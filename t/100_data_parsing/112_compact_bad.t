@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 # t/100_data_parsing/112_compact_bad.t - more N::B::Util::compact() tests
-# $Id$
+# $Id: 112_compact_bad.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 use warnings;

@@ -1,7 +1,7 @@
 #!perl -w
 
 # t/data/etc/talk-to-ourself.pl - Stolen from libwww-perl
-# $Id$
+# $Id: talk-to-ourself.pl 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 require IO::Socket;

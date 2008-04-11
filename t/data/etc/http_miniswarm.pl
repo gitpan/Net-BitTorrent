@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 # t/data/etc/http_miniswarm.pl - Used by new 500 tests
-# $Id$
+# $Id: http_miniswarm.pl 12 2008-04-10 01:53:19Z sanko@cpan.org $
 
 use strict;
 use warnings;
@@ -63,6 +63,11 @@ if ( my $pid = fork ) {
         for my $chr ( 1 .. $leeches ) {
             $client{$chr} = new Net::BitTorrent(
                       { LocalAddr => q[127.0.0.1], Timeout => 0.1 } );
+
+
+$client{$chr}->set_callback_on_peer_disconnect( sub { shift; shift; warn shift; } );
+#$client{$chr}->set_callback_on_log( sub { shift; shift; warn shift; } );
+#$client{$chr}->debug_level(1000);
 
             skip( sprintf( q[Failed to create leech_%s], $chr ),
                   $test_builder->{Expected_Tests}

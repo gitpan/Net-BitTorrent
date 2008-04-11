@@ -1,7 +1,10 @@
 # -*- perl -*-
 
 # t/900_etc/910_pod/911_check.t -
-# $Id$
+# $Id: 911_check.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
+
+use strict;
+use warnings;
 
 use Test::More;
 

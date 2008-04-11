@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 # t/100_data_parsing/116_uncompact.t - test N::B::Util::uncompact()
-# $Id$
+# $Id: 116_uncompact.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 use warnings;

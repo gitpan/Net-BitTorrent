@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 # t/200_classes/280_NBST/284_http_announce_2.t
-# $Id$
+# $Id: 284_http_announce_2.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 use warnings;

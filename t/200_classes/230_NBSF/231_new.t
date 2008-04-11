@@ -1,7 +1,7 @@
 # -*- perl -*-
 
 # t/200_classes/230_NBSF/231_new.t
-# $Id$
+# $Id: 231_new.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 use warnings;

@@ -1,13 +1,12 @@
 # -*- perl -*-
 
 # t/900_etc/921_perlcritic.t -
-# $Id$
+# $Id: 921_perlcritic.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
 
 use strict;
 use warnings;
 use File::Spec;
 use Test::More;
-use English qw(-no_match_vars);
 
 if ( not $ENV{TEST_AUTHOR} ) {
     my $msg
@@ -17,7 +16,7 @@ if ( not $ENV{TEST_AUTHOR} ) {
 
 eval { require Test::Perl::Critic; };
 
-if ($EVAL_ERROR) {
+if ($@) {
     my $msg = 'Test::Perl::Critic required to criticise code';
     plan( skip_all => $msg );
 }

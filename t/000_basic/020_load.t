@@ -1,8 +1,7 @@
 #!/usr/bin/perl -w
 
-# /t/000_basic/002_load.t
-#
-# $Id$
+# /t/000_basic/020_load.t
+# $Id: 020_load.t 12 2008-04-10 01:53:19Z sanko@cpan.org $
 
 use strict;
 use warnings;
