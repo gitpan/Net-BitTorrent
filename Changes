@@ -1,3 +1,18 @@
+Version 0.013_01 | 2008-04-11 XX:XX:XX -0400 (Fri, 11 Apr 2008)
+
+ API changes:
+  - None.
+
+ Internal changes:
+  - None.
+
+ Notes:
+  - Upgrade is recommended.
+  - Fix bad M::B dist.  Something fishy going on with the gzip'd file.
+     Some systems (like PAUSE) properly extract directories and some
+     (like the cpan shell) extract it all into the base directory
+     causing build failures.
+
 Version 0.013 | 2008-04-11 13:30:36 -0400 (Fri, 11 Apr 2008)
 
  API changes:
