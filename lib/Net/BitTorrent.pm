@@ -7,8 +7,8 @@ use warnings;
         use vars qw[$VERSION];
         use version qw[qv];
         our $SVN
-            = q[$Id: BitTorrent.pm 13 2008-04-11 17:30:36Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 13 $)->numify / 1000;
+            = q[$Id: BitTorrent.pm 15 2008-04-12 00:00:26Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 15 $)->numify / 1000;
     }
     use Socket qw[PF_INET AF_INET SOCK_STREAM INADDR_ANY];
     use Time::HiRes qw[sleep];
@@ -126,7 +126,7 @@ use warnings;
                             q[a20],
                             (sprintf(
                                  q[NB%03dC-%8s%5s],
-                                 (q[$Rev: 13 $] =~ m[(\d+)]g),
+                                 (q[$Rev: 15 $] =~ m[(\d+)]g),
                                  (  join q[],
                                     map {
                                         [q[A] .. q[Z],
@@ -136,7 +136,7 @@ use warnings;
                                         ]->[rand(66)]
                                         } 1 .. 8
                                  ),
-                                 q[erase],
+                                 q[Oops.],
                              )
                             )
                         );
@@ -1912,6 +1912,6 @@ Attribution-Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<AUTHOR|/AUTHOR> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 13 2008-04-11 17:30:36Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 15 2008-04-12 00:00:26Z sanko@cpan.org $
 
 =cut
