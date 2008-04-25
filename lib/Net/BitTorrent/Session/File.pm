@@ -7,8 +7,8 @@ use warnings;
         use vars qw[$VERSION];
         use version qw[qv];
         our $SVN
-            = q[$Id: File.pm 12 2008-04-10 01:53:19Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 12 $)->numify / 1000;
+            = q[$Id: File.pm 17 2008-04-19 20:17:50Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 17 $)->numify / 1000;
     }
     use Fcntl qw[/O_/ /SEEK/];
     use File::Spec;
@@ -210,8 +210,9 @@ use warnings;
                     );
                 }
                 : do {
+                    my ($filename) = ($self->path =~ m[^(.*)$]g);
                     sysopen($handle{$self},
-                            $self->path,
+                            $filename,
                             ($mode eq q[r]
                              ? O_RDONLY
                              : O_WRONLY | O_CREAT
@@ -467,6 +468,7 @@ END
 =end future
 
 =cut
+
             return print STDERR qq[$dump\n] unless defined wantarray;
             return $dump;
         }
@@ -687,6 +689,6 @@ Attribution-Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<AUTHOR|/AUTHOR> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: File.pm 12 2008-04-10 01:53:19Z sanko@cpan.org $
+=for svn $Id: File.pm 17 2008-04-19 20:17:50Z sanko@cpan.org $
 
 =cut

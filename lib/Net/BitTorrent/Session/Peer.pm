@@ -7,8 +7,8 @@ use warnings;
         use vars qw[$VERSION];
         use version qw[qv];
         our $SVN
-            = q[$Id: Peer.pm 13 2008-04-11 17:30:36Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 13 $)->numify / 1000;
+            = q[$Id: Peer.pm 18 2008-04-25 01:14:52Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 18 $)->numify / 1000;
     }
     use Socket
         qw[SOL_SOCKET SO_SNDTIMEO SO_RCVTIMEO PF_INET AF_INET SOCK_STREAM];
@@ -43,8 +43,7 @@ use warnings;
         );
 
         # statistics
-        my (%uploaded, %downloaded, %next_pulse,
-            %previous_incoming_data);
+        my (%uploaded, %downloaded, %previous_incoming_data);
 
         sub new {
             my ($class, $args) = @_;
@@ -128,9 +127,8 @@ use warnings;
             $previous_incoming_block{$self} = time;    # lies
             $previous_incoming_data{$self}  = time;    # lies
             $outgoing_requests{$self}       = [];
-
-            #$incoming_requests{$self}       = {};
-            $next_pulse{$self}     = time + 5;
+            $incoming_requests{$self}       = [];
+            $client{$self}->_set_pulse($self, time + 5);
             $queue_outgoing{$self} = q[];
             $queue_incoming{$self} = q[];
             $bitfield{$self}       = q[];
@@ -146,122 +144,56 @@ use warnings;
 
                 sub bitfield {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $bitfield{$self};
                 }
 
                 sub client {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $client{$self};
                 }
 
                 sub downloaded {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $downloaded{$self};
                 }
 
                 sub is_choked {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $is_choked{$self};
                 }
 
                 sub is_choking {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $is_choking{$self};
                 }
 
                 sub incoming_connection {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $incoming_connection{$self};
                 }
 
                 sub is_interested {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $is_interested{$self};
                 }
 
                 sub is_interesting {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $is_interesting{$self};
                 }
 
                 sub outgoing_requests {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $outgoing_requests{$self};
                 }
 
                 sub peer_id {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $peer_id{$self};
                 }
 
                 sub peerhost {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     if (not defined $peerhost{$self}
                         and $connected{$self})
                     {   my (undef, undef, @address)
@@ -274,12 +206,6 @@ use warnings;
 
                 sub peerport {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     if (not defined $peerport{$self}
                         and $connected{$self})
                     {   (undef, $peerport{$self}, undef)
@@ -291,34 +217,16 @@ use warnings;
 
                 sub reserved {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $reserved{$self};
                 }
 
                 sub session {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $session{$self};
                 }
 
                 sub uploaded {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $uploaded{$self};
                 }
             }
@@ -326,78 +234,31 @@ use warnings;
 
                 sub _connected {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $connected{$self};
                 }
 
                 sub _fileno {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $fileno{$self};
                 }
 
                 sub _socket {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $socket{$self};
-                }
-
-                sub _next_pulse {
-                    my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
-                    return $next_pulse{$self};
                 }
 
                 sub _connection_timestamp {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $connection_timestamp{$self};
                 }
 
                 sub _queue_outgoing {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $queue_outgoing{$self};
                 }
 
                 sub _queue_incoming {
                     my ($self) = @_;
-                    $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                    );
                     return $queue_incoming{$self};
                 }
             }
@@ -406,12 +267,6 @@ use warnings;
 
             sub as_string {
                 my ($self, $advanced) = @_;
-                $client{$self}->_do_callback(
-                                       q[log], TRACE,
-                                       sprintf(q[Entering %s for %s],
-                                               [caller 0]->[3], $$self
-                                       )
-                );
                 my $dump = $self . q[ [TODO]];
                 return print STDERR qq[$dump\n]
                     unless defined wantarray;
@@ -421,12 +276,7 @@ use warnings;
         {    # Private Methods
 
             sub _process_one {
-                my $self = shift;
-                my $read = shift
-                    ; # length (>= 0) we should read from this peer...
-                my $write = shift
-                    ;  # ...or write. In the future, this is how we'll
-                       # limit bandwidth.
+                my ($self, $read, $write) = @_;
                 $client{$self}->_do_callback(
                                        q[log], TRACE,
                                        sprintf(q[Entering %s for %s],
@@ -449,7 +299,7 @@ use warnings;
                     }
                     else { $self->_disconnect($^E); goto RETURN; }
                 }
-                if ($read) {
+                if ($read and defined $socket{$self}) {
                     $actual_read =
                         sysread($socket{$self},
                                 $queue_incoming{$self},
@@ -496,7 +346,8 @@ use warnings;
                             or length $queue_incoming{$self} == 0;
                     my (%ref, $type);
                     if (unpack(q[c], $queue_incoming{$self}) == 0x13)
-                    {   %ref = $self->_parse_packet_handshake( $queue_incoming{$self});
+                    {   %ref = $self->_parse_packet_handshake(
+                                              $queue_incoming{$self});
                     }
                     else {
                         return
@@ -718,8 +569,12 @@ use warnings;
                             return;
                         }
                         $is_choking{$self} = 0;
-                        $next_pulse{$self}
-                            = min($next_pulse{$self}, time + 2);
+                        $client{$self}->_set_pulse(
+                                 $self,
+                                 min(time + 2,
+                                     $client{$self}->_get_pulse($self)
+                                 )
+                        );
                         $client{$self}
                             ->_do_callback(q[peer_incoming_unchoke],
                                            $self);
@@ -1104,12 +959,11 @@ use warnings;
                                            )
                         );
                         my %ref;
-
-                        if(defined $peer_id{$self}) {
- $self->_disconnect(                                           q[Second handshake packet]);
-return;
-                            }
-
+                        if (defined $peer_id{$self}) {
+                            $self->_disconnect(
+                                          q[Second handshake packet]);
+                            return;
+                        }
                         if (length $packet < 68) {
                             $self->_disconnect(
                                 q[Not enough data for handshake packet]
@@ -1140,9 +994,9 @@ return;
                             {
                                 if ($session->peers > $self->client
                                     ->maximum_peers_per_session)
-                                {  $self->_disconnect(
+                                {   $self->_disconnect(
                                              q[We have enough peers]);
-                                             return;
+                                    return;
                                 }
                                 $session{$self}           = $session;
                                 $incoming_requests{$self} = [];
@@ -1152,9 +1006,10 @@ return;
                                             $peer_id
                                     } $session{$self}->peers
                                     )
-                                {    $self->_disconnect(
+                                {   $self->_disconnect(
                                         q[We've already connected to this peer.]
-                                    );return
+                                    );
+                                    return;
                                 }
                                 elsif ($peer_id eq
                                        $self->client->peer_id)
@@ -1264,9 +1119,13 @@ return;
                                 @{$outgoing_requests{$self}}
                                     = grep { $_ ne $block }
                                     @{$outgoing_requests{$self}};
-                                $next_pulse{$self}
-                                    = min((time + 5),
-                                          $next_pulse{$self});
+                                $client{$self}->_set_pulse(
+                                           $self,
+                                           min(time + 5,
+                                               $client{$self}
+                                                   ->_get_pulse($self)
+                                           )
+                                );
                                 $downloaded{$self} += length $data;
                                 $session{$self}
                                     ->_inc_downloaded(length $data);
@@ -1281,7 +1140,8 @@ return;
           # TODO: if endgame, cancel all other requests for this block
                                 if (scalar($block->peers) > 1) {
                                     for my $peer ($block->peers) {
-                                        $peer->_cancel_block($block)
+                                        $peer->_action_cancel_block(
+                                                               $block)
                                             unless $peer == $self;
                                     }
                                 }
@@ -1608,10 +1468,10 @@ return;
                                                [caller 0]->[3], $$self
                                        )
                     );
-                     return
-                if
-                not $extentions{$self}{q[supported]}{q[FastPeers]};
-            return if not $client{$self}->_ext_FastPeers;
+                    return
+                        if not $extentions{$self}{q[supported]}
+                        {q[FastPeers]};
+                    return if not $client{$self}->_ext_FastPeers;
                     $queue_outgoing{$self} .= pack(q[Nc], 5, 14);
                     $client{$self}
                         ->_do_callback(q[peer_outgoing_have_all],
@@ -1627,12 +1487,10 @@ return;
                                                [caller 0]->[3], $$self
                                        )
                     );
-
- return
-                if
-                not $extentions{$self}{q[supported]}{q[FastPeers]};
-            return if not $client{$self}->_ext_FastPeers;
-
+                    return
+                        if not $extentions{$self}{q[supported]}
+                        {q[FastPeers]};
+                    return if not $client{$self}->_ext_FastPeers;
                     $queue_outgoing{$self} .= pack(q[Nc], 5, 15);
                     $client{$self}
                         ->_do_callback(q[peer_outgoing_have_none],
@@ -1648,13 +1506,10 @@ return;
                                                [caller 0]->[3], $$self
                                        )
                     );
-
-
- return
-                if
-                not $extentions{$self}{q[supported]}{q[ExtProtocol]};
-            return if not $client{$self}->_ext_ExtProtocol;
-
+                    return
+                        if not $extentions{$self}{q[supported]}
+                        {q[ExtProtocol]};
+                    return if not $client{$self}->_ext_ExtProtocol;
                     my $packet
                         = pack(q[ca*], $messageID, bencode $data);
 
@@ -1752,8 +1607,12 @@ return;
                 $uploaded{$self} += $request->length;
                 $session{$self}->_inc_uploaded($request->length);
             }
-            return $next_pulse{$self}
-                = min(time + 10, $next_pulse{$self});
+            return
+                $client{$self}->_set_pulse($self,
+                    min(time + 10, $client{$self}->_get_pulse($self)))
+
+                #return $next_pulse{$self}
+                #    = min(time + 10, $next_pulse{$self});
         }
         {    # Actions
 
@@ -1768,8 +1627,10 @@ return;
                 $block->_remove_peer($self);
                 @{$outgoing_requests{$self}} = grep { $_ ne $block }
                     @{$outgoing_requests{$self}};
-                $next_pulse{$self}
-                    = min((time + 5), $next_pulse{$self});
+                $client{$self}->_set_pulse($self,
+                    min(time + 5, $client{$self}->_get_pulse($self)));
+
+             #$next_pulse{$self}= min((time + 5), $next_pulse{$self});
                 return $self->_build_packet_cancel($block);
             }
 
@@ -1805,7 +1666,7 @@ return;
                             scalar @{$outgoing_requests{$self}} ..
                             $client{$self}->maximum_requests_per_peer)
                         {   my $block = $piece->_unrequested_block;
-if ($block
+                            if ($block
                                 and not grep { $$_ eq $$self }
                                 $block->peers)
                             {   $self->_build_packet_request($block);
@@ -2049,6 +1910,8 @@ if ($block
         }
         DESTROY {
             my ($self) = @_;
+            $client{$self}->_del_pulse($self)
+                if defined $client{$self};
             delete $client{$self};
             delete $peer_id{$self};
             delete $bitfield{$self};
@@ -2075,7 +1938,6 @@ if ($block
             delete $previous_incoming_block{$self};
             delete $downloaded{$self};
             delete $uploaded{$self};
-            delete $next_pulse{$self};
             delete $fileno{$self};
             delete $peerhost{$self};
             delete $peerport{$self};
@@ -2218,6 +2080,6 @@ Attribution-Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<AUTHOR|/AUTHOR> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 13 2008-04-11 17:30:36Z sanko@cpan.org $
+=for svn $Id: Peer.pm 18 2008-04-25 01:14:52Z sanko@cpan.org $
 
 =cut
