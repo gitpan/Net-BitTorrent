@@ -1,16 +1,16 @@
 # -*- perl -*-
 
 # t/900_etc/910_pod/912_coverge.t -
-# $Id: 912_coverage.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
+# $Id: 912_coverage.t 20 2008-05-22 23:09:05Z sanko@cpan.org $
 
 use strict;
 use warnings;
 
 use Test::More;
 
-if ( not $ENV{TEST_AUTHOR} ) {
+if ( not $ENV{RELEASE_TESTING} ) {
     plan( skip_all =>
-        q[Author test.  Set $ENV{TEST_AUTHOR} to a true value to run.]
+        q[Release test.  Set $ENV{RELEASE_TESTING} to a true value to run.]
     );
 }
 

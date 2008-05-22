@@ -1,16 +1,16 @@
 # -*- perl -*-
 
 # t/900_etc/921_perlcritic.t -
-# $Id: 921_perlcritic.t 10 2008-04-05 22:06:00Z sanko@cpan.org $
+# $Id: 921_perlcritic.t 20 2008-05-22 23:09:05Z sanko@cpan.org $
 
 use strict;
 use warnings;
 use File::Spec;
 use Test::More;
 
-if ( not $ENV{TEST_AUTHOR} ) {
+if ( not $ENV{RELEASE_TESTING} ) {
     my $msg
-        = 'Author test.  Set $ENV{TEST_AUTHOR} to a true value to run.';
+        = 'Release test.  Set $ENV{RELEASE_TESTING} to a true value to run.';
     plan( skip_all => $msg );
 }
 
