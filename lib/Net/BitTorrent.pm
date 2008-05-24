@@ -6,8 +6,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: BitTorrent.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 20 $)->numify / 1000;
+            = q[$Id: BitTorrent.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
     }
     use Socket qw[/F_INET/ /_STREAM/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
@@ -73,7 +73,7 @@ use warnings;
             q[a20],
             (sprintf(
                  q[NB%03dC-%8s%5s],
-                 (q[$Rev: 20 $] =~ m[(\d+)]g),
+                 (q[$Rev: 22 $] =~ m[(\d+)]g),
                  (join q[],
                   map {
                       [q[A] .. q[Z], q[a] .. q[z], 0 .. 9, qw[- . _ ~]]
@@ -699,7 +699,7 @@ __END__
 
 =pod
 
-=head1 Name
+=head1 NAME
 
 Net::BitTorrent - BitTorrent peer-to-peer protocol class
 
@@ -1549,6 +1549,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
 
 =cut

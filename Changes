@@ -1,3 +1,21 @@
+Version 0.022 | 2008-05-24 10:31:26 -0400 (Sat, 24 May 2008)
+
+ API changes:
+  - Callback system is complete.
+    + N::B::S::Tracker was the holdup...
+
+ Issues resolved:
+  - None
+
+ Internal changes:
+  - None
+
+ Notes:
+  - Upgrade is not required in general but recommended for heavy callback users.
+  - More POD tweaks.
+  - Very few changes to scripts/web-gui.pl.  These are untested changes, btw.
+
+---
 Version 0.020 | 2008-05-22 19:09:05 -0400 (Thu, 22 May 2008)
 
  API changes:
@@ -99,6 +117,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://code.google.com/p/net-bittorrent/source/list
 
-$Rev: 20 $ from public svn
-$Date: 2008-05-22 19:09:05 -0400 (Thu, 22 May 2008) $
+$Rev: 22 $ from public svn
+$Date: 2008-05-24 10:31:26 -0400 (Sat, 24 May 2008) $
 $URL: https://net-bittorrent.googlecode.com/svn/trunk/Changes $

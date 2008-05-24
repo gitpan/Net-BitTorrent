@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Util.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 20 $)->numify / 1000;
+        our $SVN = q[$Id: Util.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
     }
     use List::Util qw[min max shuffle sum];
     use Carp qw[carp];
@@ -162,9 +162,9 @@ __END__
 
 =pod
 
-=head1 Name
+=head1 NAME
 
-Net::BitTorrent::Util - Utility functions
+Net::BitTorrent::Util - BitTorrent Related Utility Functions
 
 =head1 Importing From Net::BitTorrent::Util
 
@@ -312,6 +312,6 @@ included with this module.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $
+=for svn $Id: Util.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
 
 =cut

@@ -6,8 +6,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Session.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 20 $)->numify / 1000;
+            = q[$Id: Session.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
     }
     use Digest::SHA qw[];
     use File::Spec qw[];
@@ -623,7 +623,7 @@ __END__
 
 =pod
 
-=head1 Name
+=head1 NAME
 
 Net::BitTorrent::Session - Class Representing a Single .torrent File
 
@@ -855,6 +855,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Session.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $
+=for svn $Id: Session.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
 
 =cut

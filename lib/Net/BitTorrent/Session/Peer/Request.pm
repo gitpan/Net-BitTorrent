@@ -6,8 +6,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Request.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 20 $)->numify / 1000;
+            = q[$Id: Request.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
     }
     use Carp qw[carp];
     use Net::BitTorrent::Util qw[:log];
@@ -137,7 +137,7 @@ __END__
 
 Net::BitTorrent::Session::Peer::Request - Incoming request
 
-=head1 CONSTRUCTOR
+=head1 Constructor
 
 =over 4
 
@@ -148,7 +148,7 @@ constructor should not be used directly.
 
 =back
 
-=head1 METHODS
+=head1 Methods
 
 =over 4
 
@@ -226,6 +226,6 @@ Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
 
-=for svn $Id: Request.pm 20 2008-05-22 23:09:05Z sanko@cpan.org $
+=for svn $Id: Request.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
 
 =cut
