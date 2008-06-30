@@ -4,22 +4,239 @@ use CGI qw[];
 use Time::HiRes qw[sleep time];
 use Archive::Zip qw[:ERROR_CODES];
 use JSON qw[to_json];
+use HTTP::Daemon qw[];
+use HTTP::Status qw[/RC_/];
+use IO::Select qw[];
+use MIME::Base64 qw[];
 use lib q[../lib];
-use Net::BitTorrent;
-use HTTP::Daemon;
-use HTTP::Status;
-use IO::Select;
-use MIME::Base64 qw( encode_base64 );
+use Net::BitTorrent qw[];
+use Net::BitTorrent::Util qw[:bencode];    # to store/load settings file
 $|++;
 
 # Configuration
-my $PORT = 9000;
-my $USER = q[username];
-my $PASS = q[password];
+my %config = (
+    q[bind.port]         => 0,
+    q[net.bind_ip]       => q[0.0.0.0],
+    q[conns_globally]    => 300,
+    q[conns_per_torrent] => 100,
 
-# Stop editing
-my $AUTH = encode_base64($USER . q[:] . $PASS);
-chomp $AUTH;
+    #q[enable_scrape],    0, 1,
+     q[net.max_halfopen] => 8,    # max_halfopen
+
+    #q[reload_freq],      0, 1,
+    #q[tracker_ip],       2, q[],
+    #q[webui.cookie],     2, q[{}],
+    q[webui.enable_guest]  => 0,          # bool
+    q[webui.enable_listen] => 1,
+    q[webui.guest]         => q[guest],
+    q[webui.username]      => q[admin],
+    q[webui.password]      => q[],
+    q[webui.port]          => 0,
+
+    #     ["torrents_start_stopped",      1, "false"],
+    #     ["confirm_when_deleting",       1, "true"],
+    #     ["confirm_exit",                1, "false"],
+    #     ["close_to_tray",               1, "true"],
+    #     ["minimize_to_tray",            1, "true"],
+    #     ["tray_activate",               1, "true"],
+    #     ["tray.show",                   1, "true"],
+    #     ["tray.single_click",           1, "true"],
+    #     ["activate_on_file",            1, "true"],
+    #     ["confirm_remove_tracker",      1, "true"],
+    #     ["check_assoc_on_start",        1, "false"],
+    #     ["reload_freq",                 0, "0"],
+    q[bind_port] => 1337,
+
+  #     ["tracker_ip",                  2, ""],
+  #     ["dir_active_download_flag",    1, "true"],
+  #     ["dir_torrent_files_flag",      1, "true"],
+  #     ["dir_completed_download_flag", 1, "true"],
+  #     ["dir_completed_torrents_flag", 1, "true"],
+  #     ["dir_active_download",         2, "D:\\Download\\Torrents\\Storage"],
+  #     ["dir_torrent_files",           2, "D:\\Download\\Torrents"],
+  #     ["dir_completed_download", 2,
+  #      "D:\\Download\\Torrents\\Storage\\Completed"
+  #     ],
+  #     ["dir_completed_torrents", 2, "D:\\Download\\Torrents\\Complete"],
+  #     ["dir_add_label",          1, "true"],
+    q[max_dl_rate] => 0,
+    q[max_ul_rate] => 8,
+
+#     ["max_ul_rate_seed",       0, "0"],
+#     ["max_ul_rate_seed_flag",  1, "false"],
+#     ["ul_auto_throttle",       1, "false"],
+#     ["gui.ulrate_menu", 2, "0,5,10,15,20,30,40,50,100,150,200,300,400,500"],
+#     ["gui.dlrate_menu", 2, "0,5,10,15,20,30,40,50,100,150,200,300,400,500"],
+#     ["gui.manual_ratemenu",   1, "false"],
+#     ["gui.persistent_labels", 2, "TV|JP-TV|Films|Anime|Audio|Software|Books"],
+#     ["gui.compat_diropen",    1, "false"],
+#     ["gui.alternate_color",   1, "true"],
+#     ["sys.prevent_standby",   1, "true"],
+#     ["sys.enable_wine_hacks", 1, "false"], # GUI
+     q[ul_slots_per_session] => 1, #ul_slots_per_torrent
+    q[conns_per_torrent] => 100,
+    q[conns_globally]    => 200,
+
+    #     ["max_active_torrent",    0, "2"],
+    #     ["max_active_downloads",  0, "1"],
+    #     ["seed_prio_limitul",     0, "0"],
+    #     ["seed_prio_limitul_flag", 1, "true"],
+    #     ["seeds_prioritized",      1, "false"],
+    #     ["seed_ratio",             0, "1500"],
+    #     ["seed_time",              0, "0"],
+    #     ["move_if_defdir",         1, "true"],
+    #     ["mainwnd_split",          0, "483"],  # GUI
+    #     ["mainwnd_split_x",        0, "150"],  # GUI
+    #     ["resolve_peerips",        1, "false"],# GUI
+    #     ["check_update",           1, "true"],
+    #     ["check_update_beta",      1, "true"],
+    #     ["anoninfo",               1, "true"],
+    #     ["upnp",                   1, "true"],
+    #     ["natpmp",                 1, "true"],
+    #     ["lsd",                    1, "true"],
+    #     ["disable_fw",             1, "false"],
+    #     ["k",                      2, ""],
+    #     ["v",                      0, "50342501"],
+    #     ["sched_enable",           1, "false"],
+    #     ["sched_ul_rate",          0, "0"],
+    #     ["sched_dl_rate",          0, "0"],
+    #     ["sched_dis_dht",          1, "true"],
+    #     ["enable_scrape",          1, "true"],
+    #     ["show_toolbar",           1, "true"],
+    #     ["show_details",           1, "true"],
+    #     ["show_status",            1, "true"],
+    #     ["show_category",          1, "true"],
+    #     ["show_tabicons",          1, "true"],
+    #     ["rand_port_on_start",     1, "false"],
+    #     ["prealloc_space",         1, "false"],
+    #     ["language",               0, "0"],
+    #     ["logger_mask",            0, "0"],
+    #     ["autostart",              1, "false"],
+    #     ["dht",                    1, "true"],
+    #     ["dht_per_torrent",        1, "true"],
+    #     ["pex",                    1, "true"],
+    #     ["rate_limit_local_peers", 1, "false"],
+    #     ["net.bind_ip",            2, ""],
+    #     ["net.outgoing_ip",        2, ""],
+    #     ["net.outgoing_port",      0, "0"],
+    #     ["net.outgoing_max_port",  0, "0"],
+    #     ["net.low_cpu",            1, "true"],
+    #     ["net.calc_overhead",      1, "false"],
+    q[net.max_halfopen] => 8,    # max_halfopen
+
+  #     ["net.wsaevents",          0, "6"],
+  #     ["dir_autoload_flag",      1, "false"],
+  #     ["dir_autoload_delete",    1, "false"],
+  #     ["dir_autoload",           2, ""],
+  #     ["notify_complete",        1, "true"],
+  #     ["extra_ulslots",          1, "false"],
+  #     ["ipfilter.enable",        1, "true"],
+  #     ["dht.rate",               0, "-1"],
+  #     ["extras",                 0, "2"],
+  #     ["score",                  0, "0"],
+  #     ["append_incomplete",      1, "false"],
+  #     ["show_add_dialog",        1, "true"],
+  #     ["always_show_add_dialog", 1, "true"],
+  #     ["gui.log_date",           1, "true"],
+  #     ["ct_hist_comm",    2, "Test of Unicode/utf8.  Especially on Win32."],
+  #     ["ct_hist_flags",   0, "0"],
+  #     ["ct_hist_skip",    2, ""],
+  #     ["boss_key",        0, "0"],
+  #     ["encryption_mode", 0, "1"],
+  #     ["encryption_allow_legacy",           1, "true"],
+  #     ["rss.update_interval",               0, "15"],
+  #     ["rss.smart_repack_filter",           1, "true"],
+  #     ["gui.dblclick_seed",                 0, "0"],
+  #     ["gui.dblclick_dl",                   0, "3"],
+  #     ["gui.update_rate",                   0, "1000"],
+  #     ["gui.sg_mode",                       0, "1"],
+  #     ["gui.delete_to_trash",               1, "true"],
+  #     ["gui.default_del_action",            0, "0"],
+  #     ["gui.speed_in_title",                1, "true"],
+  #     ["gui.limits_in_statusbar",           1, "true"],
+  #     ["gui.graphic_progress",              1, "true"],
+  #     ["gui.piecebar_progress",             1, "false"],
+  #     ["gui.tall_category_list",            1, "false"],
+  #     ["gui.bypass_search_redirect",        1, "true"],
+  #     ["gui.last_preference_tab-1.8",       0, "8"],
+  #     ["gui.last_overview_tab-1.8",         0, "4"],
+  #     ["queue.dont_count_slow_dl",          1, "true"],
+  #     ["queue.dont_count_slow_ul",          1, "true"],
+  #     ["queue.slow_dl_threshold",           0, "1000"],
+  #     ["queue.slow_ul_threshold",           0, "1000"],
+  #     ["queue.use_seed_peer_ratio",         1, "true"],
+  #     ["queue.prio_no_seeds",               1, "true"],
+  #     ["bt.auto_ul_interval",               0, "600"],
+  #     ["bt.auto_ul_sample_window",          0, "30"],
+  #     ["bt.auto_ul_sample_average",         0, "10"],
+  #     ["bt.auto_ul_min",                    0, "8500"],
+  #     ["bt.auto_ul_factor",                 0, "80"],
+  #     ["bt.transp_disposition",             0, "0"],
+  #     ["bt.scrape_stopped",                 1, "true"],
+  #     ["bt.compact_allocation",             1, "false"],
+  #     ["bt.enable_tracker",                 1, "false"],
+  #     ["bt.multiscrape",                    1, "true"],
+  #     ["bt.send_have_to_seed",              1, "false"],
+  #     ["bt.set_sockbuf",                    1, "true"],
+  #     ["bt.connect_speed",                  0, "20"],
+  #     ["bt.prio_first_last_piece",          1, "true"],
+  #     ["bt.allow_same_ip",                  1, "false"],
+  #     ["bt.no_connect_to_services",         1, "true"],
+  #     ["bt.no_connect_to_services_list",    2, "25,110,6666,6667"],
+  #     ["bt.ban_threshold",                  0, "3"],
+  #     ["bt.use_ban_ratio",                  1, "true"],
+  #     ["bt.ban_ratio",                      0, "128"],
+  #     ["bt.use_rangeblock",                 1, "true"],
+  #     ["bt.graceful_shutdown",              1, "false"],
+  #     ["peer.lazy_bitfield",                1, "true"],
+  #     ["peer.resolve_country",              1, "false"],
+  #     ["peer.disconnect_inactive",          1, "true"],
+  #     ["peer.disconnect_inactive_interval", 0, "300"],
+  #     ["diskio.flush_files",                1, "true"],
+  #     ["diskio.sparse_files",               1, "true"],
+  #     ["diskio.use_partfile",               1, "true"],
+  #     ["diskio.smart_hash",                 1, "true"],
+  #     ["diskio.smart_sparse_hash",          1, "true"],
+  #     ["diskio.coalesce_writes",            1, "true"],
+  #     ["cache.override",                    1, "false"],
+  #     ["cache.override_size",               0, "32"],
+  #     ["cache.reduce",                      1, "true"],
+  #     ["cache.write",                       1, "true"],
+  #     ["cache.writeout",                    1, "true"],
+  #     ["cache.writeimm",                    1, "true"],
+  #     ["cache.read",                        1, "true"],
+  #     ["cache.read_turnoff",                1, "true"],
+  #     ["cache.read_prune",                  1, "true"],
+  #     ["cache.read_thrash",                 1, "false"],
+  #     ["cache.disable_win_read",            1, "false"],
+  #     ["cache.disable_win_write",           1, "true"],
+  #     ["webui.enable",                      0, "1"],
+  #     ["webui.enable_guest",                0, "1"],
+  #     ["webui.enable_listen",               0, "0"],
+  #     ["webui.token_auth",                  1, "false"],
+  #     ["webui.username",                    2, "admin"],
+  #     ["webui.password",                    2, ""],
+  #     ["webui.guest",                       2, "guest"],
+  #     ["webui.restrict",                    2, ""],
+  #     ["webui.port",                        0, "8080"],
+  #     ["webui.cookie",                      2, "{}"],
+  #     ["proxy.proxy",                       2, "localhost"],
+  #     ["proxy.type",                        0, "0"],
+  #     ["proxy.port",                        0, "8118"],
+  #     ["proxy.auth",                        1, "false"],
+  #     ["proxy.p2p",                         1, "false"],
+  #     ["proxy.username",                    2, ""],
+  #     ["proxy.password",                    2, ""],
+    sessions => [
+
+        #{
+        #    path        => q[],
+        #    infohash    => q[],
+        #    bitfield => q[]
+        #}
+    ],
+);
+my $AUTH = setup_auth();
 -e q[webui.zip] or die <<'END';
 You seem to be missing webui.zip from the µTorrent WebUI project.  Please
 download the zip file from http://forum.utorrent.com/viewtopic.php?id=14565
@@ -29,14 +246,24 @@ END
 my $zip    = Archive::Zip->new();
 my $status = $zip->read(q[webui.zip]);
 die q[Failed to open webui.zip] if $status != AZ_OK;
-my $bittorrent = new Net::BitTorrent()
-    or die sprintf q[Failed to create Net::BitTorrent object (%s)], $^E;
-my $server = HTTP::Daemon->new(LocalPort => $PORT) || die;
+my $bittorrent = new Net::BitTorrent(
+    {LocalPort => $config{q[bind.port]},
+     LocalHost => $config{q[net.bind_ip]},
+
+     # advanced settings
+     maximum_peers_per_client  => $config{q[conns_globally]},
+     maximum_peers_per_session => $config{q[conns_per_torrent]},
+     maximum_peers_half_open   => $config{q[net.max_halfopen]},
+     kBps_down                 => $config{q[max_dl_rate]},
+     kBps_up                   => $config{q[max_ul_rate]},
+    }
+    )
+    or die sprintf q[Failed to create Net::BitTorrent object (%s)],
+    $^E;
+my $server = HTTP::Daemon->new(LocalPort => $config{q[webui.port]}) || die;
 print q[[alpha] Net::BitTorrent/µTorrent WebUI: <URL:], $server->url,
     qq[gui/>\n];
-
-# Altnernative Event Processing
-while (1) {
+while (1) {    # Altnernative Event Processing
     my ($rin, $win, $ein) = (q[], q[], q[]);
     vec($rin, fileno($server), 1) = 1;
     for my $object (values %{$bittorrent->_connections}) {
@@ -45,22 +272,21 @@ while (1) {
             if $object ne $bittorrent and $object->_queue_outgoing;
     }
     $ein = $rin | $win;
-    my ($nfound, $timeleft) = select($rin, $win, $ein, 1);
+    my ($nfound, $timeleft) = select($rin, $win, $ein, 0.3);
     my $time = time + $timeleft;
     $bittorrent->process_timers();    # Don't forget this!
     $bittorrent->process_connections(\$rin, \$win, \$ein)
         if $nfound and $nfound != -1;
     new_http() if vec($rin, fileno($server), 1);
     sleep($time - time) if $time - time > 0;    # save the CPU
-}
+}    # Wow, that was easy...
 
-# Wow, that was easy...
 sub new_http {
     my $client = $server->accept;
     while ($client and my $r = $client->get_request(1)) {
         warn $r->url;
-        if (                                    #$r->method eq q[GET]
-                                                #and
+        if (    #$r->method eq q[GET]
+                #and
             $r->url->path =~ m[^/gui(?:/.+)?]
             )
         {
@@ -113,6 +339,7 @@ sub new_http {
 sub action {
     my ($client, $request, $query) = @_;
     my %return = (build => 9704);    # lies
+                                     #warn $query->param(q[action])
     if ($query->param(q[action]) eq q[getsettings]) {
         $return{q[settings]} = [
             [q[bind_port],      0, $bittorrent->sockport()],
@@ -131,9 +358,9 @@ sub action {
             [q[webui.enable_guest],  0, 0],
             [q[webui.enable_listen], 0, 1],
             [q[webui.guest],         2, q[guest]],
-            [q[webui.username],      2, $USER],
-            [q[webui.password],      2, $PASS],
-            [q[webui.port],          0, $PORT],
+            [q[webui.username],      2, $config{q[webui.username]}],
+            [q[webui.password],      2, $config{q[webui.password]}],
+            [q[webui.port],          0, $config{q[webui.port]}],
 
             #[q[webui.restrict],      2, q[]],
         ];
@@ -381,13 +608,30 @@ sub read_post {                  # bad idea - Let CGI do this...
     close $FH or return;
     return $headers{q[filename]};
 }
+
+sub load_settings {
+}
+
+sub save_settings {
+}
+
+sub setup_auth {
+    if (@_) {
+        $config{q[webui.username]} = shift;
+        $config{q[webui.password]} = shift;
+    }
+    my $newauth = MIME::Base64::encode_base64(
+              $config{q[webui.username]} . q[:] . $config{q[webui.password]});
+    chomp $newauth;
+    return $newauth;
+}
 __END__
 
 =pod
 
-=head1 Name
+=head1 NAME
 
-webgui.pl - Very basic webgui leveraging the µTorrent WebUI project
+web-gui.pl - Very Basic WebGUI Leveraging the µTorrent WebUI Project
 
 =head1 Description
 
@@ -459,9 +703,9 @@ For something so simple, this thing uses a boat load of non-core modules:
 
 Everything.
 
-Seriously.  I haven't written anything beyond initial load and (partial)
-torrent and file lists.  The structure is here if anyone else would like
-to do it.  Hint, hint.
+Seriously.  I haven't written anything beyond initial ui load and
+(partial) torrent and file lists.  The structure is here if anyone else
+would like to do it.  Hint, hint.
 
 =back
 
@@ -482,6 +726,6 @@ Web UI API: http://forum.utorrent.com/viewtopic.php?id=25661
 Overview of everything WebUI-related:
 http://forum.utorrent.com/viewtopic.php?id=33186
 
-=for svn $Id: web-gui.pl 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: web-gui.pl 23 2008-06-18 02:35:47Z sanko@cpan.org $
 
 =cut

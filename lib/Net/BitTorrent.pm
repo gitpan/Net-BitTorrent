@@ -6,38 +6,36 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: BitTorrent.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+            = q[$Id: BitTorrent.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
+        our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 23 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
-    use Socket qw[/F_INET/ /_STREAM/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
+    use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
     use Time::HiRes qw[sleep time];
+    use lib q[../../lib/];
     use Net::BitTorrent::Session;
     use Net::BitTorrent::Session::Peer;
+    use Net::BitTorrent::DHT;
     use Net::BitTorrent::Util qw[shuffle :log];
-    my (%peer_id,                   %socket,
-        %fileno,                    %timeout,
-        %maximum_requests_per_peer, %maximum_requests_size,
-        %maximum_buffer_size,       %maximum_peers_half_open,
-        %maximum_peers_per_session, %maximum_peers_per_client,
-        %connections,               %callbacks,
-        %sessions,                  %use_unicode,
-        %debug_level,               %pulse,
-        %kBps_up,                   %kBps_down,
-        %k_up,                      %k_down
+    my (%peer_id,              %socket,            %fileno,
+        %ul_slots_per_session, %ul_slot_size,      %max_buffer_per_conn,
+        %max_halfopen,         %conns_per_session, %conns_per_client,
+        %connections,          %callbacks,         %sessions,
+        %debug_level,          %pulse,             %max_ul_rate,
+        %max_dl_rate,          %k_up,              %k_down,
+        %dht
     );
 
     sub new {
         my ($class, $args) = @_;
+        my $self = undef;
 
         # Let the user pick either LocalHost or LocalAddr like
         # IO::Socket::INET.  ...do I really want to do this?
         $args->{q[LocalAddr]} = $args->{q[LocalHost]}
             if exists $args->{q[LocalHost]}
                 && !exists $args->{q[LocalAddr]};
-        {
-
-            # Allow the user to pass a list of potential port numbers
+        {    # Allow the user to pass a list of potential port numbers
             my @portrange
                 = defined $args->{q[LocalPort]}
                 ? ref $args->{q[LocalPort]} eq q[ARRAY]
@@ -50,14 +48,15 @@ use warnings;
                 defined $socket or next PORT;
 
                 # Whew, everything's okay.  Let's bless this mess.
-                my $self = bless \sprintf(q[%s:%d], $host, $port), $class;
+                $self = bless \sprintf(q[%s:%d], $host, $port), $class;
                 $socket{$self} = $socket;
                 $self->_init();
                 $self->_parse_args($args);
-                return $self;
+                $dht{$self} = Net::BitTorrent::DHT->new({client => $self});
+                warn $^E if not $dht{$self};
             }
         }
-        return;
+        return $self;
     }
 
     sub _init {
@@ -66,14 +65,14 @@ use warnings;
         $k_up{$self}   = 0;
         $k_down{$self} = 0;
         $self->_set_pulse($self, time + 1);
-        $use_unicode{$self} = 0;
         $debug_level{$self} = ERROR;
         $fileno{$self}      = fileno($socket{$self});
         $peer_id{$self} = pack(
             q[a20],
             (sprintf(
-                 q[NB%03dC-%8s%5s],
-                 (q[$Rev: 22 $] =~ m[(\d+)]g),
+                 q[NB%03d%1s-%8s%5s],
+                 (q[$Rev: 23 $] =~ m[(\d+)]g),
+                 ($Net::BitTorrent::UNSTABLE_RELEASE ? q[S] : q[C]),
                  (join q[],
                   map {
                       [q[A] .. q[Z], q[a] .. q[z], 0 .. 9, qw[- . _ ~]]
@@ -94,47 +93,40 @@ use warnings;
         # These are sane defaults, but you can change them with params.
         # Please note: these parameters are experimental and may change in a
         # future release.
-        $self->maximum_buffer_size(defined $args->{q[maximum_buffer_size]}
-                                   ? $args->{q[maximum_buffer_size]}
-                                   : 131072
+        $self->set_conns_per_client(defined $args->{q[conns_per_client]}
+                                    ? $args->{q[conns_per_client]}
+                                    : 300
         );
-        $self->maximum_peers_per_client(
-                                  defined $args->{q[maximum_peers_per_client]}
-                                  ? $args->{q[maximum_peers_per_client]}
-                                  : 300
-        );
-        $self->maximum_peers_per_session(
-                                 defined $args->{q[maximum_peers_per_session]}
-                                 ? $args->{q[maximum_peers_per_session]}
-                                 : 100
-        );
-        $self->maximum_peers_half_open(
-                                   defined $args->{q[maximum_peers_half_open]}
-                                   ? $args->{q[maximum_peers_half_open]}
-                                   : 8
-        );
-        $self->maximum_requests_size(defined $args->{q[maximum_requests_size]}
-                                     ? $args->{q[maximum_requests_size]}
-                                     : 32768
-        );
-        $self->maximum_requests_per_peer(
-                                 defined $args->{q[maximum_requests_per_peer]}
-                                 ? $args->{q[maximum_requests_per_peer]}
-                                 : 10
-        );
-        $self->timeout(defined $args->{q[Timeout]}
-                       ? $args->{q[Timeout]}
-                       : 1
+        $self->set_conns_per_session(defined $args->{q[conns_per_session]}
+                                     ? $args->{q[conns_per_session]}
+                                     : 100
         );
 
-        # kBps_up and kBps_down: 0 == unlimited
-        $self->kBps_up(defined $args->{q[kBps_up]}
-                       ? $args->{q[kBps_up]}
-                       : 0
+        # max_ul_rate and max_dl_rate: 0 == unlimited
+
+        $self->set_max_dl_rate(defined $args->{q[max_dl_rate]}
+                               ? $args->{q[max_dl_rate]}
+                               : 0
+        );$self->set_max_ul_rate(defined $args->{q[max_ul_rate]}
+                               ? $args->{q[max_ul_rate]}
+                               : 0
         );
-        $self->kBps_down(defined $args->{q[kBps_down]}
-                         ? $args->{q[kBps_down]}
-                         : 0
+        $self->set_max_halfopen(defined $args->{q[max_halfopen]}
+                                ? $args->{q[max_halfopen]}
+                                : 8
+        );
+        $self->set_max_buffer_per_conn(defined $args->{q[max_buffer_per_conn]}
+                                       ? $args->{q[max_buffer_per_conn]}
+                                       : 131072
+        );
+        $self->set_ul_slot_size(defined $args->{q[ul_slot_size]}
+                                ? $args->{q[ul_slot_size]}
+                                : 32768
+        );
+        $self->set_ul_slots_per_session(
+                                      defined $args->{q[ul_slots_per_session]}
+                                      ? $args->{q[ul_slots_per_session]}
+                                      : 10
         );
         return 1;
     }
@@ -160,7 +152,7 @@ use warnings;
                 (defined $port and $port =~ m[^(\d+)$] ? $1 : 0),
                 (defined $host
                      and $host =~ m[^(?:\d+\.?){4}$]
-                 ? (join q[], map { chr $_ } ($host =~ m[(\d+)]g))
+                 ? (pack q[C4], ($host =~ m[(\d+)]g))
                  : INADDR_ANY
                 )
             )
@@ -171,167 +163,162 @@ use warnings;
         return ($_socket, sprintf(q[%d.%d.%d.%d], @_address), $_port);
     }
 
-    sub _change_port {
-        my ($self, $desired_host, $desired_port) = @_;
-        my ($new_socket, @real_host, $real_port)
-            = _open_socket($desired_host, $desired_port);
-        if ($new_socket) {
-            $$self = sprintf q[%d.%d.%d.%d:%d], @real_host, $real_port;
-            return $socket{$self} = $new_socket;
+    #sub _change_port {
+    #    my ($self, $desired_host, $desired_port) = @_;
+    #    my ($new_socket, @real_host, $real_port)
+    #        = _open_socket($desired_host, $desired_port);
+    #    if ($new_socket) {
+    #        $$self = sprintf q[%d.%d.%d.%d:%d], @real_host, $real_port;
+    #        $dht{$self}->_open_socket;
+    #        return $socket{$self} = $new_socket;
+    #    }
+    #    return;
+    #}
+    sub set_conns_per_client {
+        my ($self, $value) = @_;
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                      q[log], ERROR,
+                      sprintf(
+                          q[new value for conns_per_client is malformed (%s)],
+                          $value || q[undef])
+            );
         }
-        return;
+        return $conns_per_client{$self} = $value;
+    }
+    sub get_conns_per_client { die if $_[1]; return $conns_per_client{$_[0]} }
+
+    sub set_conns_per_session {
+        my ($self, $value) = @_;
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                     q[log], ERROR,
+                     sprintf(
+                         q[new value for conns_per_session is malformed (%s)],
+                         $value || q[undef])
+            );
+        }
+        return $conns_per_session{$self} = $value;
     }
 
-    sub maximum_peers_per_client {
-        my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_peers_per_client is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_peers_per_client{$self} = $value;
-                }
-            : $maximum_peers_per_client{$self}
-        );
+    sub get_conns_per_session {
+        die
+            if $_[1];
+        return $conns_per_session{$_[0]};
     }
 
-    sub maximum_peers_per_session {
+    sub set_max_halfopen {
         my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_peers_per_session is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_peers_per_session{$self} = $value;
-                }
-            : $maximum_peers_per_session{$self}
-        );
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                          q[log], ERROR,
+                          sprintf(
+                              q[new value for max_halfopen is malformed (%s)],
+                              $value || q[undef])
+            );
+        }
+        return $max_halfopen{$self} = $value;
+    }
+    sub get_max_halfopen { die if $_[1]; return $max_halfopen{$_[0]} }
+
+    sub set_max_buffer_per_conn {
+        my ($self, $value) = @_;
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                q[log], ERROR,
+                sprintf(
+                    q[new value for max_buffer_per_conn is malformed (%s).  Requires integer.],
+                    $value || q[undef])
+            );
+        }
+        return $max_buffer_per_conn{$self} = $value;
     }
 
-    sub maximum_peers_half_open {
-        my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_peers_half_open is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_peers_half_open{$self} = $value;
-                }
-            : $maximum_peers_half_open{$self}
-        );
+    sub get_max_buffer_per_conn {
+        die if $_[1];
+        return $max_buffer_per_conn{$_[0]};
     }
 
-    sub maximum_buffer_size {
+    sub set_ul_slot_size {
         my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_buffer_size is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_buffer_size{$self} = $value;
-                }
-            : $maximum_buffer_size{$self}
-        );
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                q[log], ERROR,
+                sprintf(
+                    q[new value for ul_slot_size is malformed (%s).  Requires integer.],
+                    $value || q[undef])
+            );
+        }
+        return $ul_slot_size{$self} = $value;
+    }
+    sub get_ul_slot_size { die if $_[1]; return $ul_slot_size{$_[0]} }
+
+    sub set_ul_slots_per_session {    # TODO
+        my ($self, $value) = @_;
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                q[log], ERROR,
+                sprintf(
+                    q[new value for ul_slots_per_session is malformed (%s).  Requires integer.],
+                    $value || q[undef])
+            );
+        }
+        return $ul_slots_per_session{$self} = $value;
     }
 
-    sub maximum_requests_size {
-        my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_requests_size is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_requests_size{$self} = $value;
-                }
-            : $maximum_requests_size{$self}
-        );
-    }
+    sub get_ul_slots_per_session {
+        die if $_[1];
+        return $ul_slots_per_session{$_[0]};
+    }    # TODO
+    sub get_ul_slots_per_conn { die if $_[1]; return 80 }
 
-    sub maximum_requests_per_peer {
+    sub set_debug_level {
         my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN,
-                                    q[maximum_requests_per_peer is malformed])
-                    and return
-                    unless $value =~ m[^\d+$];
-                $maximum_requests_per_peer{$self} = $value;
-                }
-            : $maximum_requests_per_peer{$self}
-        );
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                           q[log], ERROR,
+                           sprintf(
+                               q[new value for debug_level is malformed (%s)],
+                               $value || q[undef])
+            );
+        }
+        return $debug_level{$self} = $value;
     }
+    sub get_debug_level { die if $_[1]; return $debug_level{$_[0]} }
 
-    sub timeout {
+    sub set_max_ul_rate {
         my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN, q[Timeout is malformed])
-                    and return
-                    unless $value =~ m[^-?\d+\.?\d*$];
-                $timeout{$self} = $value;
-                }
-            : $timeout{$self}
-        );
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                           q[log], ERROR,
+                           sprintf(
+                               q[new value for max_ul_rate is malformed (%s)],
+                               $value || q[undef])
+            );
+        }
+        return $max_ul_rate{$self} = $value;
     }
+    sub get_max_ul_rate { die if $_[1]; return $max_ul_rate{$_[0]} }
 
-    sub debug_level {
+    sub set_max_dl_rate {
         my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN, q[debug_level is malformed])
-                    and return
-                    unless $value =~ m[^-?\d+\.?\d*$];
-                $debug_level{$self} = $value;
-                }
-            : $debug_level{$self}
-        );
+        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
+            $self->_do_callback(
+                           q[log], ERROR,
+                           sprintf(
+                               q[new value for max_dl_rate is malformed (%s)],
+                               $value || q[undef])
+            );
+        }
+        return $max_dl_rate{$self} = $value;
     }
-
-    sub kBps_up {
-        my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN, q[kBps_up is malformed])
-                    and return
-                    unless $value =~ m[^-?\d+\.?\d*$];
-                $kBps_up{$self} = $value;
-                }
-            : $kBps_up{$self}
-        );
-    }
-
-    sub kBps_down {
-        my ($self, $value) = @_;
-        return (
-            defined $value
-            ? do {
-                $self->_do_callback(q[log], WARN, q[kBps_up is malformed])
-                    and return
-                    unless $value =~ m[^-?\d+\.?\d*$];
-                $kBps_down{$self} = $value;
-                }
-            : $kBps_down{$self}
-        );
-    }
-    sub _socket { return $socket{$_[0]}; }
-    sub _fileno { return $fileno{$_[0]}; }
+    sub get_max_dl_rate { die if $_[1]; return $max_dl_rate{$_[0]} }
+    sub _get_socket     { die if $_[1]; return $socket{$_[0]}; }
+    sub _get_fileno     { die if $_[1]; return $fileno{$_[0]}; }
 
     sub do_one_loop {    # Clunky.  I really need to replace this.
-        my ($self) = @_;
+        my ($self, $timeout) = @_;
+        $timeout ||= 1;
         $self->_do_callback(q[log], TRACE,
                             sprintf(q[Entering %s for %s],
                                     [caller 0]->[3], $$self
@@ -341,8 +328,9 @@ use warnings;
             $_->_disconnect(
                         q[Connection timed out before established connection])
                 if $_ ne $self
-                    and (not $_->_connected)
-                    and ($_->_connection_timestamp < (time - 60))
+                    and ($_ ne $dht{$self})
+                    and (not $_->_get_connected)
+                    and ($_->_get_connection_timestamp < (time - 60))
         } values %{$connections{$self}};
 
         # [id://371720]
@@ -352,21 +340,22 @@ use warnings;
             vec($rin, $fileno, 1) = 1;
             vec($win, $fileno, 1) = 1
                 if $fileno ne $fileno{$self}
-                    and $connections{$self}{$fileno}->_queue_outgoing;
+                    and $connections{$self}{$fileno} ne $dht{$self}
+                    and $connections{$self}{$fileno}->_get_queue_outgoing;
         }
         my ($nfound, $timeleft)
             = select($rin, $win, $ein,
-                     (  $timeout{$self}
-                      ? $timeout{$self} == -1
+                     (  $timeout
+                      ? $timeout == -1
                               ? undef
-                              : $timeout{$self}
+                              : $timeout
                       : undef
                      )
             );
         my $time = time + $timeleft;
         $self->process_connections(\$rin, \$win, \$ein)
             if $nfound and $nfound != -1;
-        sleep($time - time) if $time - time > 0;    # save the CPU
+        if (($time - time) > 0) { sleep($time - time) }    # save the CPU
         $self->process_timers();
         return 1;
     }
@@ -379,7 +368,7 @@ use warnings;
                                     [caller 0]->[3], $$self
                             )
         );
-        return $connections{$self}{$connection->_fileno} = $connection;
+        return $connections{$self}{$connection->_get_fileno} = $connection;
     }
 
     sub _remove_connection {
@@ -390,11 +379,11 @@ use warnings;
                             )
         );
         return
-            if not defined $connections{$self}{$connection->_fileno};
-        return delete $connections{$self}{$connection->_fileno};
+            if not defined $connections{$self}{$connection->_get_fileno};
+        return delete $connections{$self}{$connection->_get_fileno};
     }
 
-    sub _connections {
+    sub _get_connections {
         my ($self) = @_;
         $self->_do_callback(q[log], TRACE,
                             sprintf(q[Entering %s for %s],
@@ -403,9 +392,11 @@ use warnings;
         );
         $self->_do_callback(
               q[log],
-              WARN,
+              ERROR,
               q[ARG! ...s. Too many of them for Net::BitTorrent::_connections]
-        ) if @_ > 1;
+            )
+            and die
+            if @_ > 1;
         return \%{$connections{$self}};
     }
 
@@ -415,7 +406,7 @@ use warnings;
             next
                 if not defined $connections{$self}{$fileno};
             if (vec($$ein, $fileno, 1)
-                or not $connections{$self}{$fileno}->_socket)
+                or not $connections{$self}{$fileno}->_get_socket)
             {   vec($$ein, $fileno, 1) = 0;
                 if ($^E
                     and (($^E != 10036) and ($^E != 10035)))
@@ -435,7 +426,7 @@ use warnings;
                                 defined $_
                                     and $_->isa(q[Net::BitTorrent::Peer])
                                 } values %{$connections{$self}}
-                        ) >= $maximum_peers_per_client{$self}
+                        ) >= $conns_per_client{$self}
                         )
                     {   close $new_socket;
                     }
@@ -451,6 +442,13 @@ use warnings;
                     }
                 }
             }
+
+            #elsif ($connections{$self}{$fileno} eq $dht{$self}) {
+            #    if (vec($$rin, $fileno, 1)) {
+            #        vec($$rin, $fileno, 1) = 0;
+            #        #die q[Yay!];
+            #    }
+            #}
             else {
                 my $read  = vec($$rin, $fileno, 1);
                 my $write = vec($$win, $fileno, 1);
@@ -459,17 +457,17 @@ use warnings;
                 if ($read or $write) {
                     my ($this_down, $this_up)
                         = $connections{$self}{$fileno}->_process_one(
-                                 (($kBps_down{$self}
-                                   ? (($kBps_down{$self} * 1024)
-                                      - $k_down{$self})
-                                   : 2**15
-                                  ) * $read
-                                 ),
-                                 (($kBps_up{$self}
-                                   ? (($kBps_up{$self} * 1024) - $k_up{$self})
-                                   : 2**15
-                                  ) * $write
-                                 ),
+                             (( $max_dl_rate{$self}
+                                ? (($max_dl_rate{$self} * 1024)
+                                   - $k_down{$self})
+                                : 2**15
+                              ) * $read
+                             ),
+                             (($max_ul_rate{$self}
+                               ? (($max_ul_rate{$self} * 1024) - $k_up{$self})
+                               : 2**15
+                              ) * $write
+                             ),
                         );
                     $k_down{$self} += $this_down || 0;
                     $k_up{$self}   += $this_up   || 0;
@@ -478,18 +476,19 @@ use warnings;
         }
         return 1;
     }
-    sub peer_id { return $peer_id{$_[0]}; }
+    sub get_peer_id { return $peer_id{$_[0]}; }
+    sub get_dht     { return $dht{$_[0]}; }
 
-    sub sockport {
+    sub get_sockport {
         return (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[1];
     }
 
-    sub sockaddr {
+    sub get_sockaddr {
         return join q[.],
             (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[2 .. 5];
     }
 
-    sub sessions {
+    sub get_sessions {
         my ($self) = @_;
         return ($sessions{$self} ? $sessions{$self} : []);
     }
@@ -518,8 +517,8 @@ use warnings;
                                     [caller 0]->[3], $$self
                             )
         );
-        $session->trackers->[0]->announce(q[stopped])
-            if scalar @{$session->trackers};
+        $session->get_trackers->[0]->_announce(q[stopped])
+            if scalar @{$session->get_trackers};
         $session->close_files;
         return $sessions{$self}
             = [grep { $session ne $_ } @{$sessions{$self}}];
@@ -534,7 +533,7 @@ use warnings;
         );
         for my $session (@{$sessions{$self}}) {
             return $session
-                if $session->infohash =~ m[^$infohash$]i;
+                if uc $session->get_infohash eq uc $infohash;
         }
         return;
     }
@@ -559,23 +558,21 @@ use warnings;
         return unless @_ == 3;
         return unless defined $type;
         if (ref $coderef ne q[CODE]) {
-            $self->_do_callback(q[log], WARN, q[callback is malformed]);
-            return;
+            $self->_do_callback(q[log], ERROR, q[callback is malformed]);
         }
         return $callbacks{$self}{$type} = $coderef;
     }
 
     # Extension information
-    sub _ext_FastPeers   {0}
-    sub _ext_ExtProtocol {0}
+    sub _ext_DHT {1}
 
     sub _build_reserved {
         my ($self) = @_;
         my @reserved = qw[0 0 0 0 0 0 0 0];
-        $reserved[7] |= 0x04
-            if $self->_ext_FastPeers;
-        $reserved[5] |= 0x10
-            if $self->_ext_ExtProtocol;
+        $reserved[7] |= 0x04;    # FastPeers
+        $reserved[5] |= 0x10;    # Ext Protocol
+        $reserved[7] |= 0x01
+            if $self->_ext_DHT;
         return join q[], map {chr} @reserved;
     }
 
@@ -609,10 +606,11 @@ use warnings;
 
     sub process_timers {
         my ($self) = @_;
-        for my $_pulse (values %{$pulse{$self}}) {
-            if ($_pulse->{q[time]} <= time
-                and defined $_pulse->{q[object]})
-            {   my $obj = $_pulse->{q[object]};
+        my @timers = values %{$pulse{$self}};
+        for my $timer (@timers) {
+            if ($timer->{q[time]} <= time
+                and defined $timer->{q[object]})
+            {   my $obj = $timer->{q[object]};
                 $self->_del_pulse($obj);
                 $obj->_pulse;
             }
@@ -627,15 +625,11 @@ use warnings;
                                     [caller 0]->[3], $$self
                             )
         );
-        my @values = ($peer_id{$self},
-                      $self->sockaddr,
-                      $self->sockport,
-                      $maximum_peers_per_client{$self},
-                      $maximum_peers_per_session{$self},
-                      $maximum_peers_half_open{$self},
-                      $maximum_buffer_size{$self},
-                      $maximum_requests_size{$self},
-                      $maximum_requests_per_peer{$self},
+        my @values = ($peer_id{$self},             $self->sockaddr,
+                      $self->sockport,             $conns_per_client{$self},
+                      $conns_per_session{$self},   $max_halfopen{$self},
+                      $max_buffer_per_conn{$self}, $ul_slot_size{$self},
+                      $ul_slots_per_session{$self},
         );
         s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g
             for @values[3 .. 8];
@@ -673,13 +667,12 @@ END
         my $self = shift;
         delete $peer_id{$self};
         delete $socket{$self};
-        delete $maximum_peers_per_client{$self};
-        delete $maximum_peers_per_session{$self};
-        delete $maximum_peers_half_open{$self};
-        delete $maximum_buffer_size{$self};
-        delete $maximum_requests_size{$self};
-        delete $maximum_requests_per_peer{$self};
-        delete $timeout{$self};
+        delete $conns_per_client{$self};
+        delete $conns_per_session{$self};
+        delete $max_halfopen{$self};
+        delete $max_buffer_per_conn{$self};
+        delete $ul_slot_size{$self};
+        delete $ul_slots_per_session{$self};
         delete $debug_level{$self};
         delete $connections{$self};
         delete $callbacks{$self};
@@ -687,10 +680,13 @@ END
         #grep { $self->remove_session($_) } @{$sessions{$self}};
         delete $sessions{$self};
         delete $fileno{$self};
-        delete $kBps_up{$self};
-        delete $kBps_down{$self};
+        delete $max_ul_rate{$self};
+        delete $max_dl_rate{$self};
         delete $k_up{$self};
         delete $k_down{$self};
+
+        # DHT
+        delete $dht{$self};
         return 1;
     }
 }
@@ -710,7 +706,7 @@ Net::BitTorrent - BitTorrent peer-to-peer protocol class
     sub hash_pass {
         my ($self, $piece) = @_;
         printf(qq[hash_pass: piece number %04d of %s\n],
-               $piece->index, $piece->session);
+               $piece->get_index, $piece->get_session);
     }
 
     my $client = Net::BitTorrent->new();
@@ -770,13 +766,6 @@ IANA.  Nor is such a standard needed.
 
 Default: 0 (any available)
 
-=item C<Timeout>
-
-The maximum amount of time, in seconds, possibly fractional, C<select()>
-is allowed to wait before returning in L</do_one_loop>.
-
-Default: C<1.0>
-
 =back
 
 Besides these, there are a number of advanced options that can be set via
@@ -785,7 +774,7 @@ basic functionality and usefulness of the module.
 
 =over 4
 
-=item C<maximum_buffer_size>
+=item C<max_buffer_per_conn>
 
 Amount of data, in bytes, we store from a peer before dropping their
 connection.  Setting this too high leaves you open to DDoS-like
@@ -794,19 +783,19 @@ attacks.  Malicious or not.
 Default: C<131072> (C<2**17>)  I<(This default may change as the
 module matures)>
 
-=item C<maximum_peers_per_client>
+=item C<conns_per_client>
 
 Maximum number of peers per client object.
 
-Default: C<300> I<(This default may change as the module matures)>
+Default: C<200> I<(This default may change as the module matures)>
 
-=item C<maximum_peers_per_session>
+=item C<conns_per_session>
 
 Maximum number of peers per session.
 
 Default: C<100> I<(This default may change as the module matures)>
 
-=item C<maximum_peers_half_open>
+=item C<max_halfopen>
 
 Maximum number of sockets we have yet to receive a handshake from.
 
@@ -817,7 +806,7 @@ Default: C<8>
 
 =begin future
 
-=item C<maximum_requests_size>
+=item C<ul_slot_size>
 
 Maximum size, in bytes, a peer is allowed to request from us as a single
 block.
@@ -826,19 +815,19 @@ Default: C<32768> (C<2**15>)
 
 =end future
 
-=item C<maximum_requests_per_peer>
+=item C<ul_slots_per_session>
 
 Maximum number of requested blocks we keep in queue with each peer.
 
 Default: C<10>
 
-=item C<kBps_up>
+=item C<max_ul_rate>
 
 Maximum amount of data transfered per second to remote hosts.
 
 Default: C<0> (unlimited)
 
-=item C<kBps_down>
+=item C<max_dl_rate>
 
 Maximum amount of data transfered per second from remote hosts.
 
@@ -883,7 +872,7 @@ torrent.
 This method returns the new
 L<Net::BitTorrent::Session|Net::BitTorrent::Session> object on success.
 
-See also: L<sessions|/sessions ( )>,
+See also: L<get_sessions|/get_sessions ( )>,
 L<remove_session|/remove_session ( SESSION )>,
 L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
@@ -901,25 +890,35 @@ is a debugging method, not to be used under normal circumstances.
 
 See also: [id://317520]
 
-=item C<debug_level ( [NEW VALUE] )>
+=item C<get_debug_level ( )>
 
-Mutator to get/set the minimum level of messages passed to the log
-callback handler.  See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS">
-for more.
+Get the minimum level of messages passed to the log callback handler.
+See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS"> for more.
 
-=item C<do_one_loop ( )>
+=item C<set_debug_level ( NEWVAL )>
+
+Set the minimum level of messages passed to the log callback handler.
+See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS"> for more.
+
+=item C<do_one_loop ( [TIMEOUT] )>
 
 Processes the various socket-containing objects (peers, trackers) held by
 this C<Net::BitTorrent> object.  This method should be called frequently.
 
+The optional TIMEOUT parameter is the maximum amount of time, in seconds,
+possibly fractional, C<select()> is allowed to wait before returning in
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )">.  This TIMEOUT defaults to
+C<1.0>.  To wait indefinatly, TIMEOUT should be C<-1.0>.
+
 =item process_connections ( READERSREF, WRITERSREF, ERRORSREF )
 
 Use this method when you want to implement your own C<select> statement
-for event processing instead of using C<Net::BitTorrent>'s L<do_one_loop>
-method.  The parameters are references to the readers, writers, and
-errors parameters used by the select statement.
+for event processing instead of using C<Net::BitTorrent>'s
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.  The parameters are
+references to the readers, writers, and errors parameters used by the
+select statement.
 
-Use the internal C<_fileno ( )> method to set up the necessary bit
+Use the internal C<_get_fileno ( )> method to set up the necessary bit
 vectors for your C<select ( )> call.
 
 Note: This is a work in progress.
@@ -935,13 +934,18 @@ without processing these timers from time to time.
 
 Use this method only when you implement your own C<select> statement for
 event processing and do not use C<Net::BitTorrent>'s
-L<do_one_loop|/"do_one_loop ( )"> method.
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.
 
 Note: This is a work in progress.
 
-=item C<maximum_buffer_size ( [NEW VALUE] )>
+=item C<get_max_buffer_per_conn ( )>
 
-Mutator to get/set the amount of unparsed data, in bytes, we store from a
+Get the amount of unparsed data, in bytes, we store from a peer before
+dropping their connection.
+
+=item C<set_max_buffer_per_conn ( NEWVAL )>
+
+Set the amount of unparsed data, in bytes, we store from a
 peer before dropping their connection.  Be sure to keep this value high
 enough to allow incoming blocks (C<2**16> by default) to be held in
 memory without trouble but low enough to keep DDoS-like attacks at bay.
@@ -949,68 +953,122 @@ memory without trouble but low enough to keep DDoS-like attacks at bay.
 Default: C<131072> (C<2**17>)  I<(This default may change as the module
 matures)>
 
-=item C<maximum_peers_half_open ( [NEW VALUE] )>
+=item C<get_max_halfopen ( )>
 
-Mutator to get/set the maximum number of peers we have yet to receive a
+Get the maximum number of peers we have yet to receive a
 handshake from.  These include sockets that have not connected yet.
+
+=item C<set_max_halfopen ( NEWVAL )>
+
+Set the maximum number of peers we have yet to receive a handshake from.
+These include sockets that have not connected yet.
 
 NOTE: On some OSes (WinXP, et al.), setting this too high can cause
 problems with the TCP stack.
 
 Default: C<8>
 
-=item C<maximum_peers_per_client ( [NEW VALUE] )>
+=item C<get_conns_per_client ( )>
 
-Mutator to get/set the maximum number of peers per client object.
+Get the maximum number of peers per client object.
+
+=item C<set_conns_per_client ( NEWVAL )>
+
+Set the maximum number of peers per client object.
 
 Default: C<300>
 
 See also: theory.org (http://tinyurl.com/4jgdnl)
 
-=item C<maximum_peers_per_session ( [NEW VALUE] )>
+=item C<get_conns_per_session ( )>
 
-Mutator to get/set the maximum number of peers per session.
+Get the maximum number of peers per session.
+
+=item C<set_conns_per_session ( NEWVAL )>
+
+Set the maximum number of peers per session.
 
 Default: C<100>
 
-=item C<maximum_requests_size ( [NEW VALUE] )>
+=item C<get_ul_slot_size ( )>
 
-Mutator to get/set the maximum size, in bytes, a peer is allowed to
-request from us as a single block of data.
+Get the maximum size, in bytes, a peer is allowed to request from us as a
+single block of data.
+
+=item C<set_ul_slot_size ( NEWVAL )>
+
+Set the maximum size, in bytes, a peer is allowed to request from us as a
+single block of data.
 
 Default: C<32768>
 
 See also: theory.org (http://tinyurl.com/32k7wu)
 
-=item C<maximum_requests_per_peer ( [NEW VALUE] )>
+=item C<get_ul_slots_per_session ( )>
 
-Mutator to get/set the maximum number of blocks we have in queue from
-each peer.
+Get the maximum number of blocks we have in queue from each peer.
+
+=item C<set_ul_slots_per_session ( NEWVAL )>
+
+Set the maximum number of blocks we have in queue from each peer.
 
 Default: C<10>
 
-=item C<kBps_down ( [NEW VALUE] )>
+=item C<get_ul_slots_per_conn ( )>
 
-Mutator to get/set the maximum amount of data transfered per second from
-remote hosts in kilobytes.  This rate limits both peers and trackers.  To
-remove transfer limits, set this value to C<0>.
+Get the maximum number of blocks we have in queue from each peer.
+Currently, this is C<80>.
+
+=item C<get_max_ul_rate ( )>
+
+Get the maximum amount of data transfered per second from remote hosts in
+kilobytes.  This rate limits both peers and trackers.  To remove transfer
+limits, set this value to C<0>.
+
+Note: This functionality requires the use of
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
+
+=item C<set_max_ul_rate ( NEWVAL )>
+
+Set the maximum amount of data transfered per second from remote hosts in
+kilobytes.  This rate limits both peers and trackers.  To remove transfer
+limits, set this value to C<0>.
+
+Note: This functionality requires the use of
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
 
 Default: C<0> (unlimited)
 
-=item C<kBps_down ( [NEW VALUE] )>
+=item C<get_max_dl_rate ( )>
 
-Mutator to get/set the maximum amount of data transfered per second from
-remote hosts in kilobytes.  This rate limits both peers and trackers.  To
-remove transfer limits, set this value to C<0>.
+Get the maximum amount of data transfered per second from remote hosts in
+kilobytes.  This rate limits both peers and trackers.  To remove transfer
+limits, set this value to C<0>.
+
+Note: This functionality requires the use of
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
+
+=item C<set_max_dl_rate ( NEWVAL )>
+
+Set the maximum amount of data transfered per second from remote hosts in
+kilobytes.  This rate limits both peers and trackers.  To remove transfer
+limits, set this value to C<0>.
+
+Note: This functionality requires the use of
+L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
 
 Default: C<0> (unlimited)
 
-=item C<peer_id ( )>
+=item C<get_peer_id ( )>
 
 Returns the Peer ID generated to identify this C<Net::BitTorrent> object
 internally, with trackers, and with remote peers.
 
 See also: theory.org (http://tinyurl.com/4a9cuv)
+
+=item C<get_dht ( )>
+
+Returns the C<Net::BitTorrent::DHT> object related to this client.
 
 =item C<remove_session ( SESSION )>
 
@@ -1024,11 +1082,11 @@ called.
 
 =end future
 
-See also: L<sessions|/"sessions ( )">,
+See also: L<get_sessions ( )|/"get_sessions ( )">,
 L<add_session|/"add_session ( { ... } )">,
 L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
-=item C<sessions ( )>
+=item C<get_sessions ( )>
 
 Returns a list of loaded
 L<Net::BitTorrent::Session|Net::BitTorrent::Session> objects.
@@ -1037,26 +1095,17 @@ See Also: L<add_session|/"add_session ( { ... } )">,
 L<remove_session|/"remove_session ( SESSION )">,
 L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
-=item C<sockaddr ( )>
+=item C<get_sockaddr ( )>
 
-Return the address part of the sockaddr structure for the socket.
+Return the address part of the sockaddr structure for the TCP socket.
 
 See also: L<IO::Socket::INET/sockaddr>
 
-=item C<sockport ( )>
+=item C<get_sockport ( )>
 
-Return the port number that the socket is using on the local host.
+Return the port number that the TCP socket is using on the local host.
 
 See also: L<IO::Socket::INET/sockport>
-
-=item C<timeout ( [TIMEOUT] )>
-
-Mutator which gets or sets the maximum amount of time, in seconds,
-possibly fractional, C<select()> is allowed to wait before returning in
-L</do_one_loop>.
-
-See Also: L<do_one_loop|/do_one_loop ( )>, C<Timeout> argument of the
-L<constructor|/"new ( { [ARGS] } )">
 
 =back
 
@@ -1195,6 +1244,10 @@ Callback arguments: ( CLIENT, PEER )
 Callback arguments: ( CLIENT, PEER, BLOCK )
 
 =item C<peer_outgoing_unchoke>
+
+Callback arguments: ( CLIENT, PEER )
+
+=item C<peer_outgoing_port>
 
 Callback arguments: ( CLIENT, PEER )
 
@@ -1346,8 +1399,9 @@ This list of bugs is incomplete.
 Found bugs should be reported through
 http://code.google.com/p/net-bittorrent/issues/list.  Please include
 as much information as possible.  For more, see
-"L<I've found a bug!  Now what?|Net::BitTorrent::FAQ/"I've found a bug!  Now what?">"
-in L<Net::BitTorrent::FAQ|Net::BitTorrent::FAQ>.
+L<Net::BitTorrent::Todo|Net::BitTorrent::Todo> and
+"L<Issue Tracker|Net::BitTorrent::Notes/"Issue Tracker">" in
+L<Net::BitTorrent::Notes|Net::BitTorrent::Notes>.
 
 =head1 Notes
 
@@ -1470,12 +1524,13 @@ http://cpantesters.perl.org/, and the CPAN Testers Wiki
 
 To making integrating C<Net::BitTorrent> into an existing C<select>-based
 event loop just a little easier, an alternative way of doing event
-processing (vs. L<do_one_loop ( )|/do_one_loop ( )>) has been designed...
-uh, I mean ganked.  Simply call the L<"process_connections"> method with
-references to the lists of readers, writers, and errors given to you by
-C<select>.  Connections that don't belong to the object will be ignored,
-and connections that do belong to the object will be removed from the
-C<select> lists so that you can use the lists for your own purposes.
+processing (vs. L<do_one_loop ( )|/"do_one_loop ( [TIMEOUT] )">) has been
+designed... uh, I mean ganked.  Simply call the L<"process_connections">
+method with references to the lists of readers, writers, and errors given
+to you by C<select>.  Connections that don't belong to the object will be
+ignored, and connections that do belong to the object will be removed
+from the C<select> lists so that you can use the lists for your own
+purposes.
 
 Here's a painfully simple example:
 
@@ -1483,9 +1538,9 @@ Here's a painfully simple example:
       my ($rin, $win, $ein) = (q[], q[], q[]);
       vec($rin, fileno($server), 1) = 1;
       for my $object (values %{$bittorrent->_connections}) {
-          vec($rin, $object->_fileno, 1) = 1;
-          vec($win, $object->_fileno, 1) = 1
-              if $object ne $bittorrent and $object->_queue_outgoing;
+          vec($rin, $object->_get_fileno, 1) = 1;
+          vec($win, $object->_get_fileno, 1) = 1
+              if $object ne $bittorrent and $object->_get_queue_outgoing;
       }
 
       # Add your other sockets to the bit vectors
@@ -1549,6 +1604,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
 
 =cut

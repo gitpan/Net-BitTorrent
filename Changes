@@ -1,3 +1,18 @@
+Version 0.023_0\d+ |
+
+ API changes:
+   - Entire API has changed.  For more information, see the next not developer
+     release.
+
+ Internal changes:
+  - DHT
+
+ Notes:
+  - This is a VERY UNSTABLE release uploaded simply to get some CPAN Tester
+    data on the extended test suite, the rewritten API, and the alpha DHT
+    code.  DO NOT INSTALL!  Stick with the 0.022 release!  As soon as I have a
+    few reports, I will mark this distribution for deletion from PAUSE.
+
 Version 0.022 | 2008-05-24 10:31:26 -0400 (Sat, 24 May 2008)
 
  API changes:
@@ -117,6 +132,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://code.google.com/p/net-bittorrent/source/list
 
-$Rev: 22 $ from public svn
-$Date: 2008-05-24 10:31:26 -0400 (Sat, 24 May 2008) $
+$Rev: 23 $ from public svn
+$Date: 2008-06-17 22:35:47 -0400 (Tue, 17 Jun 2008) $
 $URL: https://net-bittorrent.googlecode.com/svn/trunk/Changes $

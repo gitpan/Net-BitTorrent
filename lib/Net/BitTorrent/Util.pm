@@ -5,13 +5,12 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Util.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+        our $SVN = q[$Id: Util.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
     }
     use List::Util qw[min max shuffle sum];
-    use Carp qw[carp];
-    use base qw[Exporter];
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
+    use Exporter qw[];
     *import    = *Exporter::import;
     @EXPORT_OK = qw[bencode bdecode
         compact uncompact
@@ -19,7 +18,7 @@ use warnings;
         TRACE FATAL ERROR WARN INFO DEBUG
     ];
     %EXPORT_TAGS = (all     => [@EXPORT_OK],
-                    bencode => [qw(bencode bdecode)],
+                    bencode => [qw[bencode bdecode]],
                     compact => [qw[compact uncompact]],
                     list    => [qw[min max shuffle sum]],
                     log     => [qw[TRACE FATAL ERROR WARN INFO DEBUG]]
@@ -35,7 +34,7 @@ use warnings;
     sub FATAL { return 1 }
 
     sub bencode {
-        if (not ref $_[0]) {
+        if (defined $_[0] and not ref $_[0]) {
             return (  ($_[0] =~ m[^[-+]?\d+$])
                     ? (q[i] . $_[0] . q[e])
                     : (length($_[0]) . q[:] . $_[0])
@@ -60,65 +59,56 @@ use warnings;
     sub bdecode {    # needs new benchmark
         my ($string) = @_;
         return if not $string;
-        my ($return);
-        if ($string =~ m[^(\d+):]) {    # byte string
-            my $blah = $';              # this new code is undertested
-            my $before = substr($blah, 0, $1, q[]);
-            $@ =
-                sprintf(q[Not enough data for byte string (%d vs %d)],
-                        $1, length($blah))
-                if length($blah) < $1;
-            $@ = sprintf(q[Trailing garbage at %d (%d bytes)],
-                         length($1), length($blah))
-                if $blah;
-            return wantarray ? ($before, $blah) : $before;
+        if ($string =~ m[^([1-9]\d*):]s) {
+            my $return = q[];
+            my $size   = $1;
+            $string =~ s|^$size:||s;
+            while ($size) {
+                my $this_time = min($size, 32766);
+                $string =~ s|^(.{$this_time})||s;
+                return if not $1;
+                $return .= $1;
+                $size = max(0, ($size - $this_time));
+            }
+            return wantarray ? ($return, $string) : $return;    # byte string
         }
-        elsif ($string =~ m[^i([-+]?\d+)e]) {    # integer
-            $@ = sprintf(q[Trailing garbage at %d (%d bytes)],
-                         length($1), length($'))
-                if $';
-            return wantarray ? (int($1), $') : int($1);
+        elsif ($string =~ s|^i([-+]?\d+)e||s) {                 # integer
+            return wantarray ? (int($1), $string || undef) : int($1);
         }
-        elsif ($string =~ m[^l]) {               # list
-            $string = $';
-            do {
-                (my ($value), $string) = bdecode($string);
-                push @$return, $value;
-            } while ($string and $string !~ m[^e]);
-            $@ = sprintf(q[Trailing garbage at %d (%d bytes)],
-                         length($`), length($'))
-                if $';
-            return wantarray ? ($return, $') : ($return);
+        elsif ($string =~ s|^l(.*)||s) {                        # list
+            my @return   = ();
+            my $leftover = $1;
+            while ($leftover and $leftover !~ s|^e||s) {
+                (my ($piece), $leftover) = bdecode($leftover);
+                push @return, $piece;
+            }
+            return wantarray ? (\@return, $leftover || undef) : \@return;
         }
-        elsif ($string =~ m[^d]) {               # dictionary
-            $string = $';
-            do {
-                (my ($key),   $string) = bdecode($string);
-                (my ($value), $string) = bdecode($string);
-                $return->{$key} = $value if $key;
-            } while ($string and $string !~ m[^e]);
-            $@ = sprintf(q[Trailing garbage at %d (%d bytes)],
-                         length($'), length($'))
-                if $';
-            return wantarray ? ($return, $') : ($return);
+        elsif ($string =~ s|^d(.*)||s) {                        # dictionary
+            my %return   = ();
+            my $leftover = $1;
+            while ($leftover and $leftover !~ s|^e||s) {
+                (my ($key),   $leftover) = bdecode($leftover);
+                (my ($value), $leftover) = bdecode($leftover);
+                $return{$key} = $value;
+            }
+            return wantarray ? (\%return, $leftover || undef) : \%return;
         }
-        else {
-            $@ = q[Bad bencoded data];
-        }
+        $@ = sprintf q[Bad bencoded data: %s], ($string||q[]);
         return;
     }
 
     sub compact {    # IPv4 only.  For now.
         my (@peers) = @_;
         if (not @peers) {
-
-            #warn(q[Not enough parameters for compact(ARRAY)]);
+            $@ = q[Not enough parameters for compact(ARRAY)];
             return;
         }
         my $return = q[];
-        my %saw;
-    PEER: for my $peer (grep(!$saw{$_}++, @peers)) {
-            my ($ip, $port) = (  # ...sigh, some (old) trackers do crazy stuff
+        my %seen;
+    PEER: for my $peer (grep(!$seen{$_}++, @peers)) {
+            next if not $peer;
+            my ($ip, $port) = ( # ...sigh, some (old) trackers do crazy things
                 ref $peer eq q[HASH]
                 ? ($peer->{q[ip]}, $peer->{q[port]})
                 : split(q[:], $peer, 2)
@@ -312,6 +302,6 @@ included with this module.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: Util.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
 
 =cut

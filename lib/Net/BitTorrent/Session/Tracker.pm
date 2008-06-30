@@ -8,13 +8,12 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Tracker.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+            = q[$Id: Tracker.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
     }
     use Net::BitTorrent::Util qw[min bdecode max compact shuffle :log];
     use Socket qw[SOL_SOCKET /TIMEO/ /F_INET/ SOCK_STREAM];
     use Fcntl qw[F_SETFL O_NONBLOCK];
-    use Carp qw[carp];
     {
         my (%urls,                 %fileno,
             %socket,               %session,
@@ -41,52 +40,110 @@ use warnings;
                 $scrape_incomplete{$self}    = 0;
                 $scrape_downloaded{$self}    = 0;
                 $connected{$self}            = 0;
-                $session{$self}->client->_set_pulse($self, time);
+                $session{$self}->get_client->_set_pulse($self, time);
             }
             return $self;
         }
-        sub urls                  { return $urls{$_[0]}; }
-        sub _fileno               { return $fileno{$_[0]}; }
-        sub _socket               { return $socket{$_[0]}; }
-        sub session               { return $session{$_[0]}; }
-        sub client                { return $session{$_[0]}->client; }
-        sub _connection_timestamp { return $connection_timestamp{$_[0]}; }
-        sub _scrape_complete      { return $scrape_complete{$_[0]}; }
-        sub _scrape_incomplete    { return $scrape_incomplete{$_[0]}; }
-        sub _scrape_downloaded    { return $scrape_downloaded{$_[0]}; }
-        sub _connected            { return $connected{$_[0]}; }
-        sub _queue_outgoing       { return $queue_outgoing{$_[0]}; }
-        sub _queue_incoming       { return $queue_incoming{$_[0]}; }
-        sub _next_announce        { return $next_announce{$_[0]}; }
-        sub _next_scrape          { return $next_scrape{$_[0]}; }
+
+        sub get_urls {
+            die if $_[1];
+            return $urls{$_[0]};
+        }
+
+        sub _get_fileno {
+            die if $_[1];
+            return $fileno{$_[0]};
+        }
+
+        sub _get_socket {
+            die if $_[1];
+            return $socket{$_[0]};
+        }
+
+        sub get_session {
+            die if $_[1];
+            return $session{$_[0]};
+        }
+
+        sub get_client {
+            die if $_[1];
+            return $session{$_[0]}->get_client;
+        }
+
+        sub _get_connection_timestamp {
+            die if $_[1];
+            return $connection_timestamp{$_[0]};
+        }
+
+        sub _get_scrape_complete {
+            die if $_[1];
+            return $scrape_complete{$_[0]};
+        }
+
+        sub _get_scrape_incomplete {
+            die if $_[1];
+            return $scrape_incomplete{$_[0]};
+        }
+
+        sub _get_scrape_downloaded {
+            die if $_[1];
+            return $scrape_downloaded{$_[0]};
+        }
+
+        sub _get_connected {
+            die if $_[1];
+            return $connected{$_[0]};
+        }
+
+        sub _get_queue_outgoing {
+            die if $_[1];
+            return $queue_outgoing{$_[0]};
+        }
+
+        sub _get_queue_incoming {
+            die if $_[1];
+            return $queue_incoming{$_[0]};
+        }
+
+        sub _get_next_announce {
+            die if $_[1];
+            return $next_announce{$_[0]};
+        }
+
+        sub _get_next_scrape {
+            die if $_[1];
+            return $next_scrape{$_[0]};
+        }
 
         sub _pulse {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             if (not defined $socket{$self}) {
-                if ($next_scrape{$self} <= time) {
-                    $self->scrape;
-                    $next_scrape{$self} = time + 120;
-                }
-                elsif ($next_announce{$self} <= time) {
-                    $self->announce;
+                if ($next_announce{$self} <= time) {
+                    $self->_announce;
                     $next_announce{$self} = time + 120;
-                    $session{$self}->client->_set_pulse($self, time + 125);
+                    $session{$self}
+                        ->get_client->_set_pulse($self, time + 125);
+                }
+                elsif ($next_scrape{$self} <= time) {
+                    $self->_scrape;
+                    $next_scrape{$self} = time + 120;
+                    $session{$self}->get_client->_set_pulse($self, time + 3);
                 }
             }
-            $session{$self}->client->_set_pulse($self,
+            $session{$self}->get_client->_set_pulse($self,
                              min($next_announce{$self}, $next_scrape{$self}));
             return 1;
         }
 
         sub _disconnect {
             my ($self, $reason) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             close $socket{$self};
-            $self->client->_do_callback(q[tracker_disconnect], $self);
-            $session{$self}->client->_remove_connection($self);
+            $self->get_client->_do_callback(q[tracker_disconnect], $self);
+            $session{$self}->get_client->_remove_connection($self);
             delete $socket{$self};
             delete $fileno{$self};
             $connected{$self}      = 0;
@@ -95,14 +152,14 @@ use warnings;
             return 1;
         }
 
-        sub scrape {
+        sub _scrape {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_scrape], $self);
+            $self->get_client->_do_callback(q[tracker_scrape], $self);
             if ($urls{$self}->[0] =~ m[^http:]) {
-                my $infohash = $session{$self}->infohash;
-                my $peer_id  = $session{$self}->client->peer_id;
+                my $infohash = $session{$self}->get_infohash;
+                my $peer_id  = $session{$self}->get_client->get_peer_id;
                 $infohash =~ s|(..)|\%$1|g;    # urlencode
                 my %query_hash = (q[info_hash] => $infohash,
                                   q[peer_id]   => $peer_id);
@@ -117,39 +174,41 @@ use warnings;
             elsif ($urls{$self}->[0] =~ m[^udp:]) {
                 return $self->_udp_connect;
             }
-            $self->client->_do_callback(q[tracker_error],
-                                        q[Unsupported tracker]);
+            $self->get_client->_do_callback(q[tracker_error],
+                                            q[Unsupported tracker]);
             return;
         }
 
-        sub announce {
+        sub _announce {
             my ($self, $event) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             if ($urls{$self}->[0] =~ m[^http:]) {
-                my $infohash = $session{$self}->infohash;
-                my $peer_id  = $session{$self}->client->peer_id;
+                my $infohash = $session{$self}->get_infohash;
+                my $peer_id  = $session{$self}->get_client->get_peer_id;
                 $infohash =~ s|(..)|\%$1|g;    # urlencode
                 my %query_hash = (
-                               q[info_hash] => $infohash,
-                               q[peer_id]   => $peer_id,
-                               q[port] => $session{$self}->client->sockport,
-                               q[uploaded]   => $session{$self}->uploaded,
-                               q[downloaded] => $session{$self}->downloaded,
-                               q[left]       => (
-                                   $session{$self}->piece_size * scalar(
-                                       grep { not $_->check and $_->priority }
-                                           @{$session{$self}->pieces}
-                                   )
-                               ),
-                               q[key]        => $^T,
-                               q[numwant]    => 200,
-                               q[compact]    => 1,
-                               q[no_peer_id] => 1,
-                               (defined($event)
-                                ? (q[event] => $event)
-                                : ()
-                               )
+                    q[info_hash] => $infohash,
+                    q[peer_id]   => $peer_id,
+                    q[port]      => $session{$self}->get_client->get_sockport,
+                    q[uploaded]  => $session{$self}->get_uploaded,
+                    q[downloaded] => $session{$self}->get_downloaded,
+                    q[left]       => (
+                        $session{$self}->get_piece_size * scalar(
+                            grep {
+                                not $_->get_cached_integrity
+                                    and $_->get_priority
+                                } @{$session{$self}->get_pieces}
+                        )
+                    ),
+                    q[key]        => $^T,
+                    q[numwant]    => 200,
+                    q[compact]    => 1,
+                    q[no_peer_id] => 1,
+                    (defined($event)
+                     ? (q[event] => $event)
+                     : ()
+                    )
                 );
                 $self->_tcp_connect(
                           $urls{$self}->[0]
@@ -167,15 +226,16 @@ use warnings;
                 $self->_udp_connect;
             }
             else {
-                carp q[Unsupported tracker];
+                $session{$self}->get_client->_do_callback(q[log], WARN,
+                                                      q[Unsupported tracker]);
             }
-            $self->client->_do_callback(q[tracker_announce], $self);
+            $self->get_client->_do_callback(q[tracker_announce], $self);
             return 1;
         }
 
         sub _tcp_connect {
             my ($self, $query) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my ($protocol, $host, undef, $port, $object)
                 = $query =~ m{^([^:/]+)://([^/:]*)(:(\d+))?(/.*)$};
@@ -188,15 +248,15 @@ use warnings;
             if (not CORE::socket($socket,      &PF_INET,
                                  &SOCK_STREAM, getprotobyname(q[tcp]))
                 )
-            {   $self->client->_do_callback(q[tracker_error],
-                                            q[Failed to create socket]);
+            {   $self->get_client->_do_callback(q[tracker_error],
+                                                q[Failed to create socket]);
             }
             elsif (not($^O eq q[MSWin32]
                        ? ioctl($socket, 0x8004667e, pack(q[I], 1))
                        : fcntl($socket, F_SETFL, O_NONBLOCK)
                    )
                 )
-            {   $self->client->_do_callback(q[tracker_error],
+            {   $self->get_client->_do_callback(q[tracker_error],
                                      q[Failed to set socket to non-blocking]);
             }
             elsif (not setsockopt($socket, SOL_SOCKET,
@@ -204,7 +264,7 @@ use warnings;
                    or not setsockopt($socket, SOL_SOCKET,
                                      SO_RCVTIMEO, pack('LL', 15, 0))
                 )
-            {   $self->client->_do_callback(q[tracker_error],
+            {   $self->get_client->_do_callback(q[tracker_error],
                                   q[Failed to set socket connection timeout]);
             }
             elsif (
@@ -213,7 +273,7 @@ use warnings;
                   and $^E
                   and ($^E != 10036)
                   and ($^E != 10035))
-            {   $self->client->_do_callback(q[tracker_error],
+            {   $self->get_client->_do_callback(q[tracker_error],
                                         sprintf q[Failed to connect: %s (%d)],
                                         $^E, $^E + 0);
             }
@@ -232,14 +292,14 @@ use warnings;
                                . $Net::BitTorrent::VERSION,
                            q[],
                            q[]);
-                return $session{$self}->client->_add_connection($self);
+                return $session{$self}->get_client->_add_connection($self);
             }
             return;
         }
 
         sub _tcp_parse_data {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my ($head, $body) = split m[\015?\012\015?\012],
                 $queue_incoming{$self}, 2;
@@ -260,12 +320,12 @@ use warnings;
             {   my $decoded_data = bdecode($body);
                 if (defined $decoded_data) {
                     if (defined $decoded_data->{q[failure reason]}) {
-                        $self->client->_do_callback(q[tracker_error],
-                                          $decoded_data->{q[failure reason]});
+                        $self->get_client->_do_callback(q[tracker_error],
+                                   $self, $decoded_data->{q[failure reason]});
                     }
                     elsif (defined $decoded_data->{q[files]}) {
                         my $file_hash = $decoded_data->{q[files]}{pack q[H*],
-                            $session{$self}->infohash};
+                            $session{$self}->get_infohash};
                         $scrape_complete{$self} = $file_hash->{q[complete]};
                         $scrape_downloaded{$self}
                             = $file_hash->{q[downloaded]};
@@ -280,8 +340,9 @@ use warnings;
                                   ),
                                   900
                             ) + time;
-                        $self->client->_do_callback(q[tracker_scrape_okay],
-                                                    $self);
+                        $self->get_client->_do_callback(
+                                                       q[tracker_scrape_okay],
+                                                       $self);
                     }
                     else {
                         if (ref $decoded_data->{q[peers]} eq q[ARRAY])
@@ -302,8 +363,9 @@ use warnings;
                                    : 0
                                   )
                             ) + time;
-                        $self->client->_do_callback(q[tracker_announce_okay],
-                                                    $self);
+                        $self->get_client->_do_callback(
+                                                     q[tracker_announce_okay],
+                                                     $self);
                     }
                 }
                 return $self->_disconnect;
@@ -313,52 +375,53 @@ use warnings;
 
         sub _udp_connect {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_error], $self,
-                                        q[UDP trackers are unsupported.]);
+            $self->get_client->_do_callback(q[tracker_error], $self,
+                                            q[UDP trackers are unsupported.]);
+            $next_announce{$self} = time + (60 * 15);    # XXX - remove!
             return 0;
         }
 
         sub _udp_write {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_error], $self,
-                                        q[UDP trackers are unsupported.]);
+            $self->get_client->_do_callback(q[tracker_error], $self,
+                                            q[UDP trackers are unsupported.]);
             return 0;
         }
 
         sub _udp_read {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_error],
-                                        q[UDP trackers are unsupported.]);
+            $self->get_client->_do_callback(q[tracker_error],
+                                            q[UDP trackers are unsupported.]);
             return 0;
         }
 
         sub _udp_disconnect {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_error], $self,
-                                        q[UDP trackers are unsupported.]);
+            $self->get_client->_do_callback(q[tracker_error], $self,
+                                            q[UDP trackers are unsupported.]);
             return 0;
         }
 
         sub _udp_parse_data {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            $self->client->_do_callback(q[tracker_error], $self,
-                                        q[UDP trackers are unsupported.]);
+            $self->get_client->_do_callback(q[tracker_error], $self,
+                                            q[UDP trackers are unsupported.]);
             return 0;
         }
 
         sub _process_one {
             my ($self, $read, $write) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my ($actual_read, $actual_write) = (0, 0);
             if ($write and defined $socket{$self}) {
@@ -368,8 +431,8 @@ use warnings;
                              $write);
                 if ($actual_write) {
                     $session{$self}
-                        ->client->_do_callback(q[tracker_outgoing_data],
-                                               $self, $actual_write);
+                        ->get_client->_do_callback(q[tracker_outgoing_data],
+                                                   $self, $actual_write);
                 }
                 else { $self->_disconnect; goto RETURN; }
             }
@@ -387,11 +450,12 @@ use warnings;
                     if (not $connected{$self}) {
                         $connected{$self} = 1;
                         $session{$self}
-                            ->client->_do_callback(q[tracker_connect], $self);
+                            ->get_client->_do_callback(q[tracker_connect],
+                                                       $self);
                     }
                     $session{$self}
-                        ->client->_do_callback(q[tracker_incoming_data],
-                                               $self, $actual_read);
+                        ->get_client->_do_callback(q[tracker_incoming_data],
+                                                   $self, $actual_read);
                     $self->_parse_packet;
                 }
                 else {
@@ -404,7 +468,7 @@ use warnings;
 
         sub _parse_packet {
             my ($self) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             if ($urls{$self}->[0] =~ m[^http:]) {
                 $self->_tcp_parse_data;
@@ -413,15 +477,15 @@ use warnings;
                 $self->_udp_parse_data;
             }
             else {
-
-                #carp q[Somethin' is wrong!]
+                $session{$self}->get_client->_do_callback(q[log], WARN,
+                                                      q[Somethin' is wrong!]);
             }
             return;
         }
 
         sub as_string {
             my ($self, $advanced) = @_;
-            $session{$self}->client->_do_callback(q[log], TRACE,
+            $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my @values = (
                         $urls{$self}->[0],
@@ -432,7 +496,7 @@ use warnings;
                         $scrape_downloaded{$self},
                         $next_scrape{$self} - time,
                         $next_announce{$self} - time,
-                        $session{$self}->client->_get_pulse($self) - time,
+                        $session{$self}->get_client->_get_pulse($self) - time,
             );
             $_ = (sprintf q[%dm %ss%s],
                   int(abs($_) / 60),
@@ -467,9 +531,9 @@ END
         }
         DESTROY {
             my $self = shift;
-            $session{$self}->client->_del_pulse($self)
+            $session{$self}->get_client->_del_pulse($self)
                 if defined $session{$self}
-                    and defined $session{$self}->client;
+                    and defined $session{$self}->get_client;
             delete $urls{$self};
             delete $socket{$self};
             delete $session{$self};
@@ -514,14 +578,6 @@ L<Net::BitTorrent::Session::add_tracker( )|Net::BitTorrent::Session/add_tracker 
 
 =over 4
 
-=item C<announce ( )>
-
-Asks the tracker for full data including a list of nodes.  Announce
-is also used to let the tracker know when we start, stop and finish
-downloading.
-
-See also: L<scrape ( )|/scrape ( )>
-
 =item C<as_string ( [ VERBOSE ] )>
 
 Returns a 'ready to print' dump of the
@@ -531,23 +587,17 @@ called in void context, the structure is printed to C<STDERR>.
 See also: [id://317520],
 L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
 
-=item C<client ( )>
+=item C<get_client ( )>
 
 Returns the L<Net::BitTorrent|Net::BitTorrent> object related to this
 tracker.
 
-=item C<scrape ( )>
-
-Asks the tracker for basic data.
-
-See also: L<announce ( )|/announce ( )>
-
-=item C<session ( )>
+=item C<get_session ( )>
 
 Returns the L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 object related to this request.
 
-=item C<urls ( )>
+=item C<get_urls ( )>
 
 Returns the list of URLs contained in this tier.
 
@@ -599,6 +649,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Tracker.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: Tracker.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
 
 =cut
