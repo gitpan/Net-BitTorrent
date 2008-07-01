@@ -1441,12 +1441,11 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::Session::Peer> object's data structure.  If called
 in void context, the structure is printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also: L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_bitfield ( )>
 
-Returns a bitfield representing the pieces this peer claims to have
+Returns the bitfield representing the pieces this peer claims to have
 successfully downloaded.
 
 =item C<get_client ( )>
@@ -1458,7 +1457,7 @@ peer.
 
 Returns the total amount of data downloaded from this peer.
 
-See also: L<uploaded ( )|/uploaded ( )>
+See also: L<get_uploaded ( )|/"get_uploaded ( )">
 
 =item C<get_incoming_connection ( )>
 
@@ -1486,8 +1485,11 @@ peer.
 =item C<get_outgoing_requests ( )>
 
 Returns a list of
-L<Net::BitTorrent::Peer::Request|Net::BitTorrent::Peer::Request>
+L<Net::BitTorrent::Session::Peer::Request|Net::BitTorrent::Session::Peer::Request>
 objects representing blocks this peer has asked us for.
+
+See Also: L<Net::BitTorrent|Net::BitTorrent/"get_ul_slots_per_conn ( )">
+L<Net::BitTorrent|Net::BitTorrent/"set_ul_slots_per_conn ( NEWVAL )">
 
 =item C<get_peer_id ( )>
 
@@ -1520,7 +1522,7 @@ object related to this peer.
 
 Returns the total amount of data uploaded to this peer.
 
-See also: L<get_downloaded ( )|/get_downloaded ( )>
+See also: L<get_downloaded ( )|/"get_downloaded ( )">
 
 =back
 

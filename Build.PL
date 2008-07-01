@@ -43,30 +43,30 @@ Do you want to perform these tests in addition to core tests? [no] ]
 my @tests;
 find \&find_cb, sort @search;
 my $mb = Module::Build->new(
-    module_name       => q[Net::BitTorrent],
-    license           => q[perl],
-    dist_author       => q[Sanko Robinson <sanko@cpan.org>],
-    dist_abstract     => q[BitTorrent peer-to-peer protocol],
-    dist_version_from => q[lib/Net/BitTorrent.pm],
-
-    #create_makefile_pl => q[passthrough],
+    module_name        => q[Net::BitTorrent],
+    license            => q[perl],
+    dist_author        => q[Sanko Robinson <sanko@cpan.org>],
+    dist_abstract      => q[BitTorrent peer-to-peer protocol],
+    dist_version_from  => q[lib/Net/BitTorrent.pm],
+    #create_makefile_pl => q[traditional],                        # Old skool.
     sign => 0,    # chokes on build.bat on win32
     build_requires => {q[Module::Build] => 0.2805,    # core in 5.009004
                        q[Test::More]    => 0.72,      # dev on 0.74
     },
-    requires => {q[Cwd]           => 0,           # dev on
-                 q[Digest::SHA]   => 5.45,        # dev on 5.45|CORE in 5.10
-                 q[Exporter]      => 0,           # dev on 5.62
-                 q[Fcntl]         => 0,           # dev on 1.06
-                 q[File::Path]    => 0,           # dev on 2.04
-                 q[File::Spec]    => 0,           # dev on 3.2701
-                 q[Module::Build] => 0.2805,      # dev on 0.280802|CORE in 5.10
-                 q[perl]          => 5.008001,    # dev on 5.11
-                 q[Scalar::Util]  => 1.19,        # dev on 1.19
-                 q[Socket]        => 1.77,        # dev on 1.80
-                 q[Time::HiRes]   => 0,           # dev on 1.9712
-                 q[Test::More]    => 0.72,        # dev on 0.74
-                 q[version]       => 0.74         # dev on 0.74|CORE in 5.10
+    requires => {
+               q[Cwd]           => 0,           # dev on
+               q[Digest::SHA]   => 5.45,        # dev on 5.45|CORE in 5.10
+               q[Exporter]      => 0,           # dev on 5.62
+               q[Fcntl]         => 0,           # dev on 1.06
+               q[File::Path]    => 0,           # dev on 2.04
+               q[File::Spec]    => 0,           # dev on 3.2701
+               q[Module::Build] => 0.2805,      # dev on 0.280802|CORE in 5.10
+               q[perl]          => 5.008001,    # dev on 5.11
+               q[Scalar::Util]  => 1.19,        # dev on 1.19
+               q[Socket]        => 1.77,        # dev on 1.80
+               q[Time::HiRes]   => 0,           # dev on 1.9712
+               q[Test::More]    => 0.72,        # dev on 0.74
+               q[version]       => 0.74         # dev on 0.74|CORE in 5.10
     },
     recommends => {
         q[Data::Dumper] => 0,            # core
@@ -101,14 +101,14 @@ my $mb = Module::Build->new(
              MailingList =>
                  q[http://groups.google.com/group/net-bittorrent-discuss]
         },
-        keywords     => [qw[BitTorrent client peer p2p torrent socket dht]],
-        generated_by => q[Sanko Robinson <sanko@cpan.org>]          # lies
+        keywords => [qw[BitTorrent client peer p2p torrent socket dht]],
+        generated_by => q[Sanko Robinson <sanko@cpan.org>]    # lies
     },
 );
 $mb->create_build_script;
 
 sub can_talk_to_ourself {
-    system(qq["$^X" t/data/etc/talk-to-ourself.pl]);    # taken from LWP
+    system(qq["$^X" t/data/etc/talk-to-ourself.pl]);          # taken from LWP
     return $? ? 0 : 1;
 }
 

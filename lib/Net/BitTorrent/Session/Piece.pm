@@ -385,37 +385,45 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::Session::Piece> object's data structure.  If called
 in void context, the structure is printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also:
+L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_blocks ( )>
 
 Returns a hash of key/value pairs for each
 L<Net::BitTorrent::Session::Piece::Block|Net::BitTorrent::Session::Piece::Block>
 object related to this piece.  The keys of this hash are
-L<offsets|Net::BitTorrent::Session::Piece::Block/offset ( )>.
+L<offsets|Net::BitTorrent::Session::Piece::Block/"get_offset ( )">.
 
-If this piece is not marked L<working|/working ( )>, C<undef> is the
+If this piece is not marked L<working|/"get_working ( )">, C<undef> is the
 return value.
-
-=item C<get_cached_integrity ( )>
-
-Returns a cached boolean value indicating whether or not this piece
-passes hash checking.  This value is cached to save time; to be sure
-that this value is accurate, use
-L<get_verified_integrity ( )|/get_verified_integrity ( )>.
-
-=item C<get_client ( )>
-
-Returns the L<Net::BitTorrent|Net::BitTorrent> object related to this
-file.
 
 =item C<get_hash ( )>
 
 Returns the 20-byte SHA1 hash used to verify the contents of this
 piece.
 
-See also: L<get_verified_integrity ( )|/get_verified_integrity ( )>
+See also: L<get_verified_integrity ( )|/"get_verified_integrity ( )">
+
+=item C<get_cached_integrity ( )>
+
+Returns a cached boolean value indicating whether or not this piece
+passes hash checking.  This value is cached to save time; to be sure
+that this value is accurate, use
+L<get_verified_integrity ( )|/"get_verified_integrity ( )">.
+
+=item C<get_verified_integrity ( )>
+
+Verifies data integrity of this piece by checking against the SHA1
+hash.
+
+See also: L<get_cached_integrity ( )|/"get_cached_integrity ( )">,
+L<get_hash ( )|/"get_hash ( )">
+
+=item C<get_client ( )>
+
+Returns the L<Net::BitTorrent|Net::BitTorrent> object related to this
+file.
 
 =item C<get_index ( )>
 
@@ -427,7 +435,7 @@ L<Net::BitTorrent::Session|Net::BitTorrent::Session> object.
 Get the download priority of this piece.
 
 See also:
-L<Net::BitTorrent::Session::File::get_priority ( )|Net::BitTorrent::Session::File/get_priority ( )>
+L<Net::BitTorrent::Session::File|Net::BitTorrent::Session::File/"get_priority ( )">
 
 =item C<set_priority ( [NEWVAL] )>
 
@@ -436,23 +444,16 @@ Set the download priority of this piece.
 By default, all pieces begin with a priority of two (C<2>).
 
 See also:
-L<Net::BitTorrent::Session::File::set_priority ( )|Net::BitTorrent::Session::File/set_priority ( )>
+L<Net::BitTorrent::Session::File|Net::BitTorrent::Session::File/"set_priority ( )">
 
 =item C<get_session ( )>
 
-Returns the L<Net::BitTorrent::Session|Net::BitTorrent::Session>
-object related to this file.
+Returns the L<Net::BitTorrent::Session|Net::BitTorrent::Session> object
+related to this file.
 
 =item C<get_size ( )>
 
 Returns the size of the piece represented by this object.
-
-=item C<get_verified_integrity ( )>
-
-Verifies data integrity of this piece by checking against the SHA1
-hash.
-
-See also: L<get_cached_integrity ( )|/get_cached_integrity ( )>, L<get_hash ( )|/get_hash ( )>
 
 =item C<get_working ( )>
 
@@ -465,8 +466,8 @@ piece.
 Sets a boolean value indicating whether or not we are actively requesting
 L<blocks|Net::BitTorrent::Session::Piece::Block> from this piece.
 
-NOTE: This is an advanced function that should not be used under normal
-conditions.
+I<NOTE: This is an advanced function that should not be used under normal
+conditions.>
 
 =back
 

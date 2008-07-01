@@ -638,25 +638,25 @@ Net::BitTorrent::Session - Class Representing a Single .torrent File
 Creates a C<Net::BitTorrent::Session> object.  This constructor is
 called by
 L<Net::BitTorrent::add_session()|Net::BitTorrent/add_session ( { ... } )>
-and should not be used directly.  C<new ( )> accepts arguments as a
+and should not be used directly.  C<new( )> accepts arguments as a
 hash, using key-value pairs:
 
 =over 4
 
-=item C<get_path>
+=item C<path>
 
 Filename of the .torrent file to load.
 
 This is the only required parameter.
 
-=item C<get_base_dir>
+=item C<base_dir>
 
 Base directory used to store the files related to this session.  This
 directory is created if not preexisting.
 
 Default: C<./> (Current working directory)
 
-=item C<get_block_length>
+=item C<block_length>
 
 Length of blocks we request from peers of this session.  This should
 not be changed as it can greatly affect performance.
@@ -682,15 +682,26 @@ Add a new
 L<Net::BitTorrent::Session::Tracker|Net::BitTorrent::Session::Tracker>
 tier to the session.  Accepts a list of URLs.
 
-See also: L<trackers ( )|/trackers ( )>
+See also: L<get_trackers ( )|/get_trackers ( )>
+
+=item C<get_base_dir>
+
+Returns the L<base directory|/"base_dir"> used by the files contained in
+this session.
+
+=item C<get_path ( )>
+
+Returns the L<filename|/"path"> of the torrent this object represents.
 
 =item C<append_nodes ( STRING )>
 
 Adds a string of compacted nodes to the list of potential peers.
 
+I<This method may be renamed in a future version.>
+
 See also:
-L<compact_nodes ( )|/compact_nodes ( )>, L<nodes ( )|/nodes ( )>,
-L<Net::BitTorrent::Util::compact( )|Net::BitTorrent::Util/compact ( LIST )>
+L<compact_nodes ( )|/"compact_nodes ( )">, L<nodes ( )|/"nodes ( )">,
+L<Net::BitTorrent::Util::compact( )|Net::BitTorrent::Util/"compact ( LIST )">
 
 =item C<as_string ( [ VERBOSE ] )>
 
@@ -698,8 +709,8 @@ Returns a 'ready to print' dump of the C<Net::BitTorrent::Session>
 object's data structure.  If called in void context, the structure is
 printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also:
+L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_bitfield ( )>
 
@@ -710,7 +721,7 @@ downloaded.
 
 Get the size used when requesting data from peers.
 
-See also: L<set_block_size ( NEWVAL )|/set_block_size ( NEWVAL )>
+See also: L<set_block_size ( )|/"set_block_size ( NEWVAL )">
 
 =item C<set_block_size ( NEWVAL )>
 
@@ -772,7 +783,7 @@ This is a blocking method; all processing will stop until this
 function returns.
 
 See also:
-L<Net::BitTorrent::Session::Piece::get_verified_integrity( )|Net::BitTorrent::Session::Piece/get_verified_integrity( )>
+L<Net::BitTorrent::Session::Piece|Net::BitTorrent::Session::Piece/"get_verified_integrity ( )">
 
 =item C<get_infohash ( )>
 

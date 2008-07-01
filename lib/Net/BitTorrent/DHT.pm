@@ -56,13 +56,12 @@ use warnings;
                 or return;
             setsockopt($_socket, SOL_SOCKET, SO_REUSEADDR, pack(q[l], 1))
                 or return;
+            my $addr = $client{$self}->get_sockaddr();
             bind($_socket,
                  pack(q[Sna4x8],
                       AF_INET,
                       $client{$self}->get_sockport,
-                      (pack q[C4], ($client{$self}->get_sockaddr =~ m[(\d+)]g)
-                      )
-                 )
+                      (pack q[C4], ($addr =~ m[(\d+)]g)))
             ) or return;
             $fileno{$self} = fileno($_socket);
             $socket{$self} = $_socket;
@@ -216,16 +215,20 @@ use warnings;
                                 if (defined $dispatch{$type}) {
                                     $dispatch{$type}($self, $node, $packet);
                                 }
-                                elsif(require Data::Dumper) {    # xxx - do something drastic
-                                    warn q[Unhandled DHT reply: ] . Data::Dumper::Dump( $packet);
+                                elsif (require Data::Dumper)
+                                {    # xxx - do something drastic
+                                    warn q[Unhandled DHT reply: ]
+                                        . Data::Dumper::Dump($packet);
                                 }
                                 delete $outstanding_queries{$self}
                                     {$packet->{q[t]}};
                             }
                         }
-                            elsif(require Data::Dumper) {    # xxx - do something drastic
-                                    warn q[Unhandled DHT reply: ] . Data::Dumper::Dump( $packet);
-                                }
+                        elsif (require Data::Dumper)
+                        {            # xxx - do something drastic
+                            warn q[Unhandled DHT reply: ]
+                                . Data::Dumper::Dump($packet);
+                        }
                     }
                 }
                 else {    # might be AZ... might be garbage... or both.
@@ -358,7 +361,7 @@ __END__
 
 =head1 NAME
 
-Net::BitTorrent::DHT - Mainline (Kademlia based) Distributed Hash Table
+Net::BitTorrent::DHT - Kademlia based Distributed Hash Table
 
 =head1 Constructor
 
@@ -378,31 +381,28 @@ used directly.
 =item C<get_client ( )>
 
 Returns the L<Net::BitTorrent|Net::BitTorrent> object related to this
-peer.
+DHT object.
 
 =item C<get_sockaddr ( )>
 
 Return the address part of the sockaddr structure for the UDP socket.
 
-See also: L<Net::BitTorrent/sockaddr>
+See also: L<Net::BitTorrent|Net::BitTorrent/"get_sockaddr ( )">
 
 =item C<get_sockport ( )>
 
 Return the port number that the UDP socket is using on the local host.
 
-See also: L<Net::BitTorrent/sockport>
+See also: L<Net::BitTorrent|Net::BitTorrent/"get_sockport ( )">
 
 =item C<add_node ( )>
 
 TODO
 
-=item C<get_client ( )>
-
-TODO
-
 =item C<get_node_id ( )>
 
-TODO
+Get the Node ID used to identify this L<client|/"get_client( )"> in the
+DHT swarm.
 
 =item C<get_routing_table ( )>
 
@@ -418,7 +418,7 @@ Returns a 'ready to print' dump of the C<Net::BitTorrent::DHT> object's
 data structure.  If called in void context, the structure is printed to
 C<STDERR>.
 
-See also: L<Net::BitTorrent/as_string>
+See also: L<Net::BitTorrent|Net::BitTorrent/as_string>
 
 =back
 

@@ -188,7 +188,7 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::DHT::Node::Azureus> object's data structure.  If
 called in void context, the structure is printed to C<STDERR>.
 
-See also: L<Net::BitTorrent/as_string>
+See also: L<Net::BitTorrent|Net::BitTorrent/as_string>
 
 =item C<add_infohash ( NEWVAL )>
 
@@ -240,7 +240,7 @@ TODO
 
 The specification documentation (and thus this implementation... urm...)
 is incomplete.  See
-L<http://www.azureuswiki.com/index.php/Distributed_hash_table>
+http://www.azureuswiki.com/index.php/Distributed_hash_table
 
 =back
 

@@ -50,6 +50,16 @@ use warnings;
             return $urls{$_[0]};
         }
 
+        sub add_url {
+            my ($self, $url) = @_;
+            return push @{$urls{$_[@_]}}, $url;
+        }
+
+        sub remove_url {
+
+            # XXX - TODO
+        }
+
         sub _get_fileno {
             die if $_[1];
             return $fileno{$_[0]};
@@ -504,7 +514,7 @@ use warnings;
                   $_ > 0 ? q[] : q[ ago]
             ) for @values[6 .. 8];
             my $dump = sprintf( <<'END', @values);
-Net::BitTorrent::Tracker (%s)
+Net::BitTorrent::Session::Tracker (%s)
 %s
 Basic Information:
   Total peers:     %d
@@ -570,7 +580,7 @@ Creates a C<Net::BitTorrent::Session::Tracker> object.  This
 constructor should not be used directly.
 
 See also:
-L<Net::BitTorrent::Session::add_tracker( )|Net::BitTorrent::Session/add_tracker ( URLS )>
+L<Net::BitTorrent::Session|Net::BitTorrent::Session/"add_tracker ( URLS )">
 
 =back
 
@@ -581,11 +591,11 @@ L<Net::BitTorrent::Session::add_tracker( )|Net::BitTorrent::Session/add_tracker 
 =item C<as_string ( [ VERBOSE ] )>
 
 Returns a 'ready to print' dump of the
-C<Net::BitTorrent::Session::Tracker> object's data structure. If
-called in void context, the structure is printed to C<STDERR>.
+C<Net::BitTorrent::Session::Tracker> object's data structure.  If called
+in void context, the structure is printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also:
+L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_client ( )>
 
@@ -600,6 +610,25 @@ object related to this request.
 =item C<get_urls ( )>
 
 Returns the list of URLs contained in this tier.
+
+See Also: L<add_url( )|/"add_url ( URL )">,
+L<remove_url( )|/"remove_url ( URL )">
+
+=item C<add_url ( URL )>
+
+Adds a new tracker url to this tier.
+
+See Also: L<remove_url( )|/"remove_url ( URL )">,
+L<get_urls( )|/"get_urls ( )">
+
+=item C<remove_url ( URL )>
+
+Removes a tracker from the list in this tier.
+
+I<This method is a NOOP.  See the next release...>
+
+See Also: L<add_url( )|/"add_url ( URL )">,
+L<get_urls( )|/"get_urls ( )">
 
 =back
 

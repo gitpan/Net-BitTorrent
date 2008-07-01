@@ -430,8 +430,8 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::Session::File> object's data structure.  If called
 in void context, the structure is printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also:
+L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_client ( )>
 
@@ -479,8 +479,8 @@ objects.
 
 Returns the download priority of this file.
 
-See also: L<set_priority ( )|/set_priority ( NEWVAL )>,
-L<Net::BitTorrent::Session::Piece::set_priority ( )|Net::BitTorrent::Session::Piece/set_priority ( [NEWVAL] )>
+See also: L<set_priority ( )|"/set_priority ( NEWVAL )">,
+L<Net::BitTorrent::Session::Piece|Net::BitTorrent::Session::Piece/"set_priority ( [NEWVAL] )">
 
 =item C<set_priority ( NEWVAL )>
 
@@ -493,7 +493,7 @@ file's priority to say... C<1,000,000>, leave everything else at the
 default C<2> and and be positive we'll work on it first.  To avoid
 downloading this file, set priority to zero.
 
-See also: L<get_priority ( )|/get_priority ( NEWVAL )>
+See also: L<get_priority ( )|/"get_priority ( )">
 L<Net::BitTorrent::Session::Piece::priority ( )|Net::BitTorrent::Session::Piece/priority ( [NEWVAL] )>
 
 NOTE: Setting the priority to zero will tell C<Net::BitTorrrent> not

@@ -157,8 +157,7 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::Session::Peer::Request> object's data structure.
 If called in void context, the structure is printed to C<STDERR>.
 
-See also: [id://317520],
-L<Net::BitTorrent::as_string()|Net::BitTorrent/as_string ( [ VERBOSE ] )>
+See also: L<Net::BitTorrent|Net::BitTorrent/"as_string ( [ VERBOSE ] )">
 
 =item C<get_client ( )>
 

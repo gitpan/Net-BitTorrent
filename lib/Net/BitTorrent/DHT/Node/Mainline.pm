@@ -386,7 +386,7 @@ Returns a 'ready to print' dump of the
 C<Net::BitTorrent::DHT::Node::Mainline> object's data structure.  If
 called in void context, the structure is printed to C<STDERR>.
 
-See also: L<Net::BitTorrent/as_string>
+See also: L<Net::BitTorrent|Net::BitTorrent/as_string>
 
 =item C<add_infohash ( NEWVAL )>
 

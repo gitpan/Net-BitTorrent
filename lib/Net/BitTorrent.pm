@@ -7,7 +7,7 @@ use warnings;
         use version qw[qv];
         our $SVN
             = q[$Id: BitTorrent.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 23 $)->numify / 1000), $UNSTABLE_RELEASE);
+        our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 23 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
     use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
@@ -270,7 +270,9 @@ use warnings;
         die if $_[1];
         return $ul_slots_per_session{$_[0]};
     }    # TODO
+
     sub get_ul_slots_per_conn { die if $_[1]; return 80 }
+    sub set_ul_slots_per_conn { return; }  # NO OP
 
     sub set_debug_level {
         my ($self, $value) = @_;
@@ -727,8 +729,8 @@ Net::BitTorrent - BitTorrent peer-to-peer protocol class
 
 =head1 Description
 
-C<Net::BitTorrent> is a class based implementation of the current
-BitTorrent Protocol Specification.  Each C<Net::BitTorrent> object is
+L<Net::BitTorrent|Net::BitTorrent> is a class based implementation of the current
+BitTorrent Protocol Specification.  Each L<Net::BitTorrent|Net::BitTorrent> object is
 capable of handling several concurrent .torrent sessions.
 
 =head1 Constructor
@@ -737,7 +739,7 @@ capable of handling several concurrent .torrent sessions.
 
 =item C<new ( { [ARGS] } )>
 
-Creates a C<Net::BitTorrent> object.  C<new ( )> accepts arguments as a
+Creates a L<Net::BitTorrent|Net::BitTorrent> object.  C<new ( )> accepts arguments as a
 hash, using key-value pairs, all of which are optional.  The most common
 are:
 
@@ -756,7 +758,7 @@ Default: 0.0.0.0 (any address)
 =item C<LocalPort>
 
 TCP port opened to remote peers for incoming connections.  If handed a
-list of ports, C<Net::BitTorrent> will traverse the list, attempting to
+list of ports, L<Net::BitTorrent|Net::BitTorrent> will traverse the list, attempting to
 open on each of the ports until we succeed.  If this value is C<undef> or
 C<0>, we allow the OS to choose an open port at random.
 
@@ -817,7 +819,8 @@ Default: C<32768> (C<2**15>)
 
 =item C<ul_slots_per_session>
 
-Maximum number of requested blocks we keep in queue with each peer.
+Maximum number of <requests|Net::BitTorrent::Session::Peer::Request> we
+keep in queue with each peer.
 
 Default: C<10>
 
@@ -844,8 +847,9 @@ value, with C<true> meaning that the operation was a success.  When a
 method states that it returns a value, failure will result in C<undef> or
 an empty list.
 
-Besides these listed here, there are several C<set_callback[...]> methods
-described in the L</Callbacks> section.
+Besides these listed here, there is also the
+L<set_callback( )|/"set_callback ( TYPE, CODEREF )"> method described in
+the L<Callbacks|/Callbacks> section.
 
 =over 4
 
@@ -878,17 +882,17 @@ L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
 =item C<as_string ( [ VERBOSE ] )>
 
-Returns a 'ready to print' dump of the C<Net::BitTorrent> object's data
+Returns a 'ready to print' dump of the L<Net::BitTorrent|Net::BitTorrent> object's data
 structure.  If called in void context, the structure is printed to
 C<STDERR>.
 
 Note: The serialized version returned by this method is not a full,
 accurate representation of the object and cannot be C<eval>ed into a new
-C<Net::BitTorrent> object or used as resume data.  The layout of and the
+L<Net::BitTorrent|Net::BitTorrent> object or used as resume data.  The layout of and the
 data included in this dump is subject to change in future versions.  This
 is a debugging method, not to be used under normal circumstances.
 
-See also: [id://317520]
+See also: http://perlmonks.org/?node_id=317520#debugging
 
 =item C<get_debug_level ( )>
 
@@ -903,45 +907,49 @@ See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS"> for more.
 =item C<do_one_loop ( [TIMEOUT] )>
 
 Processes the various socket-containing objects (peers, trackers) held by
-this C<Net::BitTorrent> object.  This method should be called frequently.
+this L<Net::BitTorrent|Net::BitTorrent> object.  This method should be called frequently.
 
 The optional TIMEOUT parameter is the maximum amount of time, in seconds,
 possibly fractional, C<select()> is allowed to wait before returning in
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )">.  This TIMEOUT defaults to
 C<1.0>.  To wait indefinatly, TIMEOUT should be C<-1.0>.
 
-=item process_connections ( READERSREF, WRITERSREF, ERRORSREF )
+=item C<process_connections ( READERSREF, WRITERSREF, ERRORSREF )>
 
 Use this method when you want to implement your own C<select> statement
-for event processing instead of using C<Net::BitTorrent>'s
+for event processing instead of using L<Net::BitTorrent|Net::BitTorrent>'s
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.  The parameters are
 references to the readers, writers, and errors parameters used by the
 select statement.
 
-Use the internal C<_get_fileno ( )> method to set up the necessary bit
-vectors for your C<select ( )> call.
+Use the internal C<_get_fileno( )> method to set up the necessary bit
+vectors for your C<select> call.
 
-Note: This is a work in progress.
+I<This is experimental and may be improved in the future.>
 
 See Also:
 L<Alternative Event Processing|/"Alternative Event Processing">
 
-=item process_timers ( )
+=item C<process_timers ( )>
 
-C<Net::BitTorrent> relies heavily on internal timing of various events
+L<Net::BitTorrent|Net::BitTorrent> relies heavily on internal timing of various events
 (socket timeouts, tracker requests, etc.) and simply cannot function
 without processing these timers from time to time.
 
-Use this method only when you implement your own C<select> statement for
-event processing and do not use C<Net::BitTorrent>'s
+Use this method only if you have implemented your own C<select> statement
+for event processing instead of L<Net::BitTorrent|Net::BitTorrent>'s
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.
 
-Note: This is a work in progress.
+See Also:
+L<Alternative Event Processing|/"Alternative Event Processing">
 
 =item C<get_max_buffer_per_conn ( )>
 
 Get the amount of unparsed data, in bytes, we store from a peer before
 dropping their connection.
+
+See Also:
+L<set_max_buffer_per_conn ( NEWVAL )|/"set_max_buffer_per_conn ( NEWVAL )">
 
 =item C<set_max_buffer_per_conn ( NEWVAL )>
 
@@ -953,10 +961,15 @@ memory without trouble but low enough to keep DDoS-like attacks at bay.
 Default: C<131072> (C<2**17>)  I<(This default may change as the module
 matures)>
 
+See Also:
+L<get_max_buffer_per_conn ( )|/"get_max_buffer_per_conn ( )">
+
 =item C<get_max_halfopen ( )>
 
 Get the maximum number of peers we have yet to receive a
 handshake from.  These include sockets that have not connected yet.
+
+See Also: L<set_max_halfopen ( NEWVAL )|/"set_max_halfopen ( NEWVAL )">
 
 =item C<set_max_halfopen ( NEWVAL )>
 
@@ -968,9 +981,13 @@ problems with the TCP stack.
 
 Default: C<8>
 
+See Also: L<get_max_halfopen ( )|/"get_max_halfopen ( )">
+
 =item C<get_conns_per_client ( )>
 
 Get the maximum number of peers per client object.
+
+See Also: L<set_conns_per_client ( )|/"set_conns_per_client ( NEWVAL )">
 
 =item C<set_conns_per_client ( NEWVAL )>
 
@@ -978,11 +995,15 @@ Set the maximum number of peers per client object.
 
 Default: C<300>
 
-See also: theory.org (http://tinyurl.com/4jgdnl)
+See also: theory.org (http://tinyurl.com/4jgdnl),
+L<get_conns_per_client ( )|/"get_conns_per_client ( )">
 
 =item C<get_conns_per_session ( )>
 
 Get the maximum number of peers per session.
+
+See Also:
+L<set_conns_per_session ( )|/"set_conns_per_session ( NEWVAL )">
 
 =item C<set_conns_per_session ( NEWVAL )>
 
@@ -990,10 +1011,14 @@ Set the maximum number of peers per session.
 
 Default: C<100>
 
+See Also: L<get_conns_per_session ( )|/"get_conns_per_session ( )">
+
 =item C<get_ul_slot_size ( )>
 
 Get the maximum size, in bytes, a peer is allowed to request from us as a
 single block of data.
+
+See Also: L<set_ul_slot_size ( )|/"set_ul_slot_size ( NEWVAL )">
 
 =item C<set_ul_slot_size ( NEWVAL )>
 
@@ -1002,11 +1027,15 @@ single block of data.
 
 Default: C<32768>
 
-See also: theory.org (http://tinyurl.com/32k7wu)
+See also: theory.org (http://tinyurl.com/32k7wu),
+L<get_ul_slot_size ( )|/"get_ul_slot_size ( )">
 
 =item C<get_ul_slots_per_session ( )>
 
 Get the maximum number of blocks we have in queue from each peer.
+
+See Also:
+L<set_ul_slots_per_session ( )|/"set_ul_slots_per_session ( NEWVAL )">
 
 =item C<set_ul_slots_per_session ( NEWVAL )>
 
@@ -1014,10 +1043,22 @@ Set the maximum number of blocks we have in queue from each peer.
 
 Default: C<10>
 
+See Also: L<get_ul_slots_per_session ( )|/"get_ul_slots_per_session ( )">
+
 =item C<get_ul_slots_per_conn ( )>
 
 Get the maximum number of blocks we have in queue from each peer.
 Currently, this is C<80>.
+
+See Also:
+L<set_ul_slots_per_conn ( )|/"set_ul_slots_per_conn ( NEWVAL )">
+
+=item C<set_ul_slots_per_conn ( NEWVAL )>
+
+Set the maximum number of blocks we have in queue from each peer.
+Currently, this is a NOOP.  Yeah, yeah... It's on my Todo list...
+
+See Also: L<get_ul_slots_per_conn ( )|/"get_ul_slots_per_conn ( )">
 
 =item C<get_max_ul_rate ( )>
 
@@ -1027,6 +1068,8 @@ limits, set this value to C<0>.
 
 Note: This functionality requires the use of
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
+
+See Also: L<set_max_ul_rate ( )|/"set_max_ul_rate ( NEWVAL )">
 
 =item C<set_max_ul_rate ( NEWVAL )>
 
@@ -1039,6 +1082,8 @@ L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
 
 Default: C<0> (unlimited)
 
+See Also: L<get_max_ul_rate ( )|/"get_max_ul_rate ( )">
+
 =item C<get_max_dl_rate ( )>
 
 Get the maximum amount of data transfered per second from remote hosts in
@@ -1047,6 +1092,8 @@ limits, set this value to C<0>.
 
 Note: This functionality requires the use of
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
+
+See Also: L<get_max_dl_rate ( )|/"get_max_dl_rate ( NEWVAL )">
 
 =item C<set_max_dl_rate ( NEWVAL )>
 
@@ -1059,20 +1106,25 @@ L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
 
 Default: C<0> (unlimited)
 
+See Also: L<get_max_dl_rate ( )|/"get_max_dl_rate ( )">
+
 =item C<get_peer_id ( )>
 
-Returns the Peer ID generated to identify this C<Net::BitTorrent> object
+Returns the Peer ID generated to identify this L<Net::BitTorrent|Net::BitTorrent> object
 internally, with trackers, and with remote peers.
 
-See also: theory.org (http://tinyurl.com/4a9cuv)
+See also: theory.org (http://tinyurl.com/4a9cuv),
+L<Peer ID Specification|Net::BitTorrent::Notes/"Peer ID Specification">
 
 =item C<get_dht ( )>
 
 Returns the C<Net::BitTorrent::DHT> object related to this client.
 
+See Also: L<Net::BitTorrent::DHT|Net::BitTorrent::DHT>
+
 =item C<remove_session ( SESSION )>
 
-Removes a C<Net::BitTorrent::Session> object from the client.
+Removes a L<Net::BitTorrent::Session> object from the client.
 
 =begin future
 
@@ -1115,20 +1167,20 @@ See also: L<IO::Socket::INET/sockport>
 
 =item C<set_callback( TYPE, CODEREF )>
 
-C<Net::BitTorrent> provides a convenient callback system.  To set a
+L<Net::BitTorrent|Net::BitTorrent> provides a convenient callback system.  To set a
 callback, use the C<set_callback( )> method.  For example, to catch all
 attempts to read from a file, use
 C<$client-E<gt>set_callback( 'file_read', \&on_read )>.
 
 =back
 
-Here is the current list of events fired by C<Net::BitTorrent> and
-related classes as well as a brief description (soon) of them:
+Here is the current list of events fired by L<Net::BitTorrent|Net::BitTorrent> sorted by
+their related classes:
 
 =head2 Peer level
 
 Peer level events are triggered by
-L<Net::BitTorrent::Peer|Net::BitTorrent::Peer> objects.
+L<Net::BitTorrent::Session::Peer|Net::BitTorrent::Session::Peer> objects.
 
 =begin future?
 
@@ -1256,7 +1308,8 @@ Callback arguments: ( CLIENT, PEER )
 =head2 Tracker level
 
 Peer level events are triggered by
-L<Net::BitTorrent::Tracker|Net::BitTorrent::Tracker> objects.
+L<Net::BitTorrent::Session::Tracker|Net::BitTorrent::Session::Tracker>
+objects.
 
 =over
 
@@ -1369,46 +1422,34 @@ Debug level callbacks can be from anywhere and are not object specific.
 
 Callback arguments: ( CLIENT, LEVEL, STRING )
 
-See also: L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS">
+See also: L<Log Levels|Net::BitTorrent::Util/"LOG LEVELS"> in
+L<Net::BitTorrent::Util|Net::BitTorrent::Util>
 
 =back
 
 =head1 Implemented Extensions
 
-Um, none yet.
+See L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"Implemented Extensions">
 
 =head1 Bugs
 
-Numerous, I'm sure.  If you find one not listed in the F<Todo> file
-included with this distribution, please report it.
-
-List of know bugs:
-
-=over
-
-=item *
-
-Test suite is incomplete.
-
-=item *
-
-This list of bugs is incomplete.
-
-=back
+Numerous, I'm sure.
 
 Found bugs should be reported through
 http://code.google.com/p/net-bittorrent/issues/list.  Please include
 as much information as possible.  For more, see
-L<Net::BitTorrent::Todo|Net::BitTorrent::Todo> and
-"L<Issue Tracker|Net::BitTorrent::Notes/"Issue Tracker">" in
-L<Net::BitTorrent::Notes|Net::BitTorrent::Notes>.
+L<Net::BitTorrent::Todo|Net::BitTorrent::Todo> as well as
+L<Issue Tracker|Net::BitTorrent::Notes/"Issue Tracker">,
+L<Bug Reporting|Net::BitTorrent::Notes/"Bug Reporting">, and
+L<Co-Development and Patch Submission|Net::BitTorrent::Notes/"Co-Development and Patch Submission">
+information from the L<Net::BitTorrent::Notes|Net::BitTorrent::Notes>.
 
 =head1 Notes
 
 =head2 Support and Availability
 
 Visit the following for support and information related to
-C<Net::BitTorrent>:
+L<Net::BitTorrent|Net::BitTorrent>:
 
 =over 4
 
@@ -1428,7 +1469,7 @@ Before creating and sending a report, please review the following list:
 
 =item *
 
-Make sure you are using the most recent release of C<Net::BitTorrent>.
+Make sure you are using the most recent release of L<Net::BitTorrent|Net::BitTorrent>.
 This may mean checking out the latest svn commit.
 
 =item *
@@ -1437,22 +1478,22 @@ Make sure the bug is reproducible.
 
 =item *
 
-See the complete checklist in
-L<Net::BitTorrent::FAQ|Net::BitTorrent::FAQ/"I've found a bug!  Now what?">.
+See the complete checklist in the
+L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"Bug Reporting">.
 
 =back
 
 =back
 
-See
-L<Net::BitTorrent::FAQ|Net::BitTorrent::FAQ/"How can I stay up to date?">
+See L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"See Also">
 for links to a mailing list, svn information, and more.
 
 =head2 Dependencies
 
-C<Net::BitTorrent> requires L<version|version>, and
-L<Digest::SHA|Digest::SHA>.  As of perl 5.10, these are CORE modules;
-they come bundled with the distribution.
+L<Net::BitTorrent|Net::BitTorrent> requires L<version|version>, and
+L<Digest::SHA|Digest::SHA> to function and relies upon L<Module::Build>
+for installation.  As of perl 5.10, these are all CORE modules; they come
+bundled with the distribution.
 
 =head2 Development Policy
 
@@ -1469,10 +1510,11 @@ depreciated in a future version.
 
 =item * B<All undocumented functionality is subject to change without notice.>
 
-Because it's still early in its development, C<Net::BitTorrent> is filled
-with incomplete bits of stuff.  I understand some of it seems stable, but
-I reserve the right to change or eliminate code at any time without
-warning I<unless> functionality is defined in POD documentation.
+Because it's still early in its development,
+L<Net::BitTorrent|Net::BitTorrent> is filled with incomplete bits of
+stuff.  I understand some of it seems stable, but I reserve the right to
+change or eliminate code at any time without warning I<unless>
+functionality is defined in POD documentation.
 
 If you sift through the source and find something nifty that isn't
 described I<in full> in POD, don't expect your code to work with future
@@ -1482,13 +1524,14 @@ releases.
 
 =head2 Examples
 
-For a demonstration of C<Net::BitTorrent>, see F<scripts/client.pl> and
-F<scripts/web-gui.pl>.
+For a demonstration of L<Net::BitTorrent|Net::BitTorrent>, see
+L<scripts/client.pl|scripts/client.pl> and
+L<scripts/web-gui.pl|scripts/web-gui.pl>.
 
 =head2 Installation
 
-This distribution uses C<Module::Build> for installation, so use the
-following procedure:
+This distribution uses L<Module::Build|Module::Build> for installation,
+so use the following procedure:
 
   perl Build.PL
   ./Build
@@ -1496,7 +1539,7 @@ following procedure:
   ./Build install
 
 Or, if you're on a platform (like DOS or Windows) that doesn't require
-the "./" notation, you can do this:
+the "F<./>" notation, you can do this:
 
   perl Build.PL
   Build
@@ -1504,8 +1547,8 @@ the "./" notation, you can do this:
   Build install
 
 If you would like to contribute automated test reports (and I hope you
-do), first install C<CPAN::Reporter> from the CPAN shell and then install
-C<Net::BitTorrent>:
+do), first install L<CPAN::Reporter|CPAN::Reporter> from the CPAN shell
+and then install L<Net::BitTorrent|Net::BitTorrent>:
 
  $ cpan
  cpan> install CPAN::Reporter
@@ -1522,10 +1565,11 @@ http://cpantesters.perl.org/, and the CPAN Testers Wiki
 
 =head1 Alternative Event Processing
 
-To making integrating C<Net::BitTorrent> into an existing C<select>-based
+To making integrating L<Net::BitTorrent|Net::BitTorrent> into an existing C<select>-based
 event loop just a little easier, an alternative way of doing event
 processing (vs. L<do_one_loop ( )|/"do_one_loop ( [TIMEOUT] )">) has been
-designed... uh, I mean ganked.  Simply call the L<"process_connections">
+designed... uh, I mean ganked.  Simply call the
+L<process_connections( )|/"process_connections ( READERSREF, WRITERSREF, ERRORSREF )">
 method with references to the lists of readers, writers, and errors given
 to you by C<select>.  Connections that don't belong to the object will be
 ignored, and connections that do belong to the object will be removed
@@ -1537,7 +1581,7 @@ Here's a painfully simple example:
   while (1) {
       my ($rin, $win, $ein) = (q[], q[], q[]);
       vec($rin, fileno($server), 1) = 1;
-      for my $object (values %{$bittorrent->_connections}) {
+      for my $object (values %{$bittorrent->_get_connections}) {
           vec($rin, $object->_get_fileno, 1) = 1;
           vec($win, $object->_get_fileno, 1) = 1
               if $object ne $bittorrent and $object->_get_queue_outgoing;
@@ -1556,20 +1600,22 @@ Here's a painfully simple example:
       # we can process our events.
   }
 
-For a full demonstration, see F<scripts/web-gui.pl>.
+For a working demonstration, see
+L<scripts/web-gui.pl|scripts/web-gui.pl>.
 
-I<This is experimental and may be removed or improved in the future.>
+I<This is experimental and may be improved in the future.>
 
 =head1 See Also
 
 http://bittorrent.org/beps/bep_0003.html - BitTorrent Protocol
 Specification
 
-L<Net::BitTorrent::FAQ|Net::BitTorrent::FAQ> - Random questions.  More
+L<Net::BitTorrent::Notes|Net::BitTorrent::Notes> - Random stuff.  More
 jibba jabba.
 
-L<Net::BitTorrent::PeerID|Net::BitTorrent::PeerID> - The standard used to
-identify C<Net::BitTorrent> in the wild.
+L<Peer ID Specification|Net::BitTorrent::Notes/"Peer ID Specification"> -
+The standard used to identify L<Net::BitTorrent|Net::BitTorrent> in the
+wild.
 
 =head1 Acknowledgments
 

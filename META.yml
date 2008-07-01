@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.023_001
+version: 0.023_002
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -42,7 +42,7 @@ recommends:
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
-    version: 0.023_001
+    version: 0.023_002
   Net::BitTorrent::DHT:
     file: lib/Net/BitTorrent/DHT.pm
     version: 0.023
