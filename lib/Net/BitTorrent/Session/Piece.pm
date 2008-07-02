@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Piece.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+        our $SVN = q[$Id: Piece.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use lib q[../../../../lib];
     use Net::BitTorrent::Util qw[:log];
@@ -173,7 +173,7 @@ use warnings;
             }
             elsif (    not $value
                    and $blocks{$self}
-                   and $session{$self}->endgame)
+                   and $session{$self}->_get_endgame_status_status)
             {   $session{$self}->get_client->_do_callback(q[log], DEBUG,
                         q[Removal of blocks from slow piece during endgame.]);
                 delete $blocks{$self};
@@ -324,7 +324,7 @@ use warnings;
                     scalar $a->get_peers <=> scalar $b->get_peers
                 } values %{$blocks{$self}}
                 )
-            {   if ($session{$self}->_get_endgame) { return $block; }
+            {   if ($session{$self}->_get_endgame_status) { return $block; }
                 if (not scalar $block->get_peers)  { return $block; }
 
             # TODO: check for peer() instead of requested() but remember to...
@@ -493,6 +493,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Piece.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: Piece.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

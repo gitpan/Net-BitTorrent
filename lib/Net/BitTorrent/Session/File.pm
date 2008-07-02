@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: File.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+        our $SVN = q[$Id: File.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use Fcntl qw[/O_/ /SEEK/];
     use File::Spec;
@@ -41,15 +41,15 @@ use warnings;
         }
         return $self;
     }
-    sub get_size      { die if $_[1]; return $size{$_[0]}; }
-    sub get_path      { die if $_[1]; return $path{$_[0]}; }
-    sub get_index     { die if $_[1]; return $index{$_[0]}; }
-    sub get_session   { die if $_[1]; return $session{$_[0]}; }
-    sub get_client    { die if $_[1]; return $session{$_[0]}->get_client; }
-    sub _get_handle   { die if $_[1]; return $handle{$_[0]}; }
-    sub get_open_mode { die if $_[1]; return $open_mode{$_[0]}; }
-    sub get_open_timestamp  { die if $_[1]; return $open_timestamp{$_[0]}; }
-    sub get_touch_timestamp { die if $_[1]; return $touch_timestamp{$_[0]}; }
+    sub get_size            { return $size{$_[0]}; }
+    sub get_path            { return $path{$_[0]}; }
+    sub get_index           { return $index{$_[0]}; }
+    sub get_session         { return $session{$_[0]}; }
+    sub get_client          { return $session{$_[0]}->get_client; }
+    sub _get_handle         { return $handle{$_[0]}; }
+    sub get_open_mode       { return $open_mode{$_[0]}; }
+    sub get_open_timestamp  { return $open_timestamp{$_[0]}; }
+    sub get_touch_timestamp { return $touch_timestamp{$_[0]}; }
 
     sub _open {
         my ($self, $mode) = @_;
@@ -183,18 +183,18 @@ use warnings;
 
     sub get_piece_range {    # cache this only when needed
         my ($self) = @_;
-        die if $_[1];
         $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
         if (not defined $piece_range{$self}) {
             my $offset = 0;
-            for my $_index (0 .. $self->index - 1) {
-                $offset += $self->session->files->[$_index]->size;
+            for my $_index (0 .. $self->get_index - 1) {
+                $offset += $self->get_session->get_files->[$_index]->get_size;
             }
-            $piece_range{$self} = [int($offset / $self->session->piece_size),
-                                   int(($offset + $size{$self})
-                                       / $self->session->piece_size
-                                   )
+            $piece_range{$self} = [
+                            int($offset / $self->get_session->get_piece_size),
+                            int(($offset + $size{$self})
+                                / $self->get_session->get_piece_size
+                            )
             ];
         }
         return $piece_range{$self};
@@ -202,23 +202,21 @@ use warnings;
 
     sub get_pieces {
         my ($self) = @_;
-        die if $_[1];
         $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
         if (not defined $piece_range{$self}) {
-            $self->piece_range;
+            $self->get_piece_range;
         }
         return
-            map { $self->session->pieces->[$_] }
+            map { $self->get_session->get_pieces->[$_] }
             ($piece_range{$self}[0] .. $piece_range{$self}[1]);
     }
 
     sub get_priority {
         my ($self) = @_;
-        die if $_[1];
         $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-        return map { $_->priority } $self->pieces;
+        return map { $_->get_priority } $self->get_pieces;
     }
 
     sub set_priority {
@@ -232,7 +230,7 @@ use warnings;
                                                   q[priority is malformed])
             and return
             unless $value =~ m[^\d+$];
-        return map { $_->priority($value) } $self->pieces;
+        return map { $_->get_priority($value) } $self->get_pieces;
     }
 
     sub as_string {
@@ -241,14 +239,15 @@ use warnings;
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
         my @values = ($index{$self},
                       (q[=] x (25 + length($index{$self}))),
-                      $self->path,
+                      $self->get_path,
                       $size{$self},
-                      (((  (scalar grep { $_->check } $self->pieces)
-                         / (scalar $self->pieces)
+                      ((((scalar grep { $_->get_cached_integrity }
+                              $self->get_pieces
+                         ) / (scalar $self->get_pieces)
                         )
                        ) * 100
                       ),
-                      @{$self->piece_range}
+                      @{$self->get_piece_range}
         );
         s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g
             for @values[3,];    # no 'better way' warning...
@@ -539,6 +538,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: File.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: File.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

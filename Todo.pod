@@ -126,6 +126,6 @@ Net::BitTorrent::Todo - TODO list for Perl module Net::BitTorrent
 
 =back
 
-=for svn $Id: Todo.pod 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: Todo.pod 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

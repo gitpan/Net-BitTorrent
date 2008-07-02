@@ -6,8 +6,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: BitTorrent.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 23 $)->numify / 1000), $UNSTABLE_RELEASE);
+            = q[$Id: BitTorrent.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 24 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
     use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
@@ -71,7 +71,7 @@ use warnings;
             q[a20],
             (sprintf(
                  q[NB%03d%1s-%8s%5s],
-                 (q[$Rev: 23 $] =~ m[(\d+)]g),
+                 (q[$Rev: 24 $] =~ m[(\d+)]g),
                  ($Net::BitTorrent::UNSTABLE_RELEASE ? q[S] : q[C]),
                  (join q[],
                   map {
@@ -103,11 +103,11 @@ use warnings;
         );
 
         # max_ul_rate and max_dl_rate: 0 == unlimited
-
         $self->set_max_dl_rate(defined $args->{q[max_dl_rate]}
                                ? $args->{q[max_dl_rate]}
                                : 0
-        );$self->set_max_ul_rate(defined $args->{q[max_ul_rate]}
+        );
+        $self->set_max_ul_rate(defined $args->{q[max_ul_rate]}
                                ? $args->{q[max_ul_rate]}
                                : 0
         );
@@ -186,7 +186,7 @@ use warnings;
         }
         return $conns_per_client{$self} = $value;
     }
-    sub get_conns_per_client { die if $_[1]; return $conns_per_client{$_[0]} }
+    sub get_conns_per_client { return $conns_per_client{$_[0]} }
 
     sub set_conns_per_session {
         my ($self, $value) = @_;
@@ -202,8 +202,6 @@ use warnings;
     }
 
     sub get_conns_per_session {
-        die
-            if $_[1];
         return $conns_per_session{$_[0]};
     }
 
@@ -219,7 +217,7 @@ use warnings;
         }
         return $max_halfopen{$self} = $value;
     }
-    sub get_max_halfopen { die if $_[1]; return $max_halfopen{$_[0]} }
+    sub get_max_halfopen { return $max_halfopen{$_[0]} }
 
     sub set_max_buffer_per_conn {
         my ($self, $value) = @_;
@@ -235,7 +233,6 @@ use warnings;
     }
 
     sub get_max_buffer_per_conn {
-        die if $_[1];
         return $max_buffer_per_conn{$_[0]};
     }
 
@@ -251,7 +248,7 @@ use warnings;
         }
         return $ul_slot_size{$self} = $value;
     }
-    sub get_ul_slot_size { die if $_[1]; return $ul_slot_size{$_[0]} }
+    sub get_ul_slot_size { return $ul_slot_size{$_[0]} }
 
     sub set_ul_slots_per_session {    # TODO
         my ($self, $value) = @_;
@@ -267,12 +264,10 @@ use warnings;
     }
 
     sub get_ul_slots_per_session {
-        die if $_[1];
         return $ul_slots_per_session{$_[0]};
     }    # TODO
-
-    sub get_ul_slots_per_conn { die if $_[1]; return 80 }
-    sub set_ul_slots_per_conn { return; }  # NO OP
+    sub get_ul_slots_per_conn { return 80 }
+    sub set_ul_slots_per_conn { return; }     # NO OP
 
     sub set_debug_level {
         my ($self, $value) = @_;
@@ -286,7 +281,7 @@ use warnings;
         }
         return $debug_level{$self} = $value;
     }
-    sub get_debug_level { die if $_[1]; return $debug_level{$_[0]} }
+    sub get_debug_level { return $debug_level{$_[0]} }
 
     sub set_max_ul_rate {
         my ($self, $value) = @_;
@@ -300,7 +295,7 @@ use warnings;
         }
         return $max_ul_rate{$self} = $value;
     }
-    sub get_max_ul_rate { die if $_[1]; return $max_ul_rate{$_[0]} }
+    sub get_max_ul_rate { return $max_ul_rate{$_[0]} }
 
     sub set_max_dl_rate {
         my ($self, $value) = @_;
@@ -314,9 +309,9 @@ use warnings;
         }
         return $max_dl_rate{$self} = $value;
     }
-    sub get_max_dl_rate { die if $_[1]; return $max_dl_rate{$_[0]} }
-    sub _get_socket     { die if $_[1]; return $socket{$_[0]}; }
-    sub _get_fileno     { die if $_[1]; return $fileno{$_[0]}; }
+    sub get_max_dl_rate { return $max_dl_rate{$_[0]} }
+    sub _get_socket     { return $socket{$_[0]}; }
+    sub _get_fileno     { return $fileno{$_[0]}; }
 
     sub do_one_loop {    # Clunky.  I really need to replace this.
         my ($self, $timeout) = @_;
@@ -397,7 +392,7 @@ use warnings;
               ERROR,
               q[ARG! ...s. Too many of them for Net::BitTorrent::_connections]
             )
-            and die
+            and return
             if @_ > 1;
         return \%{$connections{$self}};
     }
@@ -627,8 +622,8 @@ use warnings;
                                     [caller 0]->[3], $$self
                             )
         );
-        my @values = ($peer_id{$self},             $self->sockaddr,
-                      $self->sockport,             $conns_per_client{$self},
+        my @values = ($peer_id{$self},             $self->get_sockaddr,
+                      $self->get_sockport,         $conns_per_client{$self},
                       $conns_per_session{$self},   $max_halfopen{$self},
                       $max_buffer_per_conn{$self}, $ul_slot_size{$self},
                       $ul_slots_per_session{$self},
@@ -1456,7 +1451,7 @@ L<Net::BitTorrent|Net::BitTorrent>:
 =item The project's website
 
 For wiki and subversion repository access, please visit the project's
-home: http://net-bittorrent.googlecode.com/.
+home: http://sankorobinson.com/net-bittorrent/.
 
 =item Bug and Issue Tracker
 
@@ -1490,7 +1485,7 @@ for links to a mailing list, svn information, and more.
 
 =head2 Dependencies
 
-L<Net::BitTorrent|Net::BitTorrent> requires L<version|version>, and
+L<Net::BitTorrent|Net::BitTorrent> requires L<version|version> and
 L<Digest::SHA|Digest::SHA> to function and relies upon L<Module::Build>
 for installation.  As of perl 5.10, these are all CORE modules; they come
 bundled with the distribution.
@@ -1526,7 +1521,7 @@ releases.
 
 For a demonstration of L<Net::BitTorrent|Net::BitTorrent>, see
 L<scripts/client.pl|scripts/client.pl> and
-L<scripts/web-gui.pl|scripts/web-gui.pl>.
+L<scripts/web-gui.pl>.
 
 =head2 Installation
 
@@ -1650,6 +1645,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

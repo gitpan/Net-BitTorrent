@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Util.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
+        our $SVN = q[$Id: Util.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use List::Util qw[min max shuffle sum];
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
@@ -302,6 +302,6 @@ included with this module.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Util.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

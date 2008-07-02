@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Block.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 22 $)->numify / 1000;
+        our $SVN = q[$Id: Block.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use Scalar::Util qw[/weak/];
     use Net::BitTorrent::Util qw[:log];
@@ -235,6 +235,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Block.pm 22 2008-05-24 14:31:26Z sanko@cpan.org $
+=for svn $Id: Block.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

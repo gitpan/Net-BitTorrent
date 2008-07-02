@@ -6,7 +6,7 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Mainline.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
+            = q[$Id: Mainline.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
         our $VERSION = sprintf q[%.3f], version->new(qw$Rev 23$)->numify / 1000;
     }
     use Socket qw[SOL_SOCKET /F_INET/ SOCK_DGRAM SO_REUSEADDR];
@@ -38,36 +38,30 @@ use warnings;
             }
             return $self;
         }
-        sub get_packed_host { die if $_[1]; return $packed_host{$_[0]}; }
+        sub get_packed_host {  return $packed_host{$_[0]}; }
 
         sub get_peerhost {
-            die if $_[1];
             return join q[.],
                 (unpack(q[SnC4x8], $packed_host{$_[0]}))[2 .. 5];
         }
 
         sub get_peerport {
-            die if $_[1];
             return (unpack(q[SnC4x8], $packed_host{$_[0]}))[1];
         }
-        sub get_node_id { die if $_[1]; return $node_id{$_[0]}; }
+        sub get_node_id {  return $node_id{$_[0]}; }
 
         sub add_infohash {
-            die if $_[1];
             return push @{$infohashes{$_[0]}}, $_[1];
         }
         sub get_infohashes {
-            die if $_[1];
             return keys %{$infohashes{$_[0]}};
         }
-        sub get_last_seen { die if $_[1]; return $last_seen{$_[0]}; }
-        sub get_last_ping { die if $_[1]; return $last_ping{$_[0]}; }
+        sub get_last_seen {  return $last_seen{$_[0]}; }
+        sub get_last_ping {  return $last_ping{$_[0]}; }
         sub get_last_get_peers {
-            die if $_[1];
             return $last_get_peers{$_[0]};
         }
         sub get_last_find_node {
-            die if $_[1];
             return $last_find_node{$_[0]};
         }
 
@@ -458,6 +452,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Mainline.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Mainline.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

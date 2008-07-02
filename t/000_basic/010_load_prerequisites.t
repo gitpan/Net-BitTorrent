@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 # /t/000_basic/010_load_prerequisites.t
 #
-# $Id: 010_load_prerequisites.t 22 2008-05-24 14:31:26Z sanko@cpan.org $
+# $Id: 010_load_prerequisites.t 24 2008-07-01 23:52:15Z sanko@cpan.org $
 use strict;
 use warnings;
 use Test::More qw[no_plan];

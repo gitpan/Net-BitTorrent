@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Peer.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
+        our $SVN = q[$Id: Peer.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use Socket
         qw[SOL_SOCKET SO_SNDTIMEO SO_RCVTIMEO PF_INET AF_INET SOCK_STREAM];
@@ -119,29 +119,26 @@ use warnings;
         $client{$self}->_set_pulse($self, time + 5);
         return 1;
     }
-    sub _get_fileno    { die if $_[1]; return $fileno{$_[0]}; }
-    sub get_session    { die if $_[1]; return $session{$_[0]}; }
-    sub _get_connected { die if $_[1]; return $connected{$_[0]}; }
+    sub _get_fileno    { return $fileno{$_[0]}; }
+    sub get_session    { return $session{$_[0]}; }
+    sub _get_connected { return $connected{$_[0]}; }
 
     sub _get_connection_timestamp {
-        die if $_[1];
         return $connection_timestamp{$_[0]};
     }
-    sub _get_queue_outgoing { die if $_[1]; return $queue_outgoing{$_[0]}; }
-    sub _get_socket         { die if $_[1]; return $socket{$_[0]}; }
-    sub get_peer_id         { die if $_[1]; return $peer_id{$_[0]}; }
-    sub get_client          { die if $_[1]; return $client{$_[0]}; }
-    sub get_bitfield        { die if $_[1]; return $bitfield{$_[0]}; }
-    sub get_is_choking      { die if $_[1]; return $is_choking{$_[0]}; }
+    sub _get_queue_outgoing { return $queue_outgoing{$_[0]}; }
+    sub _get_socket         { return $socket{$_[0]}; }
+    sub get_peer_id         { return $peer_id{$_[0]}; }
+    sub get_client          { return $client{$_[0]}; }
+    sub get_bitfield        { return $bitfield{$_[0]}; }
+    sub get_is_choking      { return $is_choking{$_[0]}; }
 
     sub get_outgoing_requests {
-        die if $_[1];
         return $outgoing_requests{$_[0]};
     }
 
     sub get_peerhost {    # cache it
         my ($self) = @_;
-        die if $_[1];
         if (not defined $peerhost{$self}
             and $connected{$self})
         {   my (undef, undef, @address)
@@ -153,7 +150,6 @@ use warnings;
 
     sub get_peerport {    # cache it
         my ($self) = @_;
-        die if $_[1];
         if (not defined $peerport{$self}
             and $connected{$self})
         {   (undef, $peerport{$self}, undef)
@@ -938,7 +934,7 @@ use warnings;
                 #
                 #}
                 #elsif (not scalar $block->get_peers
-                #    or not $block->request_timestamp($self))
+                #    or not $block->get_request_timestamp($self))
                 #{
                 # TODO: ...should we accept the block anyway if we need it?
                 $self->_disconnect(
@@ -1327,18 +1323,17 @@ use warnings;
         }
         return $_fastset_out{$self} = \@a;
     }
-    sub get_downloaded { die if $_[1]; return $downloaded{$_[0]}; }
-    sub get_is_choked  { die if $_[1]; return $is_choked{$_[0]}; }
+    sub get_downloaded { return $downloaded{$_[0]}; }
+    sub get_is_choked  { return $is_choked{$_[0]}; }
 
     sub get_incoming_connection {
-        die if $_[1];
         return $incoming_connection{$_[0]};
     }
-    sub get_is_interested   { die if $_[1]; return $is_interested{$_[0]}; }
-    sub get_is_interesting  { die if $_[1]; return $is_interesting{$_[0]}; }
-    sub get_reserved        { die if $_[1]; return $reserved{$_[0]}; }
-    sub get_uploaded        { die if $_[1]; return $uploaded{$_[0]}; }
-    sub _get_queue_incoming { die if $_[1]; return $queue_incoming{$_[0]}; }
+    sub get_is_interested   { return $is_interested{$_[0]}; }
+    sub get_is_interesting  { return $is_interesting{$_[0]}; }
+    sub get_reserved        { return $reserved{$_[0]}; }
+    sub get_uploaded        { return $uploaded{$_[0]}; }
+    sub _get_queue_incoming { return $queue_incoming{$_[0]}; }
 
 #     sub _build_packet_port {
 #~         my ($self) = @_;
@@ -1548,6 +1543,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Peer.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

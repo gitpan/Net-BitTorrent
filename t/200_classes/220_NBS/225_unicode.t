@@ -1,6 +1,6 @@
 # -*- perl -*-
 # t/200_classes/220_NBS/225_unicode.t
-# $Id: 225_unicode.t 20 2008-05-22 23:09:05Z sanko@cpan.org $
+# $Id: 225_unicode.t 24 2008-07-01 23:52:15Z sanko@cpan.org $
 use strict;
 use warnings;
 use Test::More tests => 9;

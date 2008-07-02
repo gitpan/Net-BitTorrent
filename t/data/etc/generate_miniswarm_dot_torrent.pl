@@ -206,4 +206,4 @@ $torrent->save;
 
 
 
-# $Id: generate_miniswarm_dot_torrent.pl 20 2008-05-22 23:09:05Z sanko@cpan.org $
+# $Id: generate_miniswarm_dot_torrent.pl 24 2008-07-01 23:52:15Z sanko@cpan.org $

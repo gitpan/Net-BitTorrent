@@ -266,10 +266,10 @@ print q[[alpha] Net::BitTorrent/µTorrent WebUI: <URL:], $server->url,
 while (1) {    # Altnernative Event Processing
     my ($rin, $win, $ein) = (q[], q[], q[]);
     vec($rin, fileno($server), 1) = 1;
-    for my $object (values %{$bittorrent->_connections}) {
-        vec($rin, $object->_fileno, 1) = 1;
-        vec($win, $object->_fileno, 1) = 1
-            if $object ne $bittorrent and $object->_queue_outgoing;
+    for my $object (values %{$bittorrent->_get_connections}) {
+        vec($rin, $object->_get_fileno, 1) = 1;
+        vec($win, $object->_get_fileno, 1) = 1
+            if $object ne $bittorrent and $object->_get_queue_outgoing;
     }
     $ein = $rin | $win;
     my ($nfound, $timeleft) = select($rin, $win, $ein, 0.3);
@@ -284,7 +284,7 @@ while (1) {    # Altnernative Event Processing
 sub new_http {
     my $client = $server->accept;
     while ($client and my $r = $client->get_request(1)) {
-        warn $r->url;
+        #warn $r->url;
         if (    #$r->method eq q[GET]
                 #and
             $r->url->path =~ m[^/gui(?:/.+)?]
@@ -342,16 +342,14 @@ sub action {
                                      #warn $query->param(q[action])
     if ($query->param(q[action]) eq q[getsettings]) {
         $return{q[settings]} = [
-            [q[bind_port],      0, $bittorrent->sockport()],
-            [q[net.bind_ip],    2, $bittorrent->sockaddr()],
-            [q[conns_globally], 0, $bittorrent->maximum_peers_per_client()],
-            [q[conns_per_torrent], 0,
-             $bittorrent->maximum_peers_per_session()
-            ],
+            [q[bind_port],      0, $bittorrent->get_sockport()],
+            [q[net.bind_ip],    2, $bittorrent->get_sockaddr()],
+            [q[conns_globally], 0, $bittorrent->get_conns_per_client()],
+            [q[conns_per_torrent], 0,$bittorrent->get_conns_per_session()],
             [q[enable_scrape],    0, 1],
-            [q[max_dl_rate],      0, $bittorrent->kBps_down()],
-            [q[max_ul_rate],      0, $bittorrent->kBps_up()],
-            [q[net.max_halfopen], 0, $bittorrent->maximum_peers_half_open()],
+            [q[max_dl_rate],      0, $bittorrent->get_max_dl_rate()],
+            [q[max_ul_rate],      0, $bittorrent->get_max_ul_rate()],
+            [q[net.max_halfopen], 0, $bittorrent->get_max_halfopen()],
             [q[reload_freq],      0, 1],
             [q[tracker_ip],       2, q[]],
             [q[webui.cookie],     2, q[{}]],
@@ -487,13 +485,13 @@ sub action {
         my $session = $bittorrent->_locate_session($query->param(q[hash]));
         if ($session) {
             my @files;
-            for my $file (@{$session->files}) {
+            for my $file (@{$session->get_files}) {
                 push @files, [
                     $$file,
-                    $file->size,    # size
+                    $file->get_size,    # size
                     (               # downloaded TODO
-                       (scalar grep { $_->check } $file->pieces)
-                       * (scalar $session->piece_size)
+                       (scalar grep { $_->get_cached_integrity } $file->get_pieces)
+                       * (scalar $session->get_piece_size)
                     ),
                     2    # priority (0=Skip,1=Low,2=Normal,3=High) TODO
                 ];
@@ -528,7 +526,7 @@ sub action {
 
 sub list {
     my @torrents;
-    for my $session (@{$bittorrent->sessions}) {
+    for my $session (@{$bittorrent->get_sessions}) {
         push @torrents, [
             $$session,
             201,            # STATUS: TODO
@@ -541,19 +539,19 @@ sub list {
                             # 32 = Paused
                             # 64 = Queued
                             # 128 = Loaded
-            $session->name, # NAME
-            $session->total_size,    # SIZE
+            $session->get_name, # NAME
+            $session->get_total_size,    # SIZE
             sprintf(
                 q[3.2f],    # PERCENT PROGRESS (integer in 1/10 of a percent)
-                ((  (scalar grep { $_->check } @{$session->pieces})
-                  / (scalar @{$session->pieces})
+                ((  (scalar grep { $_->get_cached_integrity } @{$session->get_pieces})
+                  / (scalar @{$session->get_pieces})
                  )
                     ) * 1000
             ),
-            $session->downloaded,    # DOWNLOADED (integer in bytes)
-            $session->uploaded,      # UPLOADED (integer in bytes)
+            $session->get_downloaded,    # DOWNLOADED (integer in bytes)
+            $session->get_uploaded,      # UPLOADED (integer in bytes)
             (                        # RATIO (integer in 1/10 of a percent)
-               ($session->downloaded || 1) / ($session->uploaded || 1)
+               ($session->get_downloaded || 1) / ($session->get_uploaded || 1)
             ),
             0,      # UPLOAD SPEED (integer in bytes per second) TODO
             0,      # DOWNLOAD SPEED (integer in bytes per second) TODO
@@ -565,8 +563,8 @@ sub list {
             0,      # SEEDS IN SWARM (integer) TODO
             0,      # AVAILABILITY (integer in 1/65535ths) TODO
             50,     # TORRENT QUEUE ORDER (integer) TODO
-            $session->total_size
-                - $session->downloaded,    # REMAINING (integer in bytes) TODO
+            $session->get_total_size
+                - $session->get_downloaded,    # REMAINING (integer in bytes) TODO
         ];
     }
     return {
@@ -653,6 +651,11 @@ Download the latest (...so far, there's only been one release, but you
 never know) webui.zip file through the uTorrent forums:
 http://forum.utorrent.com/viewtopic.php?id=14565
 
+Alternativly, you could try one of the (nifty) unofficial UI (iPhone,
+mobile, even a Facebook plugin) while you review the
+"Overview of everything WebUI-related" thread:
+http://forum.utorrent.com/viewtopic.php?id=33186
+
 =item *
 
 Save the .zip file in the current working directory.  Do not extract the
@@ -726,6 +729,6 @@ Web UI API: http://forum.utorrent.com/viewtopic.php?id=25661
 Overview of everything WebUI-related:
 http://forum.utorrent.com/viewtopic.php?id=33186
 
-=for svn $Id: web-gui.pl 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: web-gui.pl 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

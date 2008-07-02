@@ -756,6 +756,6 @@ jurisdiction).
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Notes.pod 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Notes.pod 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

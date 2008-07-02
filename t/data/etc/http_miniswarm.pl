@@ -1,6 +1,6 @@
 # -*- perl -*-
 # t/data/etc/http_miniswarm.pl - Used by new 500 tests
-# $Id: http_miniswarm.pl 20 2008-05-22 23:09:05Z sanko@cpan.org $
+# $Id: http_miniswarm.pl 24 2008-07-01 23:52:15Z sanko@cpan.org $
 use strict;
 use warnings;
 use Socket;

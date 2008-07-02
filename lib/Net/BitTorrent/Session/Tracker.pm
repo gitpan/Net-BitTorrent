@@ -8,8 +8,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Tracker.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
+            = q[$Id: Tracker.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use Net::BitTorrent::Util qw[min bdecode max compact shuffle :log];
     use Socket qw[SOL_SOCKET /TIMEO/ /F_INET/ SOCK_STREAM];
@@ -46,7 +46,6 @@ use warnings;
         }
 
         sub get_urls {
-            die if $_[1];
             return $urls{$_[0]};
         }
 
@@ -61,67 +60,54 @@ use warnings;
         }
 
         sub _get_fileno {
-            die if $_[1];
             return $fileno{$_[0]};
         }
 
         sub _get_socket {
-            die if $_[1];
             return $socket{$_[0]};
         }
 
         sub get_session {
-            die if $_[1];
             return $session{$_[0]};
         }
 
         sub get_client {
-            die if $_[1];
             return $session{$_[0]}->get_client;
         }
 
         sub _get_connection_timestamp {
-            die if $_[1];
             return $connection_timestamp{$_[0]};
         }
 
         sub _get_scrape_complete {
-            die if $_[1];
             return $scrape_complete{$_[0]};
         }
 
         sub _get_scrape_incomplete {
-            die if $_[1];
             return $scrape_incomplete{$_[0]};
         }
 
         sub _get_scrape_downloaded {
-            die if $_[1];
             return $scrape_downloaded{$_[0]};
         }
 
         sub _get_connected {
-            die if $_[1];
             return $connected{$_[0]};
         }
 
         sub _get_queue_outgoing {
-            die if $_[1];
             return $queue_outgoing{$_[0]};
         }
 
         sub _get_queue_incoming {
-            die if $_[1];
             return $queue_incoming{$_[0]};
         }
 
         sub _get_next_announce {
-            die if $_[1];
             return $next_announce{$_[0]};
         }
 
         sub _get_next_scrape {
-            die if $_[1];
             return $next_scrape{$_[0]};
         }
 
@@ -678,6 +664,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Tracker.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Tracker.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

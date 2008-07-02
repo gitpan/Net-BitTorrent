@@ -119,4 +119,4 @@ sub find_cb {
     return push @tests, $File::Find::name;
 }
 
-# $Id: Build.PL 22 2008-05-24 14:31:26Z sanko@cpan.org $
+# $Id: Build.PL 24 2008-07-01 23:52:15Z sanko@cpan.org $

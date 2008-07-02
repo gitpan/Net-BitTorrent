@@ -95,7 +95,8 @@ for my $dot_torrent (sort @dot_torrents) {
         )
         or carp sprintf q[Cannot load .torrent (%s): %s],
         $dot_torrent, $^E;
-    printf qq[\rLoaded '%s' [%s%s]\n], $dot_torrent, $$session,
+    printf qq[\rLoaded '%s' [%s...%s%s]\n], $dot_torrent,
+        ($$session =~ (m[^(.{4}).+(.{4})$])),
         ($session->get_private ? q[|No DHT] : q[]);
 }
 $loaded_okay = 1;
@@ -104,21 +105,21 @@ __END__
 
 =pod
 
-=head1 Name
+=head1 NAME
 
-basic.pl - Very basic BitTorrent client
+client.pl - Very basic BitTorrent client
 
-=head1 SYNOPSIS
+=head1 Synopsis
 
-basic.pl [options] [file ...]
+client.pl [options] [file ...]
 
  Options:
-   -torrent         .torrent file to load
-   -port            port number opened to incoming connections
-   -store           base directory to store downloaded files
-   -skip_hashcheck  skip integrity check at start
-   -help            brief help message
-   -man             full documentation
+   -torrent           .torrent file to load
+   -port              port number opened to incoming connections
+   -store             base directory to store downloaded files
+   -skip_hashcheck    skip integrity check at start
+   -help              brief help message
+   -man               full documentation
 
 =head1 Options
 
@@ -128,13 +129,14 @@ basic.pl [options] [file ...]
 
 Open this .torrent file.
 
-You may pass several -torrent parameters and load more than one
-.torrent session.
+You may pass several -torrent parameters and load more than one .torrent
+session.
 
 =item B<-port>
 
 Port number opened to the world for incoming connections.  This defaults
-to C<0> and lets IO::Socket bind to a random, unused port.
+to C<0> and lets L<Net::BitTorrent|Net::BitTorrent> bind to a random,
+unused port.
 
 =item B<-store>
 
@@ -161,9 +163,9 @@ Print the manual page and exit.
 
 =head1 Description
 
-This is a B<very> basic demonstration of a full
-C<Net::BitTorrent>-based client.
+This is a B<very> basic demonstration of a full C<Net::BitTorrent>-based
+client.
 
-=for svn $Id: client.pl 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: client.pl 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

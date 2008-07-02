@@ -6,8 +6,8 @@ use warnings;
     BEGIN {
         use version qw[qv];
         our $SVN
-            = q[$Id: Session.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 23 $)->numify / 1000;
+            = q[$Id: Session.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
     use Digest::SHA qw[];
     use File::Spec qw[];
@@ -96,14 +96,12 @@ use warnings;
                         = defined $args->{q[base_dir]}
                         ? $args->{q[base_dir]}
                         : q[./];
-
                     $piece_count{$self}
                         = int(
                             length(
                                 unpack(q[H*], $_content->{q[info]}{q[pieces]})
                                 ) / 40
                         ) - 1;
-
                     $piece_size{$self}
                         = $_content->{q[info]}{q[piece length]};
                     $private{$self}
@@ -161,7 +159,8 @@ use warnings;
                         ];
                     }
                     else {    # This seems to be a trackerless torrent
-                              # and we don't support DHT/PEX yet.
+                              # but we support DHT so it should work out.
+                              # ...unless the torrent is also private.
                         $trackers{$self} = [];
                     }
                     my $i = 0;
@@ -169,11 +168,12 @@ use warnings;
                         ? (
                         [Net::BitTorrent::Session::File->new(
                              {   size => $_content->{q[info]}{q[length]},
-                                 path => File::Spec->catfile(# XXX - not happy with this
+                                 path => File::Spec
+                                     ->catfile(    # XXX - not happy with this
                                      $self->get_base_dir,
                                      $_content->{q[info]}{q[name.utf-8]}
                                          || $_content->{q[info]}{q[name]}
-                                 ),
+                                     ),
                                  session => $self,
                                  index   => $i++
                              }
@@ -184,16 +184,16 @@ use warnings;
                         [map {
                              Net::BitTorrent::Session::File->new(
                                  {   size => $_->{q[length]},
-                                     path => File::Spec->catfile(  # XXX - not happy with this
+                                     path => File::Spec
+                                         ->catfile( # XXX - not happy with this
                                          $self->get_base_dir,
-                                        ($_content->{q[info]}{q[name.utf-8]}
-                                             || $_content->{q[info]}{q[name]}
-                                        )
-                                         ,
+                                         ($_content->{q[info]}{q[name.utf-8]}
+                                              || $_content->{q[info]}{q[name]}
+                                         ),
                                          @{         $_->{q[path.utf-8]}
                                                  || $_->{q[path]}
                                              }
-                                     ),
+                                         ),
                                      session => $self,
                                      index   => $i++
                                  }
@@ -211,19 +211,22 @@ use warnings;
             }
             return $self;
         }
-        sub get_path        { die if $_[1];return $path{$_[0]}; }
-        sub get_name        { die if $_[1];return $name{$_[0]}; }
-        sub get_base_dir    { die if $_[1];return File::Spec->rel2abs($base_dir{$_[0]}); }
-        sub get_private     { die if $_[1];return $private{$_[0]}; }
-        sub get_infohash    { die if $_[1];return $infohash{$_[0]}; }
-        sub get_client      { die if $_[1];return $client{$_[0]}; }
-        sub get_pieces      { die if $_[1];return $pieces{$_[0]}; }
-        sub get_trackers    { die if $_[1];return $trackers{$_[0]}; }
-        sub get_files       { die if $_[1];return $files{$_[0]}; }
-        sub get_piece_count { die if $_[1];return $piece_count{$_[0]}; }
-        sub get_piece_size  { die if $_[1];return $piece_size{$_[0]}; }
-        sub get_total_size  { die if $_[1];return $total_size{$_[0]}; }
-        sub _get_endgame    { die if $_[1];return $endgame{$_[0]}; }
+        sub get_path { return $path{$_[0]}; }
+        sub get_name { return $name{$_[0]}; }
+
+        sub get_base_dir {
+            return File::Spec->rel2abs($base_dir{$_[0]});
+        }
+        sub get_private         { return $private{$_[0]}; }
+        sub get_infohash        { return $infohash{$_[0]}; }
+        sub get_client          { return $client{$_[0]}; }
+        sub get_pieces          { return $pieces{$_[0]}; }
+        sub get_trackers        { return $trackers{$_[0]}; }
+        sub get_files           { return $files{$_[0]}; }
+        sub get_piece_count     { return $piece_count{$_[0]}; }
+        sub get_piece_size      { return $piece_size{$_[0]}; }
+        sub get_total_size      { return $total_size{$_[0]}; }
+        sub _get_endgame_status { return $endgame{$_[0]}; }
 
         sub add_tracker {    # should be add_tracker_tier
             my ($self, @urls) = @_;
@@ -237,15 +240,21 @@ use warnings;
                 scalar grep { $_->get_verified_integrity } @{$pieces{$_[0]}};
         }
 
-        sub get_block_size {             my ($self) = @_;die if $_[1];            return $block_size{$self};        }
-        sub set_block_size{
-            my ($self, $value) = @_;
-               $self->get_client->_do_callback(q[log], WARN,
-                                                   q[block_size is malformed])
-                        and return unless $value =~ m[^\d+$] and $value  < ($client{$self}->get_max_buffer_per_conn + 12);
-                    return $block_size{$self} = $value;
+        sub get_block_size {
+            my ($self) = @_;
+            return $block_size{$self};
         }
 
+        sub set_block_size {
+            my ($self, $value) = @_;
+            $self->get_client->_do_callback(q[log], WARN,
+                                            q[block_size is malformed])
+                and return
+                unless $value =~ m[^\d+$]
+                    and $value
+                    < ($client{$self}->get_max_buffer_per_conn + 12);
+            return $block_size{$self} = $value;
+        }
 
         sub _inc_uploaded {
             my ($self, $value) = @_;
@@ -255,7 +264,7 @@ use warnings;
                 unless caller->isa(q[Net::BitTorrent::Session::Peer]);
             return $uploaded{$self} += $value;
         }
-        sub get_uploaded { die if $_[1];return $uploaded{$_[0]}; }
+        sub get_uploaded { return $uploaded{$_[0]}; }
 
         sub _inc_downloaded {
             my ($self, $value) = @_;
@@ -265,7 +274,7 @@ use warnings;
                 unless caller->isa(q[Net::BitTorrent::Session::Peer]);
             return $downloaded{$self} += $value;
         }
-        sub get_downloaded { die if $_[1];return $downloaded{$_[0]}; }
+        sub get_downloaded { return $downloaded{$_[0]}; }
 
         sub append_nodes {
             my ($self, $new_nodes) = @_;
@@ -274,8 +283,8 @@ use warnings;
             return $nodes{$self}
                 = compact(uncompact($nodes{$self}), uncompact($new_nodes));
         }
-        sub get_nodes         { die if $_[1];return uncompact($nodes{$_[0]}); }
-        sub get_compact_nodes { die if $_[1];return $nodes{$_[0]}; }
+        sub get_nodes         { return uncompact($nodes{$_[0]}); }
+        sub get_compact_nodes { return $nodes{$_[0]}; }
 
         sub _pulse {
             my ($self) = @_;
@@ -284,12 +293,12 @@ use warnings;
 
     # TODO: review the following block ===================================
     #for my $file (@{$files{$self}}) {
-    #$file->close if ((time - $file->touch_timestamp) > 600);
+    #$file->close if ((time - $file->get_touch_timestamp) > 600);
     #}
     #if (not $self->get_complete) {
     #grep {
     #	$_->_disconnect(q[We're in pull mode and this peer has nothing for us.])
-    #	not $_->is_interesting
+    #	not $_->get_is_interesting
     #} @peers;
     # Remove peers we're not interested it.  Evil, but...
     # well, survival is key. We can seed later.  Right?  Right.
@@ -346,7 +355,8 @@ use warnings;
             return unless $downloaded{$self};
             if ((scalar(
                      grep {
-                         not $_->get_cached_integrity and $_->get_priority
+                         not $_->get_cached_integrity
+                             and $_->get_priority
                          } @{$pieces{$self}}
                  )
                 ) <= 10    # TODO: make this number a variable
@@ -380,13 +390,12 @@ use warnings;
             }
             my $max_working = (($free_blocks < $free_slots)
                       + (scalar(grep { $_->get_working } @{$pieces{$self}})));
-
             my @weights = (
                 (scalar(grep { $_->get_working } @{$pieces{$self}})
                      < $max_working    # TODO: Make this ratio variable
                 )
                 ? (grep {
-                              not $_->get_cached_integrity
+                               not $_->get_cached_integrity
                            and $_->get_priority
                            and vec($peer->get_bitfield, $_->get_index, 1)
                            and ($_->get_working
@@ -394,16 +403,17 @@ use warnings;
                                    values %{$_->get_blocks})
                                 : 1
                            )
-                       }   @{$pieces{$self}}
+                       } @{$pieces{$self}}
                     )
                 : (grep {
                        $_->get_working    # and $pieces{$self}->[$_->index]
                            and (scalar grep { scalar $_->get_peers == 0 }
                                 values %{$_->get_blocks})
-                       }   @{$pieces{$self}}
+                       } @{$pieces{$self}}
                 )
             );
             return if not @weights;
+
             # [id://230661]
             my $total    = sum map { $_->get_priority } @weights;
             my $rand_val = $total * rand;
@@ -420,7 +430,7 @@ use warnings;
         }
 
         sub get_peers {
-            my ($self) = @_;die if $_[1];
+            my ($self) = @_;
             $client{$self}->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             return (
@@ -433,7 +443,7 @@ use warnings;
         }
 
         sub get_complete {
-            my ($self) = @_;die if $_[1];
+            my ($self) = @_;
             $client{$self}->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             for my $piece (@{$pieces{$self}}) {
@@ -445,7 +455,7 @@ use warnings;
         }
 
         sub get_bitfield {
-            my ($self) = @_;die if $_[1];
+            my ($self) = @_;
             $client{$self}->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             return pack q[B*], join q[],    # dec bit order
@@ -453,7 +463,7 @@ use warnings;
         }
 
         sub close_files {
-            my ($self) = @_;die if $_[1];
+            my ($self) = @_;
             $client{$self}->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my $return = 0;
@@ -498,8 +508,9 @@ use warnings;
                           $path{$self},
                           $base_dir{$self},
                           $total_size{$self},
-                          (((  (scalar grep { $_->check } @{$pieces{$self}})
-                             / (scalar @{$pieces{$self}})
+                          ((((scalar grep { $_->get_cached_integrity }
+                                  @{$pieces{$self}}
+                             ) / (scalar @{$pieces{$self}})
                             )
                            ) * 100
                           ),
@@ -547,7 +558,7 @@ END
                         #$block_size{$self},
                         scalar(grep { $_->get_working } @{$pieces{$self}}),
                         join(q[, ],
-                             map      { $_->index }
+                             map      { $_->get_index }
                                  grep { $_->get_working } @{$pieces{$self}})
                     );
                     s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g
@@ -873,6 +884,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Session.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: Session.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut

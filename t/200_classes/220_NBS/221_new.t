@@ -1,6 +1,6 @@
 # -*- perl -*-
 # t/200_classes/220_NBS/221_new.t
-# $Id: 221_new.t 20 2008-05-22 23:09:05Z sanko@cpan.org $
+# $Id: 221_new.t 24 2008-07-01 23:52:15Z sanko@cpan.org $
 use strict;
 use warnings;
 

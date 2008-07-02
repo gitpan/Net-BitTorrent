@@ -5,7 +5,7 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: DHT.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $];
+        our $SVN = q[$Id: DHT.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
         our $VERSION = sprintf q[%.3f], version->new(qw$Rev 23$)->numify / 1000;
     }
     use Socket qw[SOL_SOCKET /F_INET/ SOCK_DGRAM SO_REUSEADDR];
@@ -49,7 +49,6 @@ use warnings;
 
         sub _open_socket {
             my ($self) = @_;
-            die if $_[1];
             $client{$self}->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             socket(my ($_socket), PF_INET, SOCK_DGRAM, getprotobyname(q[udp]))
@@ -69,49 +68,40 @@ use warnings;
         }
 
         sub get_client {
-            die if $_[1];
             return $client{$_[0]};
         }
 
         sub get_routing_table {
-            die if $_[1];
             return $routing_table{$_[0]};
         }
 
         sub get_node_id {
-            die if $_[1];
             return $node_id{$_[0]};
         }
 
         sub _get_socket {
-            die if $_[1];
             return $socket{$_[0]};
         }
 
         sub _get_fileno {
-            die if $_[1];
             return $fileno{$_[0]};
         }
 
-        sub _get_queue_outgoing {
-            die if $_[1];
+        sub _get_queue_outgoing {# no-op
             return;
-        }    # no-op
+        }
 
         sub get_sockport {
-            die if $_[1];
             return (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[1];
         }
 
         sub get_sockaddr {
-            die if $_[1];
             return join q[.],
                 (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[2 .. 5];
         }
 
         sub _pulse {
             my ($self) = @_;
-            die if $_[1];
             {    # get rid of old outgoing packets...
                 my @expired_requests = grep {
                     $outstanding_queries{$self}{$_}->{timestamp}
@@ -454,6 +444,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 23 2008-06-18 02:35:47Z sanko@cpan.org $
+=for svn $Id: DHT.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
 
 =cut
