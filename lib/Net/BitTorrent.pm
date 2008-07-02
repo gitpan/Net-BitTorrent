@@ -3,11 +3,11 @@ use strict;
 use warnings;
 {
 
-    BEGIN {
+    BEGIN {    # random change to have keywords updated by SVN...
         use version qw[qv];
         our $SVN
-            = q[$Id: BitTorrent.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 24 $)->numify / 1000), $UNSTABLE_RELEASE);
+            = q[$Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
+        our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
     use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
@@ -71,7 +71,7 @@ use warnings;
             q[a20],
             (sprintf(
                  q[NB%03d%1s-%8s%5s],
-                 (q[$Rev: 24 $] =~ m[(\d+)]g),
+                 (q[$Rev: 25 $] =~ m[(\d+)]g),
                  ($Net::BitTorrent::UNSTABLE_RELEASE ? q[S] : q[C]),
                  (join q[],
                   map {
@@ -1645,6 +1645,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $
 
 =cut

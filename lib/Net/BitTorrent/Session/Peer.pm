@@ -5,8 +5,8 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: Peer.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
+        our $SVN = q[$Id: Peer.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
+        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 25 $)->numify / 1000;
     }
     use Socket
         qw[SOL_SOCKET SO_SNDTIMEO SO_RCVTIMEO PF_INET AF_INET SOCK_STREAM];
@@ -232,6 +232,10 @@ use warnings;
                                              [caller 0]->[3], $$self
                                      )
         );
+        if (not $socket{$self} || not defined $socket{$self}) {
+            $self->_disconnect;
+            return;
+        }
         my $actual_read =
             sysread($socket{$self},
                     $queue_incoming{$self},
@@ -264,6 +268,10 @@ use warnings;
                                              [caller 0]->[3], $$self
                                      )
         );
+        if (not $socket{$self} || not defined $socket{$self}) {
+            $self->_disconnect;
+            return;
+        }
         my $actual_write =
             syswrite($socket{$self},
                      substr($queue_outgoing{$self}, 0, $length, q[]),
@@ -283,7 +291,7 @@ use warnings;
                                              [caller 0]->[3], $$self
                                      )
         );
-        close $socket{$self};
+        close $socket{$self} if $socket{$self};
         $client{$self}->_remove_connection($self);
         $reason ||= q[Connection closed by remote peer.];
         $client{$self}->_do_callback(q[peer_disconnect], $self, $reason);
@@ -444,24 +452,22 @@ use warnings;
                 = unpack q[Na] . ($packet_len) . q[ a*],
                 $queue_incoming{$self};
             ($type, my $packet) = unpack(q[ca*], $packet_data);
-            my %dispatch = (
-                q[] => \&_parse_packet_keepalive,
-                0   => \&_parse_packet_choke,
-                1   => \&_parse_packet_unchoke,
-                2   => \&_parse_packet_interested,
-                3   => \&_parse_packet_disinterested,
-                4   => \&_parse_packet_have,
-                5   => \&_parse_packet_bitfield,
-                6   => \&_parse_packet_request,
-                7   => \&_parse_packet_piece,
-                8   => \&_parse_packet_cancel,
-                9   => \&_parse_packet_port,
-                14  => \&_parse_packet_have_all,
-                15  => \&_parse_packet_have_none,
-
-                #16 => \&_parse_packet_reject,
-                #17 => \&_parse_packet_allowed_fast,
-                20 => \&_parse_packet_extended
+            my %dispatch = (q[] => \&_parse_packet_keepalive,
+                            0   => \&_parse_packet_choke,
+                            1   => \&_parse_packet_unchoke,
+                            2   => \&_parse_packet_interested,
+                            3   => \&_parse_packet_disinterested,
+                            4   => \&_parse_packet_have,
+                            5   => \&_parse_packet_bitfield,
+                            6   => \&_parse_packet_request,
+                            7   => \&_parse_packet_piece,
+                            8   => \&_parse_packet_cancel,
+                            9   => \&_parse_packet_port,
+                            14  => \&_parse_packet_have_all,
+                            15  => \&_parse_packet_have_none,
+                            16  => \&_parse_packet_reject,
+                            17  => \&_parse_packet_allowed_fast,
+                            20  => \&_parse_packet_extended
             );
             if (defined $dispatch{$type}) {
                 %ref = $dispatch{$type}($self, $packet_len, $packet);
@@ -469,7 +475,9 @@ use warnings;
             else {
                 if (require Data::Dumper) {
                     warn $type;
-                    warn Data::Dumper::Dump($packet);
+                    warn q[Unhandled BitTorrent packet: ]
+                        . Data::Dumper->Dump([$type, $packet],
+                                             [qw[type infohash]]);
                 }
 
                 # XXX - think about banning this guy
@@ -1543,6 +1551,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
+=for svn $Id: Peer.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $
 
 =cut

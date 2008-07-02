@@ -5,7 +5,7 @@ use warnings;
 
     BEGIN {
         use version qw[qv];
-        our $SVN = q[$Id: DHT.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
+        our $SVN = q[$Id: DHT.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
         our $VERSION = sprintf q[%.3f], version->new(qw$Rev 23$)->numify / 1000;
     }
     use Socket qw[SOL_SOCKET /F_INET/ SOCK_DGRAM SO_REUSEADDR];
@@ -87,7 +87,7 @@ use warnings;
             return $fileno{$_[0]};
         }
 
-        sub _get_queue_outgoing {# no-op
+        sub _get_queue_outgoing {    # no-op
             return;
         }
 
@@ -206,18 +206,19 @@ use warnings;
                                     $dispatch{$type}($self, $node, $packet);
                                 }
                                 elsif (require Data::Dumper)
-                                {    # xxx - do something drastic
-                                    warn q[Unhandled DHT reply: ]
-                                        . Data::Dumper::Dump($packet);
+                                {    # XXX - turn into a callback
+                                    warn q[Unhandled DHT Reply]
+                                        . Data::Dumper->Dump([$packet],
+                                                             [qw[packet]]);
                                 }
                                 delete $outstanding_queries{$self}
                                     {$packet->{q[t]}};
                             }
                         }
                         elsif (require Data::Dumper)
-                        {            # xxx - do something drastic
-                            warn q[Unhandled DHT reply: ]
-                                . Data::Dumper::Dump($packet);
+                        {            # XXX - turn into a callback
+                            warn q[Unhandled DHT Reply]
+                                . Data::Dumper->Dump([$packet], [qw[packet]]);
                         }
                     }
                 }
@@ -444,6 +445,6 @@ Noncommercial-Share Alike 3.0 License
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
+=for svn $Id: DHT.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $
 
 =cut
