@@ -80,10 +80,6 @@ $client->set_callback(q[peer_incoming_block],   \&block_in);
 $client->set_callback(q[peer_outgoing_request], \&request_out);
 $client->set_callback(q[piece_hash_pass],       \&hashpass);
 $client->set_callback(q[piece_hash_fail],       \&hashfail);
-
-#$client->set_callback(q[tracker_error], sub { shift; shift; warn shift; });
-#$client->set_callback(q[log], sub { shift; shift; warn shift; } );
-#$client->set_debug_level(1000);
 for my $dot_torrent (sort @dot_torrents) {
     next if not -e $dot_torrent;
     printf q[Loading '%s'...], $dot_torrent;

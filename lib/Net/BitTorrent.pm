@@ -7,11 +7,12 @@ use warnings;
         use version qw[qv];
         our $SVN
             = q[$Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
+        our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
     use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
     use Time::HiRes qw[sleep time];
+    use Errno qw[EINPROGRESS EWOULDBLOCK];
     use lib q[../../lib/];
     use Net::BitTorrent::Session;
     use Net::BitTorrent::Session::Peer;
@@ -405,8 +406,9 @@ use warnings;
             if (vec($$ein, $fileno, 1)
                 or not $connections{$self}{$fileno}->_get_socket)
             {   vec($$ein, $fileno, 1) = 0;
-                if ($^E
-                    and (($^E != 10036) and ($^E != 10035)))
+                if (    $^E
+                    and ($^E != EINPROGRESS)
+                    and ($^E != EWOULDBLOCK))
                 {   $connections{$self}{$fileno}->_disconnect($^E);
                     next;
                 }

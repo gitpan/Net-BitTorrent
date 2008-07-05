@@ -11,9 +11,11 @@ use warnings;
             = q[$Id: Tracker.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
         our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
     }
+    use lib q[../../../../lib];
     use Net::BitTorrent::Util qw[min bdecode max compact shuffle :log];
     use Socket qw[SOL_SOCKET /TIMEO/ /F_INET/ SOCK_STREAM];
     use Fcntl qw[F_SETFL O_NONBLOCK];
+    use Errno qw[EINPROGRESS EWOULDBLOCK];
     {
         my (%urls,                 %fileno,
             %socket,               %session,
@@ -267,8 +269,8 @@ use warnings;
                   not
                   connect($socket, pack(q[Sna4x8], &AF_INET, $port, $resolve))
                   and $^E
-                  and ($^E != 10036)
-                  and ($^E != 10035))
+                  and ($^E != EINPROGRESS)
+                  and ($^E != EWOULDBLOCK))
             {   $self->get_client->_do_callback(q[tracker_error],
                                         sprintf q[Failed to connect: %s (%d)],
                                         $^E, $^E + 0);
@@ -483,16 +485,18 @@ use warnings;
             my ($self, $advanced) = @_;
             $session{$self}->get_client->_do_callback(q[log], TRACE,
                      sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
-            my @values = (
-                        $urls{$self}->[0],
-                        (q[=] x (27 + length($urls{$self}->[0]))),
-                        ($scrape_complete{$self} + $scrape_incomplete{$self}),
-                        $scrape_complete{$self},
-                        $scrape_incomplete{$self},
-                        $scrape_downloaded{$self},
-                        $next_scrape{$self} - time,
-                        $next_announce{$self} - time,
-                        $session{$self}->get_client->_get_pulse($self) - time,
+            my @values = ($urls{$self}->[0],
+                          (q[=] x (27 + length($urls{$self}->[0]))),
+                          (  ($scrape_complete{$self} || 0)
+                           + ($scrape_incomplete{$self} || 0)
+                          ),
+                          ($scrape_complete{$self}   || 0),
+                          ($scrape_incomplete{$self} || 0),
+                          ($scrape_downloaded{$self} || 0),
+                          ($next_scrape{$self} - time),
+                          ($next_announce{$self} - time),
+                          $session{$self}->get_client->_get_pulse($self)
+                              - time,
             );
             $_ = (sprintf q[%dm %ss%s],
                   int(abs($_) / 60),

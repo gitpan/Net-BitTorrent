@@ -12,6 +12,7 @@ use warnings;
         qw[SOL_SOCKET SO_SNDTIMEO SO_RCVTIMEO PF_INET AF_INET SOCK_STREAM];
     use Fcntl qw[F_SETFL O_NONBLOCK];
     use Digest::SHA qw[sha1_hex];
+    use Errno qw[EINPROGRESS EWOULDBLOCK];
     use lib q[../../../../lib/];
     use Net::BitTorrent::Session::Peer::Request;
     use Net::BitTorrent::Util qw[min :bencode :log compact];
@@ -67,21 +68,48 @@ use warnings;
         {
 
             # perldoc perlipc
-            socket(my ($socket), PF_INET, SOCK_STREAM, getprotobyname(q[tcp]))
-                or next PORT;
-            if ($^O eq q[MSWin32]) {
-                ioctl($socket, 0x8004667e, pack(q[I], 1));
-            }
-            else { fcntl($socket, F_SETFL, O_NONBLOCK) }
-            my ($ip, $peerport) = split q[:], $args->{q[address]}, 2;
-            connect($socket,
-                    pack(q[Sna4x8],
-                         AF_INET, $peerport,
-                         join(q[], map { chr $_ } ($ip =~ m[(\d+)]g)))
-            );
-
-            # TODO: check value of err to verify non-blocking connect
             $self = bless \$args->{q[address]}, $class;
+            my $socket;
+            if (not CORE::socket($socket,     PF_INET,
+                                 SOCK_STREAM, getprotobyname(q[tcp]))
+                )
+            {   $self->_disconnect(q[Failed to create socket]);
+                return;
+            }
+            if (not($^O eq q[MSWin32]
+                    ? ioctl($socket, 0x8004667e, pack(q[I], 1))
+                    : fcntl($socket, F_SETFL, O_NONBLOCK)
+                )
+                )
+            {   $self->_disconnect(q[Failed to set socket to non-blocking]);
+                return;
+            }
+            if (not setsockopt($socket, SOL_SOCKET,
+                               SO_SNDTIMEO, pack('LL', 15, 0))
+                or not setsockopt($socket, SOL_SOCKET,
+                                  SO_RCVTIMEO, pack('LL', 15, 0))
+                )
+            {   $self->_disconnect(
+                                  q[Failed to set socket connection timeout]);
+                return;
+            }
+            my ($ip, $peerport) = split q[:], $args->{q[address]}, 2;
+            if (not connect($socket,
+                            pack(q[Sna4x8],
+                                 AF_INET,
+                                 $peerport,
+                                 join(q[], map { chr $_ } ($ip =~ m[(\d+)]g)))
+                )
+                and $^E
+                and ($^E != EINPROGRESS)
+                and ($^E != EWOULDBLOCK)
+                )
+            {   $self->_disconnect(sprintf q[Failed to connect: %s (%d)],
+                                   $^E, $^E + 0);
+                return;
+            }
+
+            # everything's good, let's keep moving.
             $socket{$self}              = $socket;
             $fileno{$self}              = fileno($socket{$self});
             $connected{$self}           = 0;
@@ -1264,7 +1292,7 @@ use warnings;
         }
         else {
 
-            #die;
+            #
         }
         return;
     }

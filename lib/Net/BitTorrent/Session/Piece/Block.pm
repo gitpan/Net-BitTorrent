@@ -22,9 +22,7 @@ use warnings;
             {   $self =
                     bless \sprintf(q[B I:%d:O:%d:L:%d],
                                    $args->{q[piece]}->get_index,
-                                   $args->{q[offset]},
-                                   $args->{q[length]}
-                    ),
+                                   $args->{q[offset]}, $args->{q[length]}),
                     $class;
                 $length{$self} = $args->{q[length]};
                 $offset{$self} = $args->{q[offset]};
