@@ -30,9 +30,10 @@ SKIP: {
         plan tests => int($seeds + $leeches);
 
         if (SOMAXCONN < ($seeds + $leeches)) {
-            skip_all(
-                 sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)], SOMAXCONN
-                 )
+            skip(sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)],
+                         SOMAXCONN),
+                 $test_builder->{q[Expected_Tests]}
+                     - $test_builder->{q[Curr_Test]}
             );
         }
         my %client;
@@ -41,9 +42,9 @@ SKIP: {
             $chr = sprintf $sprintf, $chr;
             $client{q[seed_] . $chr}
                 = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
-            skip_all(sprintf(q[Failed to create seed_%s], $chr),
-                     $test_builder->{q[Expected_Tests]}
-                         - $test_builder->{q[Curr_Test]}
+            skip(sprintf(q[Failed to create seed_%s], $chr),
+                 $test_builder->{q[Expected_Tests]}
+                     - $test_builder->{q[Curr_Test]}
             ) if not $client{q[seed_] . $chr};
 
          #{    # DEBUG
