@@ -29,11 +29,14 @@ SKIP: {
         use IO::Socket qw[SOMAXCONN];
         plan tests => int($seeds + $leeches);
 
-        skip_all(sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)], SOMAXCONN)) if SOMAXCONN < ($seeds + $leeches);
-
+        if (SOMAXCONN < ($seeds + $leeches)) {
+            skip_all(
+                 sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)], SOMAXCONN
+                 )
+            );
+        }
         my %client;
         my $test_builder = Test::More->builder;
-
         for my $chr (1 .. $seeds) {
             $chr = sprintf $sprintf, $chr;
             $client{q[seed_] . $chr}
@@ -132,8 +135,7 @@ SKIP: {
                                ),
                                $completion
                          )
-                        )
-                        if $ENV{q[RELEASE_TESTING]};
+                    ) if $ENV{q[RELEASE_TESTING]};
                     ok($session->get_complete,
                         sprintf(q[peer_%s complete], $chr))
                         if $session->get_complete;
