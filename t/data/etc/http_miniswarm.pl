@@ -26,7 +26,11 @@ SKIP: {
         use lib q[../../../lib];
         use Net::BitTorrent;
         use Net::BitTorrent::Util qw[compact];
+        use IO::Socket qw[SOMAXCONN];
         plan tests => int($seeds + $leeches);
+
+        skip_all(sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)], SOMAXCONN)) if SOMAXCONN < ($seeds + $leeches);
+
         my %client;
         my $test_builder = Test::More->builder;
 

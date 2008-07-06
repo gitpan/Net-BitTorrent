@@ -103,7 +103,7 @@ __END__
 
 =head1 NAME
 
-client.pl - Very basic BitTorrent client
+client.pl - Painfully simplistic BitTorrent client
 
 =head1 Synopsis
 

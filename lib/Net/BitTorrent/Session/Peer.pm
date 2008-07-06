@@ -72,6 +72,7 @@ use warnings;
             my $socket;
             if (not CORE::socket($socket,     PF_INET,
                                  SOCK_STREAM, getprotobyname(q[tcp]))
+                                 or not $socket
                 )
             {   $self->_disconnect(q[Failed to create socket]);
                 return;

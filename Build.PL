@@ -43,11 +43,12 @@ Do you want to perform these tests in addition to core tests? [no] ]
 my @tests;
 find \&find_cb, sort @search;
 my $mb = Module::Build->new(
-    module_name        => q[Net::BitTorrent],
-    license            => q[perl],
-    dist_author        => q[Sanko Robinson <sanko@cpan.org>],
-    dist_abstract      => q[BitTorrent peer-to-peer protocol],
-    dist_version_from  => q[lib/Net/BitTorrent.pm],
+    module_name       => q[Net::BitTorrent],
+    license           => q[perl],
+    dist_author       => q[Sanko Robinson <sanko@cpan.org>],
+    dist_abstract     => q[BitTorrent peer-to-peer protocol],
+    dist_version_from => q[lib/Net/BitTorrent.pm],
+
     #create_makefile_pl => q[traditional],                        # Old skool.
     sign => 0,    # chokes on build.bat on win32
     build_requires => {q[Module::Build] => 0.2805,    # core in 5.009004
@@ -56,6 +57,7 @@ my $mb = Module::Build->new(
     requires => {
                q[Cwd]           => 0,           # dev on
                q[Digest::SHA]   => 5.45,        # dev on 5.45|CORE in 5.10
+               q[Errno]         => 0,
                q[Exporter]      => 0,           # dev on 5.62
                q[Fcntl]         => 0,           # dev on 1.06
                q[File::Path]    => 0,           # dev on 2.04

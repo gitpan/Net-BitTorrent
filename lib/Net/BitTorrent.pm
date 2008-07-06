@@ -7,7 +7,7 @@ use warnings;
         use version qw[qv];
         our $SVN
             = q[$Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
+        our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
     }
     use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
     use Scalar::Util qw[/weak/];
