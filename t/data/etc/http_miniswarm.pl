@@ -28,6 +28,8 @@ SKIP: {
         use Net::BitTorrent::Util qw[compact];
         use IO::Socket qw[SOMAXCONN];
         plan tests => int($seeds + $leeches);
+        my %client;
+        my $test_builder = Test::More->builder;
 
         if (SOMAXCONN < ($seeds + $leeches)) {
             skip(sprintf(q[SOMAXCONN is too low. (SOMAXCONN == %d)],
@@ -36,8 +38,6 @@ SKIP: {
                      - $test_builder->{q[Curr_Test]}
             );
         }
-        my %client;
-        my $test_builder = Test::More->builder;
         for my $chr (1 .. $seeds) {
             $chr = sprintf $sprintf, $chr;
             $client{q[seed_] . $chr}
