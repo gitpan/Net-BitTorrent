@@ -18,17 +18,17 @@ progress.
 
 =head1 Net::BitTorrent's Way-too-Obvious Class Hierarchy
 
-                    Net::BitTorrent
-                          |
-                Net::BitTorrent::Session
-               /      /   |      \
-   N::B::S::Tracker  /    | N::B::S::Piece
-                    /     |       /
-            N::B::S::File | N::B::S::P::Block
-                          |
-                     N::B::S::Peer
-                           \
-                    N::B::S::P::Request
+                                            .---- N::B::S::T::UDP
+                                           /
+                     .-------- N::B::S::Tracker
+                    /  .-- N::B::S::File   \
+                   /  /                     `--- N::B::S::T::HTTP
+           .---- Net::BitTorrent::Session
+          /   .--- Net::BitTorrent::DHT
+         /   /           \
+  Net::BitTorrent         `---- N::B::D::Node
+         \
+          `---- Net::BitTorrent::Peer
 
 See Also: L<Class Pseudo-structures|/"Class Pseudo-structures">
 
@@ -79,7 +79,7 @@ perl 5.8.1.  See L<Portability Hacks|/"Portability Hacks">.
 
 Parts that aren't handled internally are described here with sample code
 to get you started.  In the future, this will probably be in a separate
-recipe book.
+pod.
 
 =head2 Pause and Resume a .torrent Session
 

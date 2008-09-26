@@ -1,67 +1,77 @@
 package Net::BitTorrent::Util;
-use strict;
-use warnings;
 {
+    use strict;      # core as of perl 5
+    use warnings;    # core as of perl 5.006
 
-    BEGIN {
-        use version qw[qv];
-        our $SVN = q[$Id: Util.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $];
-        our $VERSION = sprintf q[%.3f], version->new(qw$Rev: 24 $)->numify / 1000;
-    }
-    use List::Util qw[min max shuffle sum];
-    use vars qw[@EXPORT_OK %EXPORT_TAGS];
-    use Exporter qw[];
-    *import    = *Exporter::import;
+    #
+    use Carp qw[carp];                         # core as of perl 5
+    use List::Util qw[min max shuffle sum];    # core as of 5.007003
+
+    #
+    #
+    use version qw[qv];                        # core as of 5.009
+    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+
+    #
+    use vars                                   # core as of perl 5.002
+        qw[@EXPORT_OK %EXPORT_TAGS];
+    use Exporter                               # core as of perl 5
+        qw[];
+    *import = *import = *Exporter::import;
     @EXPORT_OK = qw[bencode bdecode
         compact uncompact
         min max shuffle sum
-        TRACE FATAL ERROR WARN INFO DEBUG
+        TRACE DEBUG INFO WARN ERROR FATAL
     ];
     %EXPORT_TAGS = (all     => [@EXPORT_OK],
                     bencode => [qw[bencode bdecode]],
                     compact => [qw[compact uncompact]],
-                    list    => [qw[min max shuffle sum]],
-                    log     => [qw[TRACE FATAL ERROR WARN INFO DEBUG]]
+                    log     => [qw[TRACE DEBUG INFO WARN ERROR FATAL]]
     );
 
+    #
     # http://tech.puredanger.com/2008/03/25/log-levels/
     # http://www.sip-communicator.org/index.php/Documentation/LogLevels
     sub TRACE { return 32 }
     sub DEBUG { return 16 }
-    sub INFO  { return 7 }
+    sub INFO  { return 8 }
     sub WARN  { return 4 }
     sub ERROR { return 2 }
     sub FATAL { return 1 }
 
     sub bencode {
-        if (defined $_[0] and not ref $_[0]) {
-            return (  ($_[0] =~ m[^[-+]?\d+$])
-                    ? (q[i] . $_[0] . q[e])
-                    : (length($_[0]) . q[:] . $_[0])
+        my ($ref) = @_;
+        $ref = defined $ref ? $ref : q[];
+        if (not ref $ref) {
+            return (  (defined $ref and $ref =~ m[^[-+]?\d+$])
+                    ? (q[i] . $ref . q[e])
+                    : (length($ref) . q[:] . $ref)
             );
         }
-        elsif (ref $_[0] eq q[ARRAY]) {
-            return join(q[], q[l], (map { bencode($_) } @{$_[0]}), q[e]);
+        elsif (ref $ref eq q[ARRAY]) {
+            return join(q[], q[l], (map { bencode($_) } @{$ref}), q[e]);
         }
-        elsif (ref $_[0] eq q[HASH]) {
+        elsif (ref $ref eq q[HASH]) {
             return
                 join(q[], q[d],
-                     (map { bencode($_) . bencode($_[0]->{$_}) }
-                          sort keys %{$_[0]}
+                     (map { bencode($_) . bencode($ref->{$_}) }
+                          sort keys %{$ref}
                      ),
                      q[e]
                 );
         }
-        $@ = q[invalid format];
-        return q[];
+        return q[];    # $ref == undef
     }
 
-    sub bdecode {    # needs new benchmark
-        my ($string) = @_;
-        return if not $string;
-        if ($string =~ m[^([1-9]\d*):]s) {
-            my $return = q[];
-            my $size   = $1;
+    sub bdecode {      # needs work
+        my($string)=@_;
+        return if not defined $string;
+        my ($return, $leftover);
+        if (   $string =~ m[^([1-9]\d*):]s
+            or $string =~ m[^(0+):]s)
+        {   my $size = $1;
+            $return = q[] if $1 =~ m[^0+$];
             $string =~ s|^$size:||s;
             while ($size) {
                 my $this_time = min($size, 32766);
@@ -73,59 +83,53 @@ use warnings;
             return wantarray ? ($return, $string) : $return;    # byte string
         }
         elsif ($string =~ s|^i([-+]?\d+)e||s) {                 # integer
-            return wantarray ? (int($1), $string || undef) : int($1);
+            return wantarray ? (int($1), $string) : int($1);
         }
         elsif ($string =~ s|^l(.*)||s) {                        # list
-            my @return   = ();
-            my $leftover = $1;
+            $leftover = $1;
             while ($leftover and $leftover !~ s|^e||s) {
                 (my ($piece), $leftover) = bdecode($leftover);
-                push @return, $piece;
+                push @$return, $piece;
             }
-            return wantarray ? (\@return, $leftover || undef) : \@return;
+            return wantarray ? (\@$return, $leftover) : \@$return;
         }
         elsif ($string =~ s|^d(.*)||s) {                        # dictionary
-            my %return   = ();
-            my $leftover = $1;
+            $leftover = $1;
             while ($leftover and $leftover !~ s|^e||s) {
-                (my ($key),   $leftover) = bdecode($leftover);
-                (my ($value), $leftover) = bdecode($leftover);
-                $return{$key} = $value;
+                my ($key, $value);
+                ($key,   $leftover) = bdecode($leftover);
+                ($value, $leftover) = bdecode($leftover);
+                $return->{$key} = $value;
             }
-            return wantarray ? (\%return, $leftover || undef) : \%return;
+            return wantarray ? (\%$return, $leftover) : \%$return;
         }
-        $@ = sprintf q[Bad bencoded data: %s], ($string||q[]);
+
+        #carp sprintf(q[Bad bencoded data: '%s'], $string);
         return;
     }
 
-    sub compact {    # IPv4 only.  For now.
+    sub compact {
         my (@peers) = @_;
         if (not @peers) {
-            $@ = q[Not enough parameters for compact(ARRAY)];
+
+            #carp q[Not enough parameters for compact(ARRAY)];
             return;
         }
-        my $return = q[];
+        my $return;
         my %seen;
-    PEER: for my $peer (grep(!$seen{$_}++, @peers)) {
+    PEER: for my $peer (grep(defined && !$seen{$_}++, @peers)) {
             next if not $peer;
-            my ($ip, $port) = ( # ...sigh, some (old) trackers do crazy things
-                ref $peer eq q[HASH]
-                ? ($peer->{q[ip]}, $peer->{q[port]})
-                : split(q[:], $peer, 2)
-            );
-            if (grep { $_ > 0xff }
-                       ($ip =~ m[^([\d]+)\.([\d]+)\.([\d]+)\.([\d]+)$])
-                    or ($ip !~ m[^([\d]+)\.([\d]+)\.([\d]+)\.([\d]+)$]))
-            {   $@ = q[Invalid IP address: ] . $peer;
-            }
-            elsif ($port =~ m[[^\d]]) {
-                $@ = q[Malformed port number: ] . $peer;
+            my ($ip, $port) = split(q[:], $peer, 2);
+            if ($peer
+                !~ m[^(?:(?:(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2})[.]?){4}):\d+$]
+                )
+            {    #carp q[Invalid IP address: ] . $peer;
             }
             elsif ($port > 2**16) {    #
-                $@ = q[Port number beyond ephemeral range: ] . $peer;
+                    #carp q[Port number beyond ephemeral range: ] . $peer;
             }
             else {
-                $return .= pack q[C4n],
+                $return .= pack q[C4n],    # XXX - use inet_aton
                     ($ip =~ m[^([\d]+)\.([\d]+)\.([\d]+)\.([\d]+)$]),
                     int $port;
             }
@@ -146,9 +150,8 @@ use warnings;
         }
         return (shuffle(%peers ? keys %peers : ()));
     }
+    1;
 }
-1;
-__END__
 
 =pod
 
@@ -168,26 +171,10 @@ You may import any of the following or use one or more of these tags:
 
 Everything is imported into your namespace.
 
-=item C<:bencode>
-
-You get the two Bencode-related functions: C<bencode> and C<bedecode>.
-For more on Bencoding, see the BitTorrent Protocol documentation.
-
-=item C<:compact>
-
-C<compact>, C<uncompact>
-
-These are tracker response-related functions.
-
-=item C<:list>
-
-C<min>, C<max>, C<shuffle>, C<sum>
-
-Net::BitTorrent::Util imports these from List::Util.
-
 =item C<:log>
 
-Net::BitTorrent's log callback uses these:
+Net::BitTorrent's log callback uses these to indicate how 'important' a
+certain message is:
 
 =over 2
 
@@ -204,6 +191,19 @@ Net::BitTorrent's log callback uses these:
 =item C<DEBUG>
 
 =back
+
+=item C<:bencode>
+
+You get the two Bencode-related functions: C<bencode> and C<bedecode>.
+For more on Bencoding, see the BitTorrent Protocol documentation.
+
+=item C<:compact>
+
+C<compact>, C<uncompact>
+
+These are tracker response-related functions.
+
+
 
 =back
 
@@ -244,45 +244,6 @@ strings.
 
 =back
 
-=head1 Log Levels
-
-=over 4
-
-=item C<FATAL>
-
-C<FATAL> errors usually mean something really wrong has taken place.
-You should restart the application to restore normal operation.
-
-=item C<ERROR>
-
-C<ERROR> is used for logging general errors that prevent the
-L<Net::BitTorrent> from functioning as expected.
-
-=item C<WARN>
-
-C<WARN> is used for logging any unusual situation that is, for the
-moment, not preventing normal operation.
-
-=item C<INFO>
-
-C<INFO> level messages include any interesting piece of information
-that helps to give context to a log, often when things are starting or
-stopping.
-
-=item C<DEBUG>
-
-C<DEBUG> level includes anything that you’d like to be in the logs
-when trying to understand why the application didn’t work as expected.
-
-=item C<TRACE>
-
-Indicates a level of logging that shows the control flow of the
-program.  Among the things that you’d like to log with a C<TRACE>
-level are: entry and exit of a method, loop, if statement or other
-control flow statements.
-
-=back
-
 =head1 Author
 
 Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
@@ -291,17 +252,22 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
 
 This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+it under the terms of The Artistic License 2.0.  See the F<LICENSE>
+file included with this distribution or
+http://www.perlfoundation.org/artistic_license_2_0.  For
+clarification, see http://www.perlfoundation.org/artistic_2_0_notes.
 
-See [http://www.perl.com/perl/misc/Artistic.html] or the LICENSE file
-included with this module.
+When separated from the distribution, all POD documentation is covered
+by the Creative Commons Attribution-Share Alike 3.0 License.  See
+http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
+clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 24 2008-07-01 23:52:15Z sanko@cpan.org $
+=for svn $Id: Util.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
 
 =cut

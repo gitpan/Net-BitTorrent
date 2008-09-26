@@ -1,139 +1,681 @@
 package Net::BitTorrent;
-use strict;
-use warnings;
 {
+    use strict;      # core as of perl 5
+    use warnings;    # core as of perl 5.006
 
-    BEGIN {    # random change to have keywords updated by SVN...
-        use version qw[qv];
-        our $SVN
-            = q[$Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $];
-        our $UNSTABLE_RELEASE = 5; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(qw$Rev: 25 $)->numify / 1000), $UNSTABLE_RELEASE);
-    }
-    use Socket qw[/F_INET/ /SOCK_/ /_ANY/ SOL_SOCKET /SO_RE/ /SOMAX/];
-    use Scalar::Util qw[/weak/];
-    use Time::HiRes qw[sleep time];
-    use Errno qw[EINPROGRESS EWOULDBLOCK];
-    use lib q[../../lib/];
+    #
+    use Scalar::Util    # core as of perl 5.007.003
+        qw[blessed weaken];
+    use Time::HiRes;    # core as of perl 5.007003
+    use Socket          # core as of perl 5
+        qw[    /inet_/
+        SOCK_STREAM /SO_REUSE/ SOL_SOCKET
+        PF_INET     SOMAXCONN
+        /pack_sockaddr_in/];
+    use Carp            # core as of perl 5
+        qw[carp carp];
+
+    #$Carp::Internal{q[Net::BitTorrent]}++;
+    # I could also use Errno, but it's so heavy...
+    use POSIX qw[];     # core as of perl 5
+    sub _EWOULDBLOCK { $^O eq q[MSWin32] ? 10035 : POSIX::EWOULDBLOCK() }
+    sub _EINPROGRESS { $^O eq q[MSWin32] ? 10036 : POSIX::EINPROGRESS() }
+
+    #
+    use version qw[qv];    # core as of 5.009
+    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+
+    #
+    use lib q[../../lib];
     use Net::BitTorrent::Session;
-    use Net::BitTorrent::Session::Peer;
+    use Net::BitTorrent::Peer;
     use Net::BitTorrent::DHT;
-    use Net::BitTorrent::Util qw[shuffle :log];
-    my (%peer_id,              %socket,            %fileno,
-        %ul_slots_per_session, %ul_slot_size,      %max_buffer_per_conn,
-        %max_halfopen,         %conns_per_session, %conns_per_client,
-        %connections,          %callbacks,         %sessions,
-        %debug_level,          %pulse,             %max_ul_rate,
-        %max_dl_rate,          %k_up,              %k_down,
-        %dht
-    );
+    use Net::BitTorrent::Util qw[:log];
 
+    # Debugging
+    #use Data::Dump qw[pp];
+    #
+    my (%_socket, %_peerid, %_schedule, %_peers_per_session, %_event);
+    my (%_dht, %_sessions, %_connections);
+    my (%_max_ul_rate, %_k_up, %_max_dl_rate, %_k_down);
+    my (%_tid);
+
+    # Net::BitTorrent
+    #~    dht       =>  Net::BitTorrent::DHT
+    #~                      Net::BitTorrent::DHT::Azureus
+    #~                      Net::BitTorrent::DHT::Mainline
+    #~    peers     =>  [Net::BitTorrent::Peer]
+    #~    session   =>  [Net::BitTorrent::Session]
+    #~                  [Net::BitTorrent::Session::Tracker]
+    #~ 		                [Net::BitTorrent::Session::Tracker::UDP]
+    #~                      [Net::BitTorrent::Session::Tracker::HTTP]
+    #
+    # Constructor
     sub new {
         my ($class, $args) = @_;
-        my $self = undef;
-
-        # Let the user pick either LocalHost or LocalAddr like
-        # IO::Socket::INET.  ...do I really want to do this?
-        $args->{q[LocalAddr]} = $args->{q[LocalHost]}
-            if exists $args->{q[LocalHost]}
-                && !exists $args->{q[LocalAddr]};
-        {    # Allow the user to pass a list of potential port numbers
-            my @portrange
+        my $self;
+        my ($hostname, @portlist) = (q[0.0.0.0], (0));   # Reasonable Defaults
+        my ($reuseaddr, $reuseport) = (0, 0);            # XXX - undocumented
+        if (defined $args) {
+            if (ref($args) ne q[HASH]) {
+                carp q[Net::BitTorrent->new({}) requires ]
+                    . q[parameters to be passed as a hashref];
+                return;
+            }
+            $hostname = $args->{q[LocalHost]}
+                if defined $args->{q[LocalHost]};
+            @portlist
                 = defined $args->{q[LocalPort]}
-                ? ref $args->{q[LocalPort]} eq q[ARRAY]
-                    ? @{$args->{q[LocalPort]}}
-                    : $args->{q[LocalPort]}
-                : undef;
-        PORT: for my $port (@portrange) {
-                my ($socket, $host, $port)
-                    = _open_socket($args->{q[LocalAddr]}, $port);
-                defined $socket or next PORT;
-
-                # Whew, everything's okay.  Let's bless this mess.
-                $self = bless \sprintf(q[%s:%d], $host, $port), $class;
-                $socket{$self} = $socket;
-                $self->_init();
-                $self->_parse_args($args);
-                $dht{$self} = Net::BitTorrent::DHT->new({client => $self});
-                warn $^E if not $dht{$self};
+                ? (ref($args->{q[LocalPort]}) eq q[ARRAY]
+                   ? @{$args->{q[LocalPort]}}
+                   : $args->{q[LocalPort]}
+                )
+                : @portlist;
+            {    # XXX - undocumented
+                $reuseaddr = $args->{q[ReuseAddr]}
+                    if defined $args->{q[ReuseAddr]};
+                $reuseport = $args->{q[ReusePort]}
+                    if defined $args->{q[ReusePort]};
             }
         }
+
+        # MO:
+        # - foreach @portlist
+        #   - open socket
+        #   - if socket is okay
+        #     - last port
+        # - if socket is okay
+        #   - get port and ip
+        #   - bless $self (which stringifies to IPv4:port)
+        #   - store socket
+        #   - store peerid
+        #   - TODO: create DHT object
+        # - return $self (which, unless blessed, is undef)
+        my $_socket;
+    PORT: for my $port (@portlist) {
+            $_socket = __socket_open($hostname, $port, $args->{q[ReuseAddr]},
+                                     $args->{q[ReusePort]});
+            last PORT if defined $_socket;
+        }
+        my ($port, $packed_ip);
+        if (defined $_socket) {
+            ($port, $packed_ip) = unpack_sockaddr_in(getsockname($_socket));
+            my $address = sprintf(q[%s:%d], inet_ntoa($packed_ip), $port);
+            $self = bless \$address, $class;
+            $_socket{$self} = $_socket;
+            $_peerid{$self} = pack(
+                q[a20],
+                (sprintf(
+                     q[NB%03d%1s-%8s%5s],
+                     (q[$Rev: 27 $] =~ m[(\d+)]g),
+                     ($UNSTABLE_RELEASE ? q[S] : q[C]),
+                     (join q[],
+                      map {
+                          [q[A] .. q[Z], q[a] .. q[z], 0 .. 9, qw[- . _ ~]]
+                          ->[rand(66)]
+                          } 1 .. 8
+                     ),
+                     q[Sanko],
+                 )
+                )
+            );
+            $_tid{$self} = qq[\0] x 5;    # 26^5 before rollover
+            if (not($self->_add_connection($self, q[ro]))) {
+                carp q[Could not add server socket to list of connections];
+                return;
+            }
+        }
+        if (not $self) {                  # failed to open socket?
+            return;
+        }
+
+        # Settings
+        $_peers_per_session{$self} = 50;
+        $_max_dl_rate{$self}       = 0;
+        $_max_ul_rate{$self}       = 0;
+
+        #
+        $_sessions{$self} = {};           # by infohash
+
+        #
+        #$self->_schedule(
+        #    {Time    => time + 5,
+        #     Code => $self->_add_connections }
+        #    }
+        #);
+        #
+        #
+        $self->_schedule(
+            {Time => time + 5,
+             Code => sub {
+                 return $_k_down{$_[0]} = $_k_up{$_[0]} = 0;
+             },
+             Object => $self
+            }
+        );
+
+        #
         return $self;
     }
 
-    sub _init {
-        my ($self) = @_;
-        return if not defined $socket{$self};
-        $k_up{$self}   = 0;
-        $k_down{$self} = 0;
-        $self->_set_pulse($self, time + 1);
-        $debug_level{$self} = ERROR;
-        $fileno{$self}      = fileno($socket{$self});
-        $peer_id{$self} = pack(
-            q[a20],
-            (sprintf(
-                 q[NB%03d%1s-%8s%5s],
-                 (q[$Rev: 25 $] =~ m[(\d+)]g),
-                 ($Net::BitTorrent::UNSTABLE_RELEASE ? q[S] : q[C]),
-                 (join q[],
-                  map {
-                      [q[A] .. q[Z], q[a] .. q[z], 0 .. 9, qw[- . _ ~]]
-                      ->[rand(66)]
-                      } 1 .. 8
-                 ),
-                 q[Oops.],
-             )
-            )
-        );
-        $sessions{$self} = [];
-        return $self->_add_connection($self);
+    # Accessors | Private
+    sub _socket      { return $_socket{+shift} }
+    sub _connections { return $_connections{+shift} }
+    sub _dht         { return $_dht{+shift} }
+
+    sub _port {
+        my ($port, undef) = unpack_sockaddr_in(getsockname($_socket{+shift}));
+        return $port;
     }
+    sub _peers_per_session { return $_peers_per_session{+shift}; }
 
-    sub _parse_args {
-        my ($self, $args) = @_;
+    # Accessors | Public
+    sub peerid   { return $_peerid{+shift} }
+    sub sessions { return $_sessions{+shift} }
 
-        # These are sane defaults, but you can change them with params.
-        # Please note: these parameters are experimental and may change in a
-        # future release.
-        $self->set_conns_per_client(defined $args->{q[conns_per_client]}
-                                    ? $args->{q[conns_per_client]}
-                                    : 300
-        );
-        $self->set_conns_per_session(defined $args->{q[conns_per_session]}
-                                     ? $args->{q[conns_per_session]}
-                                     : 100
-        );
+    # Methods | Public
+    sub do_one_loop {    # Clunky.  I really need to replace this.
+        my ($self, $timeout) = @_;
+        return if defined $timeout and $timeout !~ m[^\+?\d+\.?\d*$];
+        $self->_process_schedule;
+        $timeout = ($timeout ? $timeout : 1);
 
-        # max_ul_rate and max_dl_rate: 0 == unlimited
-        $self->set_max_dl_rate(defined $args->{q[max_dl_rate]}
-                               ? $args->{q[max_dl_rate]}
-                               : 0
-        );
-        $self->set_max_ul_rate(defined $args->{q[max_ul_rate]}
-                               ? $args->{q[max_ul_rate]}
-                               : 0
-        );
-        $self->set_max_halfopen(defined $args->{q[max_halfopen]}
-                                ? $args->{q[max_halfopen]}
-                                : 8
-        );
-        $self->set_max_buffer_per_conn(defined $args->{q[max_buffer_per_conn]}
-                                       ? $args->{q[max_buffer_per_conn]}
-                                       : 131072
-        );
-        $self->set_ul_slot_size(defined $args->{q[ul_slot_size]}
-                                ? $args->{q[ul_slot_size]}
-                                : 32768
-        );
-        $self->set_ul_slots_per_session(
-                                      defined $args->{q[ul_slots_per_session]}
-                                      ? $args->{q[ul_slots_per_session]}
-                                      : 10
-        );
+       #warn pp \%_connections;
+       #grep {
+       #    $_->_disconnect(
+       #                q[Connection timed out before established connection])
+       #        if $_ ne $self
+       #            and ($_ ne $_dht{$self})
+       #            #and (not $_->get_is_connected)
+       #            #and ($_->get_connection_timestamp < (time - 60))
+       #} values %{$_connections{$self}};
+       # [id://371720]
+        my ($rin, $win, $ein) = (q[], q[], q[]);
+    PUSHSOCK: for my $fileno (keys %{$_connections{$self}}) {
+            vec($rin, $fileno, 1) = 1
+                if $_connections{$self}{$fileno}{q[Mode]} =~ m[r];
+            vec($win, $fileno, 1) = 1
+                if $_connections{$self}{$fileno}{q[Mode]} =~ m[w];
+            vec($ein, $fileno, 1) = 1;
+
+            #warn sprintf q[[%d|%s]], $fileno,
+            #    $_connections{$self}{$fileno}{q[Mode]};
+        }
+        my ($nfound, $timeleft) = select($rin, $win, $ein, $timeout);
+
+        #
+        my $time = time + $timeleft;
+
+        #
+        $self->_process_connections(\$rin, \$win, \$ein)
+            if $nfound and $nfound != -1;
+
+        #
+        if (($time - time) > 0) { sleep($time - time) }    # save the CPU
+                                                           #
         return 1;
     }
 
-    sub _open_socket {    # Not for objects!
-        my ($host, $port) = @_;
+    # Enable/disable dht
+    sub _use_dht {
+        my ($self, $value) = @_;
+
+        #
+        if (not defined $value) {
+            carp q[Net::BitTorrent->dht( VALUE ) requires a bool value];
+            return;
+        }
+
+        #
+        if ($value and not defined $_dht{$self}) {
+            my ($port, $packed_ip)
+                = unpack_sockaddr_in(getsockname($_socket{$self}));
+            return $_dht{$self} = Net::BitTorrent::DHT->new(
+                {   Client    => $self,
+                    LocalAddr => inet_ntoa($packed_ip),
+                    LocalPort => $port,
+
+                    #ReuseAddr => $args->{q[ReuseAddr]},
+                    #ReusePort => $args->{q[ReusePort]}
+                }
+            );
+        }
+        elsif (not $value and defined $_dht{$self}) {
+            $self->_remove_connection($_dht{$self});
+            return delete $_dht{$self};
+        }
+
+        #
+        return;
+    }
+
+    # Methods | Private
+    # Connections. Trackers, Peers, ...even the client itself
+    sub _add_connection {    # untested
+        my ($self, $connection, $mode) = @_;
+
+      # Adds a socket to this objects list for select()ion
+      # Expects parameters in list context:
+      #   - ref to self    (...this is OOP after all.)
+      #   - the connection (Duh.)
+      #   - the mode       (What should we ask select() about for this socket.
+      #                       'rw', 'wo', or 'ro')
+      # Returns:
+      #   - true on success
+      #   - false on failure (socket already in list, missing params, etc.)
+      # Param validation
+        if (not defined $connection) {
+            carp q[Net::BitTorrent->_add_connection() requires an object];
+            return;
+        }
+        if (not blessed $connection) {
+            carp
+                q[Net::BitTorrent->_add_connection() requires a blessed object];
+            return;
+        }
+        if (not(   $connection->isa(q[Net::BitTorrent])
+                or $connection->isa(q[Net::BitTorrent::Peer])
+                or
+                $connection->isa(q[Net::BitTorrent::Session::Tracker::HTTP])
+                or $connection->isa(q[Net::BitTorrent::Session::Tracker::UDP])
+                or $connection->isa(q[Net::BitTorrent::DHT])
+                or $connection->isa(q[Net::BitTorrent::DHT::Node::Mainline])
+                or $connection->isa(q[Net::BitTorrent::DHT::Node::Azureus]))
+            )
+        {   carp
+                q[Net::BitTorrent->_add_connection() requires a Net::BitTorrent-related object];
+            return;
+        }
+        my $_socket = $connection->_socket;
+        if (ref($_socket) ne q[GLOB]) {
+            carp
+                q[Net::BitTorrent->_add_connection(SOCKET, MODE) requires a GLOB-type socket];
+            return;
+        }
+
+        #
+        if (not defined $mode) {
+            carp
+                q[Net::BitTorrent->_add_connection(SOCKET, MODE) requires a $mode parameter];
+            return;
+        }
+        if ($mode !~ m[^(?:ro|rw|wo)$]) {
+            carp
+                sprintf(
+                q['%s' is not a valid mode for Net::BitTorrent->_add_connection(SOCKET, MODE)],
+                $mode);
+            return;
+        }
+        carp unless ref($_socket) eq q[GLOB];    # untested
+        carp unless fileno $_socket;
+        if (defined $_connections{$self}{fileno $_socket}) {
+            carp q[This connection object is already loaded.];
+            return;
+        }
+        $_connections{$self}{fileno $_socket} = {Object => $connection,
+                                                 Mode   => $mode,
+            }
+            or return;
+        if ($connection->isa(q[Net::BitTorrent])) {
+            weaken $_connections{$self}{fileno $_socket}{q[Object]};
+        }
+        return 1;
+    }
+
+    sub _remove_connection {
+
+        # Removes a socket to this objects list for select()ion
+        # Expects parameters in list context:
+        #   - ref to self (...this is OOP after all.)
+        #   - the connection  (Duh.)
+        # Returns:
+        #   - true on success
+        #   - false on failure (socket not in list, missing params, etc.)
+        my ($self, $connection) = @_;
+        if (not defined $connection) {
+            carp q[Net::BitTorrent->_remove_connection() requires an object];
+            return;
+        }
+        if (not blessed $connection) {
+            carp
+                q[Net::BitTorrent->_remove_connection() requires a blessed object];
+            return;
+        }
+        if (not($connection->isa(q[Net::BitTorrent]
+                )    # XXX - ...who would remove the client itself?
+                or $connection->isa(q[Net::BitTorrent::Peer])
+                or
+                $connection->isa(q[Net::BitTorrent::Session::Tracker::HTTP])
+                or $connection->isa(q[Net::BitTorrent::Session::Tracker::UDP])
+                or $connection->isa(q[Net::BitTorrent::DHT])
+                or $connection->isa(q[Net::BitTorrent::DHT::Node::Mainline])
+                or $connection->isa(q[Net::BitTorrent::DHT::Node::Azureus])
+            )
+            )
+        {   carp
+                q[Net::BitTorrent->_remove_connection() requires a Net::BitTorrent-related object];
+            return;
+        }
+        my $socket = $connection->_socket;
+        return    # a disconnected peer?  Bug for sure.
+            unless ref($socket) eq q[GLOB];    # untested
+        return delete $_connections{$self}{fileno $socket};
+    }
+
+    sub _process_connections {
+        my ($self, $rin, $win, $ein) = @_;
+        carp unless defined $rin;
+        carp unless ref $rin;
+        carp if ref $rin ne q[SCALAR];
+        carp unless defined $win;
+        carp unless ref $win;
+        carp if ref $win ne q[SCALAR];
+        carp unless defined $ein;
+        carp unless ref $ein;
+        carp if ref $ein ne q[SCALAR];
+    POPSOCK: foreach my $fileno (keys %{$_connections{$self}}) {
+            next POPSOCK unless defined $_connections{$self}{$fileno};
+            if ($fileno eq fileno $_socket{$self})
+            {    # if socket is our N::B obj
+                if (vec($$rin, $fileno, 1) == 1) {
+                    vec($$rin, $fileno, 1) = 0;
+                    accept(my ($new_socket), $_socket{$self})
+                        or
+
+                       #$self->_do_callback(q[log], ERROR,
+                       #                   q[Failed to accept new connection])
+                       #and
+                        next POPSOCK;
+
+           #if (scalar(
+           #        grep {
+           #            defined $_
+           #                and $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
+           #            } values %{$_connections{$self}}
+           #    ) >= $_peers_per_session{$self}
+           #    )
+           #{   close $new_socket;
+           #}
+           #else {
+                    my $new_peer =
+                        Net::BitTorrent::Peer->new({Socket => $new_socket,
+                                                    Client => $self
+                                                   }
+                        );
+
+                    #}
+                }
+            }
+
+            #elsif ($_connections{$self}{$fileno} eq $dht{$self}) {
+            #    if (vec($$rin, $fileno, 1)) {
+            #        vec($$rin, $fileno, 1) = 0;
+            #        #die q[Yay!];
+            #    }
+            #}
+            else {
+                my $read  = vec($$rin, $fileno, 1);
+                my $write = vec($$win, $fileno, 1);
+                my $error = vec($$ein, $fileno, 1)
+                    && (   $^E
+                        && ($^E != _EINPROGRESS)
+                        && ($^E != _EWOULDBLOCK));
+                vec($$rin, $fileno, 1) = 0;
+                vec($$win, $fileno, 1) = 0;
+                vec($$ein, $fileno, 1) = 0;
+                if ($read or $write) {
+
+                    #use Data::Dump qw[pp];
+                    #warn sprintf q[R:%d | W:%d], $read, $write;
+                    #warn pp $_connections{$self}{$fileno};
+                    # Weaken the ref in case...
+                    #weaken $_connections{$self}{$fileno}{q[Object]};
+                    #
+                    my ($this_down, $this_up)
+                        = $_connections{$self}{$fileno}{q[Object]}->_rw(
+                           ((   $_max_dl_rate{$self}
+                                ? (($_max_dl_rate{$self} * 1024)
+                                   - $_k_down{$self})
+                                : 2**15
+                            ) * $read
+                           ),
+                           (($_max_ul_rate{$self}
+                             ? (($_max_ul_rate{$self} * 1024) - $_k_up{$self})
+                             : 2**15
+                            ) * $write
+                           ),
+                           $error
+                        );
+                    $_k_down{$self} += defined $this_down ? $this_down : 0;
+                    $_k_up{$self}   += defined $this_up   ? $this_up   : 0;
+
+                    # Make it a strong ref once again...
+                    #$_connections{$self}{$fileno}{q[Object]} =
+                    #    $_connections{$self}{$fileno}{q[Object]}
+                }
+            }
+        }
+        return 1;
+    }
+
+    # Methods | Private | Sessions
+    sub _locate_session {
+        my ($self, $infohash) = @_;
+
+        #
+        carp q[Bad infohash for Net::BitTorrent->_locate_session(INFOHASH)]
+            if $infohash !~ m[[\d|a-f]{40}]i;
+
+        #
+        return
+            defined $_sessions{$self}{$infohash}
+            ? $_sessions{$self}{$infohash}
+            : undef;
+    }
+
+    # Methods | Public | Sessions
+    sub add_session {
+
+        # Adds a session to the list of loaded .torrents.  Beyond that, this
+        # is a simple passthru for Net::BitTorrent::Session::new().
+        my ($self, $args) = @_;
+        if (ref($args) ne q[HASH]) {
+            carp
+                q[Net::BitTorrent->add_session() requires params passed as a hash ref];
+            return;
+        }
+        $args->{q[Client]} = $self;
+        my $session = Net::BitTorrent::Session->new($args);
+        return if not defined $session;
+        return if defined $_sessions{$self}{$$session};    # XXX - Untested
+        return $_sessions{$self}{$$session} = $session;
+    }
+
+    sub remove_session {
+        my ($self, $session) = @_;
+
+        #
+        if (   not blessed($session)
+            or not $session->isa(q[Net::BitTorrent::Session]))
+        {   carp
+                q[Net::BitTorrent->remove_session(SESSION) requires a blessed Net::BitTorrent::Session object];
+            return;
+        }
+
+        # close peers
+        for my $_peer (@{$session->_peers}) {
+            $_peer->_disconnect(
+                              q[Removing .torrent session from local client]);
+        }
+
+        # let the trackers know
+        for my $_tracker (@{$session->trackers}) {
+            $_tracker->_urls->[0]->_announce(q[stopped]);
+        }
+
+        #
+        return delete $_sessions{$self}{$session->infohash};
+    }
+
+    # Methods | Public | Callback system
+    sub on_event {
+        my ($self, $type, $method) = @_;
+        $_event{$self}{$type} = $method;
+    }
+
+    # Methods | Private | Callback system
+    sub _event {
+        my ($self, $type, $args) = @_;
+        if (defined $_event{$self}{$type}) {
+            return $_event{$self}{$type}($self, $args);
+        }
+
+        # Debugging
+        #my @caller = caller();
+        #use 5.010;
+        #use Data::Dump qw[pp];
+        #say sprintf qq[Unhandled %s | %s at %s line %d], $type, pp($args),
+        #    $caller[1], $caller[2];
+        #
+        return;
+    }
+
+    sub _schedule {
+        my ($self, $args) = @_;
+        if (not defined $args) {
+            carp q[Net::BitTorrent->_schedule() requires parameters];
+            return;
+        }
+        if (ref $args ne q[HASH]) {
+            carp
+                q[Net::BitTorrent->_schedule() requires params to be passed as a HashRef];
+            return;
+        }
+        if (not defined $args->{q[Object]}) {
+            carp
+                q[Net::BitTorrent->_schedule() requires an 'Object' parameter];
+            return;
+        }
+        if (not blessed $args->{q[Object]}) {
+            carp
+                q[Net::BitTorrent->_schedule() requires a blessed 'Object' parameter];
+            return;
+        }
+        if (not defined $args->{q[Time]}) {
+            carp q[Net::BitTorrent->_schedule() requires a 'Time' parameter];
+            return;
+        }
+        if ($args->{q[Time]} !~ m[^\d+$]) {
+            carp
+                q[Net::BitTorrent->_schedule() requires 'Time' to be an integer];
+            return;
+        }
+        if (not defined $args->{q[Code]}) {
+            carp q[Net::BitTorrent->_schedule() requires a 'Code' parameter];
+            return;
+        }
+        if (ref $args->{q[Code]} ne q[CODE]) {
+            carp
+                q[Net::BitTorrent->_schedule() requires a 'Code' parameter of type 'CodeRef];
+            return;
+        }
+
+        #
+        my $tid = $self->_generate_token_id();
+        $_schedule{$self}{$tid} = {Timestamp => $args->{q[Time]},
+                                   Code      => $args->{q[Code]},
+                                   Object    => $args->{q[Object]}
+        };
+        weaken $_schedule{$self}{$tid}{q[Object]};
+        return $tid;
+    }
+
+    sub _cancel {
+        my ($self, $tid) = @_;
+        if (not defined $tid) {
+            carp q[Net::BitTorrent->_cancel( TID ) requires an ID];
+            return;
+        }
+        elsif (not defined $_schedule{$self}{$tid}) {
+            carp sprintf
+                q[Net::BitTorrent->_cancel( TID ) cannot find an event with TID == %s],
+                $tid;
+            return;
+        }
+
+        #
+        return delete $_schedule{$self}{$tid};
+    }
+
+    sub _process_schedule {
+        my ($self) = @_;
+
+        #
+        for my $job (keys %{$_schedule{$self}}) {
+            if ($_schedule{$self}{$job}->{q[Timestamp]} <= time) {
+                &{$_schedule{$self}{$job}->{q[Code]}}(
+                                        $_schedule{$self}{$job}->{q[Object]});
+                delete $_schedule{$self}{$job};
+            }
+        }
+
+        #
+        return 1;
+    }
+
+    # Methods | Private | Various
+    sub _generate_token_id {    # automatic rollover/expansion/etc
+        return if defined $_[1];
+        my ($self) = @_;
+        $_tid{$self} = qq[\0\0\0\0] if not defined $_tid{$self};
+        my ($len) = ($_tid{$self} =~ m[^([a-z]+)]);
+        $_tid{$self} = (($_tid{$self} =~ m[^z*(\0*)$])
+                        ? ($_tid{$self} =~ m[\0]
+                           ? pack(q[a] . (length $_tid{$self}),
+                                  (q[a] x (length($len || q[]) + 1))
+                               )
+                           : (q[a] . (qq[\0] x (length($_tid{$self}) - 1)))
+                            )
+                        : ++$_tid{$self}
+        );
+        return $_tid{$self};
+    }
+
+    # Utility, object-neutral functions
+    sub __socket_open {
+        my ($host, $port, $reuseaddr, $reuseport) = @_;
+
+        # param validation is [...].
+        if (not defined $host) {
+            carp q[Net::BitTorrent::__socket_oen( ) ]
+                . q[requires a hostname];
+            return;
+        }
+        if (not defined $port) {
+            carp q[Net::BitTorrent::__socket_open( ) ]
+                . q[requires a port number];
+            return;
+        }
+        if ($port !~ m[^\d+$]) {
+            carp q[Net::BitTorrent::__socket_open( ) ]
+                . q[requires an integer port number];
+            return;
+        }
+        if (defined $reuseaddr) {    # XXX - Undocumented
+            if ($reuseaddr !~ m[^[10]$]) {
+                carp q[Net::BitTorrent::__socket_open( ) ]
+                    . q[requires a bool ReuseAddr value];
+                return;
+            }
+        }
+        if (defined $reuseport) {    # XXX - Undocumented
+            if ($reuseport !~ m[^[10]$]) {
+                carp q[Net::BitTorrent::__socket_open( ) ]
+                    . q[requires a bool ReusePort value];
+                return;
+            }
+        }
 
         # perldoc perlipc
         socket(my ($_socket), PF_INET, SOCK_STREAM, getprotobyname(q[tcp]))
@@ -143,554 +685,54 @@ use warnings;
         #    [http://www.unixguide.net/network/socketfaq/4.11.shtml]
         # - setsockopt - what are the options for ActivePerl under Windows NT?
         #    [http://perlmonks.org/?node_id=63280]
-        setsockopt($_socket, SOL_SOCKET, SO_REUSEADDR, pack(q[l], 1))
-            or return;
-        bind(
-            $_socket,
-            pack(
-                q[Sna4x8],    # Why pack by hand?  .:shrugs:.
-                AF_INET,
-                (defined $port and $port =~ m[^(\d+)$] ? $1 : 0),
-                (defined $host
-                     and $host =~ m[^(?:\d+\.?){4}$]
-                 ? (pack q[C4], ($host =~ m[(\d+)]g))
-                 : INADDR_ANY
-                )
-            )
-        ) or return;
+        if ($reuseaddr) {    # XXX - undocumented
+            setsockopt($_socket, SOL_SOCKET, SO_REUSEADDR, pack(q[l], 1))
+                or return;
+        }
+
+       # SO_REUSEPORT is undefined on Win32... Boo...
+       #if ($reuse_port and defined SO_REUSEPORT) {       # XXX - undocumented
+       #   setsockopt($_socket, SOL_SOCKET, SO_REUSEPORT, pack(q[l], 1))
+       #       or return;
+       #}
+        my $packed_host = undef;
+        if ($host            # XXX - Undocumented
+            !~ m[^(?:(?:(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2})[.]?){4})$])
+        {                    # it's not an IPv4 so it may be a hostname
+                             # No point resolving an IP address.  Right?
+            my ($name, $aliases, $addrtype, $length, @addrs)
+                = gethostbyname($host)
+                or return;
+            $packed_host = $addrs[0];
+        }
+        else { $packed_host = inet_aton($host) }
+        bind($_socket, pack_sockaddr_in($port, $packed_host)) or return;
         listen($_socket, SOMAXCONN) or return;    # max of five?
-        my (undef, $_port, @_address)
-            = unpack(q[SnC4x8], getsockname($_socket));
-        return ($_socket, sprintf(q[%d.%d.%d.%d], @_address), $_port);
+        return $_socket;
     }
 
-    #sub _change_port {
-    #    my ($self, $desired_host, $desired_port) = @_;
-    #    my ($new_socket, @real_host, $real_port)
-    #        = _open_socket($desired_host, $desired_port);
-    #    if ($new_socket) {
-    #        $$self = sprintf q[%d.%d.%d.%d:%d], @real_host, $real_port;
-    #        $dht{$self}->_open_socket;
-    #        return $socket{$self} = $new_socket;
-    #    }
-    #    return;
-    #}
-    sub set_conns_per_client {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                      q[log], ERROR,
-                      sprintf(
-                          q[new value for conns_per_client is malformed (%s)],
-                          $value || q[undef])
-            );
-        }
-        return $conns_per_client{$self} = $value;
-    }
-    sub get_conns_per_client { return $conns_per_client{$_[0]} }
-
-    sub set_conns_per_session {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                     q[log], ERROR,
-                     sprintf(
-                         q[new value for conns_per_session is malformed (%s)],
-                         $value || q[undef])
-            );
-        }
-        return $conns_per_session{$self} = $value;
-    }
-
-    sub get_conns_per_session {
-        return $conns_per_session{$_[0]};
-    }
-
-    sub set_max_halfopen {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                          q[log], ERROR,
-                          sprintf(
-                              q[new value for max_halfopen is malformed (%s)],
-                              $value || q[undef])
-            );
-        }
-        return $max_halfopen{$self} = $value;
-    }
-    sub get_max_halfopen { return $max_halfopen{$_[0]} }
-
-    sub set_max_buffer_per_conn {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                q[log], ERROR,
-                sprintf(
-                    q[new value for max_buffer_per_conn is malformed (%s).  Requires integer.],
-                    $value || q[undef])
-            );
-        }
-        return $max_buffer_per_conn{$self} = $value;
-    }
-
-    sub get_max_buffer_per_conn {
-        return $max_buffer_per_conn{$_[0]};
-    }
-
-    sub set_ul_slot_size {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                q[log], ERROR,
-                sprintf(
-                    q[new value for ul_slot_size is malformed (%s).  Requires integer.],
-                    $value || q[undef])
-            );
-        }
-        return $ul_slot_size{$self} = $value;
-    }
-    sub get_ul_slot_size { return $ul_slot_size{$_[0]} }
-
-    sub set_ul_slots_per_session {    # TODO
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                q[log], ERROR,
-                sprintf(
-                    q[new value for ul_slots_per_session is malformed (%s).  Requires integer.],
-                    $value || q[undef])
-            );
-        }
-        return $ul_slots_per_session{$self} = $value;
-    }
-
-    sub get_ul_slots_per_session {
-        return $ul_slots_per_session{$_[0]};
-    }    # TODO
-    sub get_ul_slots_per_conn { return 80 }
-    sub set_ul_slots_per_conn { return; }     # NO OP
-
-    sub set_debug_level {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                           q[log], ERROR,
-                           sprintf(
-                               q[new value for debug_level is malformed (%s)],
-                               $value || q[undef])
-            );
-        }
-        return $debug_level{$self} = $value;
-    }
-    sub get_debug_level { return $debug_level{$_[0]} }
-
-    sub set_max_ul_rate {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                           q[log], ERROR,
-                           sprintf(
-                               q[new value for max_ul_rate is malformed (%s)],
-                               $value || q[undef])
-            );
-        }
-        return $max_ul_rate{$self} = $value;
-    }
-    sub get_max_ul_rate { return $max_ul_rate{$_[0]} }
-
-    sub set_max_dl_rate {
-        my ($self, $value) = @_;
-        if ((not defined $value) or ($value !~ m[^-?\d+\.?\d*$])) {
-            $self->_do_callback(
-                           q[log], ERROR,
-                           sprintf(
-                               q[new value for max_dl_rate is malformed (%s)],
-                               $value || q[undef])
-            );
-        }
-        return $max_dl_rate{$self} = $value;
-    }
-    sub get_max_dl_rate { return $max_dl_rate{$_[0]} }
-    sub _get_socket     { return $socket{$_[0]}; }
-    sub _get_fileno     { return $fileno{$_[0]}; }
-
-    sub do_one_loop {    # Clunky.  I really need to replace this.
-        my ($self, $timeout) = @_;
-        $timeout ||= 1;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        grep {
-            $_->_disconnect(
-                        q[Connection timed out before established connection])
-                if $_ ne $self
-                    and ($_ ne $dht{$self})
-                    and (not $_->_get_connected)
-                    and ($_->_get_connection_timestamp < (time - 60))
-        } values %{$connections{$self}};
-
-        # [id://371720]
-        my ($rin, $win, $ein) = (q[], q[], q[]);
-        for my $fileno (keys %{$connections{$self}}) {
-            vec($ein, $fileno, 1) = 1;
-            vec($rin, $fileno, 1) = 1;
-            vec($win, $fileno, 1) = 1
-                if $fileno ne $fileno{$self}
-                    and $connections{$self}{$fileno} ne $dht{$self}
-                    and $connections{$self}{$fileno}->_get_queue_outgoing;
-        }
-        my ($nfound, $timeleft)
-            = select($rin, $win, $ein,
-                     (  $timeout
-                      ? $timeout == -1
-                              ? undef
-                              : $timeout
-                      : undef
-                     )
-            );
-        my $time = time + $timeleft;
-        $self->process_connections(\$rin, \$win, \$ein)
-            if $nfound and $nfound != -1;
-        if (($time - time) > 0) { sleep($time - time) }    # save the CPU
-        $self->process_timers();
-        return 1;
-    }
-
-    # Connections. Trackers, Peers, ...even the client itself
-    sub _add_connection {
-        my ($self, $connection) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        return $connections{$self}{$connection->_get_fileno} = $connection;
-    }
-
-    sub _remove_connection {
-        my ($self, $connection) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        return
-            if not defined $connections{$self}{$connection->_get_fileno};
-        return delete $connections{$self}{$connection->_get_fileno};
-    }
-
-    sub _get_connections {
-        my ($self) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        $self->_do_callback(
-              q[log],
-              ERROR,
-              q[ARG! ...s. Too many of them for Net::BitTorrent::_connections]
-            )
-            and return
-            if @_ > 1;
-        return \%{$connections{$self}};
-    }
-
-    sub process_connections {
-        my ($self, $rin, $win, $ein) = @_;
-        foreach my $fileno (shuffle keys %{$connections{$self}}) {
-            next
-                if not defined $connections{$self}{$fileno};
-            if (vec($$ein, $fileno, 1)
-                or not $connections{$self}{$fileno}->_get_socket)
-            {   vec($$ein, $fileno, 1) = 0;
-                if (    $^E
-                    and ($^E != EINPROGRESS)
-                    and ($^E != EWOULDBLOCK))
-                {   $connections{$self}{$fileno}->_disconnect($^E);
-                    next;
-                }
-            }
-            elsif ($fileno eq $fileno{$self}) {
-                if (vec($$rin, $fileno, 1)) {
-                    vec($$rin, $fileno, 1) = 0;
-                    accept(my ($new_socket), $socket{$self})
-                        or $self->_do_callback(q[log], ERROR,
-                                           q[Failed to accept new connection])
-                        and next;
-                    if (scalar(
-                            grep {
-                                defined $_
-                                    and $_->isa(q[Net::BitTorrent::Peer])
-                                } values %{$connections{$self}}
-                        ) >= $conns_per_client{$self}
-                        )
-                    {   close $new_socket;
-                    }
-                    else {
-                        my $new_peer =
-                            Net::BitTorrent::Session::Peer->new(
-                                                    {socket => $new_socket,
-                                                     client => $self
-                                                    }
-                            );
-                        $self->_add_connection($new_peer)
-                            if $new_peer;
-                    }
-                }
-            }
-
-            #elsif ($connections{$self}{$fileno} eq $dht{$self}) {
-            #    if (vec($$rin, $fileno, 1)) {
-            #        vec($$rin, $fileno, 1) = 0;
-            #        #die q[Yay!];
-            #    }
-            #}
-            else {
-                my $read  = vec($$rin, $fileno, 1);
-                my $write = vec($$win, $fileno, 1);
-                vec($$rin, $fileno, 1) = 0;
-                vec($$win, $fileno, 1) = 0;
-                if ($read or $write) {
-                    my ($this_down, $this_up)
-                        = $connections{$self}{$fileno}->_process_one(
-                             (( $max_dl_rate{$self}
-                                ? (($max_dl_rate{$self} * 1024)
-                                   - $k_down{$self})
-                                : 2**15
-                              ) * $read
-                             ),
-                             (($max_ul_rate{$self}
-                               ? (($max_ul_rate{$self} * 1024) - $k_up{$self})
-                               : 2**15
-                              ) * $write
-                             ),
-                        );
-                    $k_down{$self} += $this_down || 0;
-                    $k_up{$self}   += $this_up   || 0;
-                }
-            }
-        }
-        return 1;
-    }
-    sub get_peer_id { return $peer_id{$_[0]}; }
-    sub get_dht     { return $dht{$_[0]}; }
-
-    sub get_sockport {
-        return (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[1];
-    }
-
-    sub get_sockaddr {
-        return join q[.],
-            (unpack(q[SnC4x8], getsockname($socket{$_[0]})))[2 .. 5];
-    }
-
-    sub get_sessions {
-        my ($self) = @_;
-        return ($sessions{$self} ? $sessions{$self} : []);
-    }
-
-    sub add_session {
-        my ($self, $args) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        $args->{q[client]} = $self;
-        my $session = Net::BitTorrent::Session->new($args);
-        if ($session) {
-            push @{$sessions{$self}}, $session;
-            $session->hash_check
-                unless $args->{q[skip_hashcheck]};
-        }
-        return $session;
-    }
-
-    sub remove_session {
-        my ($self, $session) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        $session->get_trackers->[0]->_announce(q[stopped])
-            if scalar @{$session->get_trackers};
-        $session->close_files;
-        return $sessions{$self}
-            = [grep { $session ne $_ } @{$sessions{$self}}];
-    }
-
-    sub _locate_session {
-        my ($self, $infohash) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        for my $session (@{$sessions{$self}}) {
-            return $session
-                if uc $session->get_infohash eq uc $infohash;
-        }
-        return;
-    }
-
-    # Callback system
-    sub _do_callback {
-        my ($self, $type, @params) = @_;
-        if ($type eq q[log]) {
-            return if $debug_level{$self} < $params[0];
-        }
-        if (ref $callbacks{$self}{$type} ne q[CODE]) {
-            $self->_do_callback(q[log], DEBUG,
-                                sprintf(q[Unhandled callback '%s'], $type))
-                if $type ne q[log];
-            return;
-        }
-        return &{$callbacks{$self}{$type}}($self, @params);
-    }
-
-    sub set_callback {
-        my ($self, $type, $coderef) = @_;
-        return unless @_ == 3;
-        return unless defined $type;
-        if (ref $coderef ne q[CODE]) {
-            $self->_do_callback(q[log], ERROR, q[callback is malformed]);
-        }
-        return $callbacks{$self}{$type} = $coderef;
-    }
-
-    # Extension information
-    sub _ext_DHT {1}
-
-    sub _build_reserved {
-        my ($self) = @_;
+    sub __build_reserved {
         my @reserved = qw[0 0 0 0 0 0 0 0];
-        $reserved[7] |= 0x04;    # FastPeers
-        $reserved[5] |= 0x10;    # Ext Protocol
-        $reserved[7] |= 0x01
-            if $self->_ext_DHT;
+        $reserved[5] |= 0x10;                     # Ext Protocol
         return join q[], map {chr} @reserved;
     }
 
-    # Internal scheduling
-    sub _set_pulse {
-        my ($self, $obj, $time) = @_;
-        $pulse{$self}{$obj} = {object => $obj,
-                               time   => $time
-        };
-        return weaken $pulse{$self}{$obj}{q[object]};
-    }
-
-    sub _del_pulse {
-        my ($self, $obj) = @_;
-        return delete $pulse{$self}{$obj};
-    }
-
-    sub _get_pulse {
-        my ($self, $obj) = @_;
-        return defined $pulse{$self}{$obj}
-            ? $pulse{$self}{$obj}{q[time]}
-            : 0;
-    }
-
-    sub _pulse {
-        my ($self) = @_;
-        $k_down{$self} = 0;
-        $k_up{$self}   = 0;
-        return $self->_set_pulse($self, time + 1);
-    }
-
-    sub process_timers {
-        my ($self) = @_;
-        my @timers = values %{$pulse{$self}};
-        for my $timer (@timers) {
-            if ($timer->{q[time]} <= time
-                and defined $timer->{q[object]})
-            {   my $obj = $timer->{q[object]};
-                $self->_del_pulse($obj);
-                $obj->_pulse;
-            }
-        }
-    }
-
-    # Debugging
-    sub as_string {
-        my ($self, $advanced) = @_;
-        $self->_do_callback(q[log], TRACE,
-                            sprintf(q[Entering %s for %s],
-                                    [caller 0]->[3], $$self
-                            )
-        );
-        my @values = ($peer_id{$self},             $self->get_sockaddr,
-                      $self->get_sockport,         $conns_per_client{$self},
-                      $conns_per_session{$self},   $max_halfopen{$self},
-                      $max_buffer_per_conn{$self}, $ul_slot_size{$self},
-                      $ul_slots_per_session{$self},
-        );
-        s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g
-            for @values[3 .. 8];
-        my $dump = sprintf( <<'END', @values);
-Net::BitTorrent (%20s)
-======================================
-Basic Information
-  Bind address:                  %s:%d
-  Limits:
-    Number of peers:             %s
-    Number of peers per session: %s
-    Number of half-open peers:   %s
-    Amount of unparsed data:     %s bytes
-    Size of incoming requests:   %s bytes
-    Number of requests per peer: %s
-
-END
-        if ($advanced) {
-            my @adv_values = (scalar(@{$sessions{$self}}));
-            $dump .= sprintf( <<'END', @adv_values);
-Advanced Information
-  Loaded sessions: (%d torrents)
-END
-            $dump .= join qq[\n], map {
-                my $session = $_->as_string($advanced);
-                $session =~ s|\n|\n    |g;
-                q[ ] x 4 . $session
-            } @{$sessions{$self}};
-        }
-        return print STDERR qq[$dump\n]
-            unless defined wantarray;
-        return $dump;
-    }
+    #
     DESTROY {
-        my $self = shift;
-        delete $peer_id{$self};
-        delete $socket{$self};
-        delete $conns_per_client{$self};
-        delete $conns_per_session{$self};
-        delete $max_halfopen{$self};
-        delete $max_buffer_per_conn{$self};
-        delete $ul_slot_size{$self};
-        delete $ul_slots_per_session{$self};
-        delete $debug_level{$self};
-        delete $connections{$self};
-        delete $callbacks{$self};
+        my ($self) = @_;
 
-        #grep { $self->remove_session($_) } @{$sessions{$self}};
-        delete $sessions{$self};
-        delete $fileno{$self};
-        delete $max_ul_rate{$self};
-        delete $max_dl_rate{$self};
-        delete $k_up{$self};
-        delete $k_down{$self};
-
-        # DHT
-        delete $dht{$self};
-        return 1;
+        #warn sprintf q[Goodbye, %s], $$self;
+        delete $_socket{$self};
+        delete $_peerid{$self};
+        delete $_sessions{$self};
+        delete $_connections{$self};
+        delete $_schedule{$self};
+        delete $_tid{$self};
+        delete $_peers_per_session{$self};
+        delete $_event{$self};
     }
+    1;
 }
-1;
-__END__
 
 =pod
 
@@ -700,35 +742,43 @@ Net::BitTorrent - BitTorrent peer-to-peer protocol class
 
 =head1 Synopsis
 
-    use Net::BitTorrent;
+  use Net::BitTorrent;
 
-    sub hash_pass {
-        my ($self, $piece) = @_;
-        printf(qq[hash_pass: piece number %04d of %s\n],
-               $piece->get_index, $piece->get_session);
-    }
+  my $client = Net::BitTorrent->new();
 
-    my $client = Net::BitTorrent->new();
-    $client->set_callback(q[piece_hash_pass], \&hash_pass);
+  # ...
+  # Set various callbacks if you so desire
+  # ...
+  $client->on_event(
+      q[piece_hash_pass],
+      sub {
+          my ($self, $args) = @_;
+          printf(qq[pass: piece number %04d of %s\n],
+                 $args->{q[Index]}, $args->{q[Session]}->infohash);
+      }
+  );
+  $client->on_event(
+      q[piece_hash_fail],
+      sub {
+          my ($self, $args) = @_;
+          printf(qq[fail: piece number %04d of %s\n],
+                 $args->{q[Index]}, $args->{q[Session]}->infohash);
+      }
+  );
 
-    # ...
-    # set various callbacks if you so desire
-    # ...
+  my $torrent = $client->add_session({Path => q[a.legal.torrent]})
+      or die q[Cannot load .torrent];
 
-    my $torrent = $client->add_session({path => q[a.legal.torrent]})
-        or die q[Cannot load .torrent];
+  $torrent->hashcheck;    # Verify any existing data
 
-    while (1) {
-        $client->do_one_loop();
-
-        # Etc.
-    }
+  while (1) { $client->do_one_loop(); }
 
 =head1 Description
 
-L<Net::BitTorrent|Net::BitTorrent> is a class based implementation of the current
-BitTorrent Protocol Specification.  Each L<Net::BitTorrent|Net::BitTorrent> object is
-capable of handling several concurrent .torrent sessions.
+L<Net::BitTorrent|Net::BitTorrent> is a class based implementation of the
+current BitTorrent Protocol Specification.  Each
+L<Net::BitTorrent|Net::BitTorrent> object is capable of handling several
+concurrent .torrent L<sessions|Net::BitTorrent::Session>.
 
 =head1 Constructor
 
@@ -736,102 +786,31 @@ capable of handling several concurrent .torrent sessions.
 
 =item C<new ( { [ARGS] } )>
 
-Creates a L<Net::BitTorrent|Net::BitTorrent> object.  C<new ( )> accepts arguments as a
-hash, using key-value pairs, all of which are optional.  The most common
-are:
+Creates a L<Net::BitTorrent|Net::BitTorrent> object.  C<new ( )> accepts
+arguments as a hash, using key-value pairs, all of which are optional.
+The most common are:
 
 =over 4
 
-=item C<LocalAddr>
+=item C<LocalHost>
 
 Local host bind address.  The value must be an IPv4 ("dotted quad") IP-
-address of the C<xx.xx.xx.xx> form.  Unlike the
-L<LocalAddr|IO::Socket::INET/"new ( [ARGS] )"> key used by
-C<IO::Socket::INET>, it does not (currently) support an embedded port
-number.  C<LocalHost> is a synonym for C<LocalAddr>.
+address of the C<xxx.xxx.xxx.xxx> form.
 
 Default: 0.0.0.0 (any address)
 
 =item C<LocalPort>
 
 TCP port opened to remote peers for incoming connections.  If handed a
-list of ports, L<Net::BitTorrent|Net::BitTorrent> will traverse the list, attempting to
-open on each of the ports until we succeed.  If this value is C<undef> or
-C<0>, we allow the OS to choose an open port at random.
+list of ports, L<Net::BitTorrent|Net::BitTorrent> will traverse the list,
+attempting to open on each of the ports until we succeed.  If this value
+is C<undef> or C<0>, we allow the OS to choose an open port at random.
 
-Though the default in most clients is a random port in the 6881-6889
+Though the default in most clients is a random port in the 6881..6889
 range, BitTorrent has not been assigned a port number or range by the
 IANA.  Nor is such a standard needed.
 
 Default: 0 (any available)
-
-=back
-
-Besides these, there are a number of advanced options that can be set via
-the constructor.  Use these with caution as they can greatly affect the
-basic functionality and usefulness of the module.
-
-=over 4
-
-=item C<max_buffer_per_conn>
-
-Amount of data, in bytes, we store from a peer before dropping their
-connection.  Setting this too high leaves you open to DDoS-like
-attacks.  Malicious or not.
-
-Default: C<131072> (C<2**17>)  I<(This default may change as the
-module matures)>
-
-=item C<conns_per_client>
-
-Maximum number of peers per client object.
-
-Default: C<200> I<(This default may change as the module matures)>
-
-=item C<conns_per_session>
-
-Maximum number of peers per session.
-
-Default: C<100> I<(This default may change as the module matures)>
-
-=item C<max_halfopen>
-
-Maximum number of sockets we have yet to receive a handshake from.
-
-NOTE: On some OSes (WinXP, et al.), setting this too high can cause
-problems with the TCP stack.
-
-Default: C<8>
-
-=begin future
-
-=item C<ul_slot_size>
-
-Maximum size, in bytes, a peer is allowed to request from us as a single
-block.
-
-Default: C<32768> (C<2**15>)
-
-=end future
-
-=item C<ul_slots_per_session>
-
-Maximum number of <requests|Net::BitTorrent::Session::Peer::Request> we
-keep in queue with each peer.
-
-Default: C<10>
-
-=item C<max_ul_rate>
-
-Maximum amount of data transfered per second to remote hosts.
-
-Default: C<0> (unlimited)
-
-=item C<max_dl_rate>
-
-Maximum amount of data transfered per second from remote hosts.
-
-Default: C<0> (unlimited)
 
 =back
 
@@ -841,14 +820,26 @@ Default: C<0> (unlimited)
 
 Unless otherwise stated, all methods return either a C<true> or C<false>
 value, with C<true> meaning that the operation was a success.  When a
-method states that it returns a value, failure will result in C<undef> or
-an empty list.
-
-Besides these listed here, there is also the
-L<set_callback( )|/"set_callback ( TYPE, CODEREF )"> method described in
-the L<Callbacks|/Callbacks> section.
+method states that it returns some other specific value, failure will
+result in C<undef> or an empty list.
 
 =over 4
+
+=item C<peerid ( )>
+
+Returns the Peer ID generated to identify this
+L<Net::BitTorrent|Net::BitTorrent> object internally, with trackers, and
+with remote L<peers|Net::BitTorrent::Peer>.
+
+See also: theory.org (http://tinyurl.com/4a9cuv),
+L<Peer ID Specification|Net::BitTorrent::Notes/"Peer ID Specification">
+
+=item C<sessions( )>
+
+Returns the list of loaded .torrent L<sessions|Net::BitTorrent::Session>.
+
+See also: L<add_session ( )|/add_session ( { ... } )>,
+L<remove_session ( )|/remove_session ( SESSION )>
 
 =item C<add_session ( { ... } )>
 
@@ -858,48 +849,34 @@ client.
 
 Most arguments passed to this method are handed directly to
 L<Net::BitTorrent::Session::new( )|Net::BitTorrent::Session/"new ( { [ARGS] } )">.
-The only mandatory parameter is C<path>.  C<path>'s value is the filename
+The only mandatory parameter is C<Path>.  C<Path>'s value is the filename
 of the .torrent file to load.  Please see
 L<Net::BitTorrent::Session::new( )|Net::BitTorrent::Session/"new ( { [ARGS] } )">
 for a list of possible parameters.
 
-In addition to
-L<Net::BitTorrent::Session::new( )|Net::BitTorrent::Session/"new ( { [ARGS] } )">'s
-supported arguments, C<add_session> accepts a C<skip_hashcheck> key.  If
-this bool value is set to a C<true> value, the files will not be checked
-for integrity and we assume that we have none of the data of this
-torrent.
-
 This method returns the new
 L<Net::BitTorrent::Session|Net::BitTorrent::Session> object on success.
 
-See also: L<get_sessions|/get_sessions ( )>,
+See also: L<sessions|/sessions( )>,
 L<remove_session|/remove_session ( SESSION )>,
 L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
-=item C<as_string ( [ VERBOSE ] )>
+=item C<remove_session ( SESSION )>
 
-Returns a 'ready to print' dump of the L<Net::BitTorrent|Net::BitTorrent> object's data
-structure.  If called in void context, the structure is printed to
-C<STDERR>.
+Removes a L<Net::BitTorrent::Session|Net::BitTorrent::Session> object
+from the client.
 
-Note: The serialized version returned by this method is not a full,
-accurate representation of the object and cannot be C<eval>ed into a new
-L<Net::BitTorrent|Net::BitTorrent> object or used as resume data.  The layout of and the
-data included in this dump is subject to change in future versions.  This
-is a debugging method, not to be used under normal circumstances.
+=begin future
 
-See also: http://perlmonks.org/?node_id=317520#debugging
+Before the torrent session is closed, we announce to the tracker that we
+have 'stopped' downloading and the callback to store the current state is
+called.
 
-=item C<get_debug_level ( )>
+=end future
 
-Get the minimum level of messages passed to the log callback handler.
-See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS"> for more.
-
-=item C<set_debug_level ( NEWVAL )>
-
-Set the minimum level of messages passed to the log callback handler.
-See L<LOG LEVELS|Net::BitTorrent::Util/"LOG LEVELS"> for more.
+See also: L<sessions ( )|/sessions( )>,
+L<add_session|/"add_session ( { ... } )">,
+L<Net::BitTorrent::Session|Net::BitTorrent::Session>
 
 =item C<do_one_loop ( [TIMEOUT] )>
 
@@ -911,719 +888,29 @@ possibly fractional, C<select()> is allowed to wait before returning in
 L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )">.  This TIMEOUT defaults to
 C<1.0>.  To wait indefinatly, TIMEOUT should be C<-1.0>.
 
-=item C<process_connections ( READERSREF, WRITERSREF, ERRORSREF )>
+=item C<on_event ( TYPE, CODEREF )>
 
-Use this method when you want to implement your own C<select> statement
-for event processing instead of using L<Net::BitTorrent|Net::BitTorrent>'s
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.  The parameters are
-references to the readers, writers, and errors parameters used by the
-select statement.
+Net::BitTorrent provides a convenient callback system.  To set a callback,
+use the C<on_event( )> method.  For example, to catch all attempts to read
+from a file, use C<$client->on_event( 'file_read', \&on_read )>.
 
-Use the internal C<_get_fileno( )> method to set up the necessary bit
-vectors for your C<select> call.
-
-I<This is experimental and may be improved in the future.>
-
-See Also:
-L<Alternative Event Processing|/"Alternative Event Processing">
-
-=item C<process_timers ( )>
-
-L<Net::BitTorrent|Net::BitTorrent> relies heavily on internal timing of various events
-(socket timeouts, tracker requests, etc.) and simply cannot function
-without processing these timers from time to time.
-
-Use this method only if you have implemented your own C<select> statement
-for event processing instead of L<Net::BitTorrent|Net::BitTorrent>'s
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> method.
-
-See Also:
-L<Alternative Event Processing|/"Alternative Event Processing">
-
-=item C<get_max_buffer_per_conn ( )>
-
-Get the amount of unparsed data, in bytes, we store from a peer before
-dropping their connection.
-
-See Also:
-L<set_max_buffer_per_conn ( NEWVAL )|/"set_max_buffer_per_conn ( NEWVAL )">
-
-=item C<set_max_buffer_per_conn ( NEWVAL )>
-
-Set the amount of unparsed data, in bytes, we store from a
-peer before dropping their connection.  Be sure to keep this value high
-enough to allow incoming blocks (C<2**16> by default) to be held in
-memory without trouble but low enough to keep DDoS-like attacks at bay.
-
-Default: C<131072> (C<2**17>)  I<(This default may change as the module
-matures)>
-
-See Also:
-L<get_max_buffer_per_conn ( )|/"get_max_buffer_per_conn ( )">
-
-=item C<get_max_halfopen ( )>
-
-Get the maximum number of peers we have yet to receive a
-handshake from.  These include sockets that have not connected yet.
-
-See Also: L<set_max_halfopen ( NEWVAL )|/"set_max_halfopen ( NEWVAL )">
-
-=item C<set_max_halfopen ( NEWVAL )>
-
-Set the maximum number of peers we have yet to receive a handshake from.
-These include sockets that have not connected yet.
-
-NOTE: On some OSes (WinXP, et al.), setting this too high can cause
-problems with the TCP stack.
-
-Default: C<8>
-
-See Also: L<get_max_halfopen ( )|/"get_max_halfopen ( )">
-
-=item C<get_conns_per_client ( )>
-
-Get the maximum number of peers per client object.
-
-See Also: L<set_conns_per_client ( )|/"set_conns_per_client ( NEWVAL )">
-
-=item C<set_conns_per_client ( NEWVAL )>
-
-Set the maximum number of peers per client object.
-
-Default: C<300>
-
-See also: theory.org (http://tinyurl.com/4jgdnl),
-L<get_conns_per_client ( )|/"get_conns_per_client ( )">
-
-=item C<get_conns_per_session ( )>
-
-Get the maximum number of peers per session.
-
-See Also:
-L<set_conns_per_session ( )|/"set_conns_per_session ( NEWVAL )">
-
-=item C<set_conns_per_session ( NEWVAL )>
-
-Set the maximum number of peers per session.
-
-Default: C<100>
-
-See Also: L<get_conns_per_session ( )|/"get_conns_per_session ( )">
-
-=item C<get_ul_slot_size ( )>
-
-Get the maximum size, in bytes, a peer is allowed to request from us as a
-single block of data.
-
-See Also: L<set_ul_slot_size ( )|/"set_ul_slot_size ( NEWVAL )">
-
-=item C<set_ul_slot_size ( NEWVAL )>
-
-Set the maximum size, in bytes, a peer is allowed to request from us as a
-single block of data.
-
-Default: C<32768>
-
-See also: theory.org (http://tinyurl.com/32k7wu),
-L<get_ul_slot_size ( )|/"get_ul_slot_size ( )">
-
-=item C<get_ul_slots_per_session ( )>
-
-Get the maximum number of blocks we have in queue from each peer.
-
-See Also:
-L<set_ul_slots_per_session ( )|/"set_ul_slots_per_session ( NEWVAL )">
-
-=item C<set_ul_slots_per_session ( NEWVAL )>
-
-Set the maximum number of blocks we have in queue from each peer.
-
-Default: C<10>
-
-See Also: L<get_ul_slots_per_session ( )|/"get_ul_slots_per_session ( )">
-
-=item C<get_ul_slots_per_conn ( )>
-
-Get the maximum number of blocks we have in queue from each peer.
-Currently, this is C<80>.
-
-See Also:
-L<set_ul_slots_per_conn ( )|/"set_ul_slots_per_conn ( NEWVAL )">
-
-=item C<set_ul_slots_per_conn ( NEWVAL )>
-
-Set the maximum number of blocks we have in queue from each peer.
-Currently, this is a NOOP.  Yeah, yeah... It's on my Todo list...
-
-See Also: L<get_ul_slots_per_conn ( )|/"get_ul_slots_per_conn ( )">
-
-=item C<get_max_ul_rate ( )>
-
-Get the maximum amount of data transfered per second from remote hosts in
-kilobytes.  This rate limits both peers and trackers.  To remove transfer
-limits, set this value to C<0>.
-
-Note: This functionality requires the use of
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
-
-See Also: L<set_max_ul_rate ( )|/"set_max_ul_rate ( NEWVAL )">
-
-=item C<set_max_ul_rate ( NEWVAL )>
-
-Set the maximum amount of data transfered per second from remote hosts in
-kilobytes.  This rate limits both peers and trackers.  To remove transfer
-limits, set this value to C<0>.
-
-Note: This functionality requires the use of
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
-
-Default: C<0> (unlimited)
-
-See Also: L<get_max_ul_rate ( )|/"get_max_ul_rate ( )">
-
-=item C<get_max_dl_rate ( )>
-
-Get the maximum amount of data transfered per second from remote hosts in
-kilobytes.  This rate limits both peers and trackers.  To remove transfer
-limits, set this value to C<0>.
-
-Note: This functionality requires the use of
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
-
-See Also: L<get_max_dl_rate ( )|/"get_max_dl_rate ( NEWVAL )">
-
-=item C<set_max_dl_rate ( NEWVAL )>
-
-Set the maximum amount of data transfered per second from remote hosts in
-kilobytes.  This rate limits both peers and trackers.  To remove transfer
-limits, set this value to C<0>.
-
-Note: This functionality requires the use of
-L<do_one_loop( )|/"do_one_loop ( [TIMEOUT] )"> for event processing.
-
-Default: C<0> (unlimited)
-
-See Also: L<get_max_dl_rate ( )|/"get_max_dl_rate ( )">
-
-=item C<get_peer_id ( )>
-
-Returns the Peer ID generated to identify this L<Net::BitTorrent|Net::BitTorrent> object
-internally, with trackers, and with remote peers.
-
-See also: theory.org (http://tinyurl.com/4a9cuv),
-L<Peer ID Specification|Net::BitTorrent::Notes/"Peer ID Specification">
-
-=item C<get_dht ( )>
-
-Returns the C<Net::BitTorrent::DHT> object related to this client.
-
-See Also: L<Net::BitTorrent::DHT|Net::BitTorrent::DHT>
-
-=item C<remove_session ( SESSION )>
-
-Removes a L<Net::BitTorrent::Session> object from the client.
-
-=begin future
-
-Before the torrent session is closed, we announce to the tracker that we
-have 'stopped' downloading and the callback to store the current state is
-called.
-
-=end future
-
-See also: L<get_sessions ( )|/"get_sessions ( )">,
-L<add_session|/"add_session ( { ... } )">,
-L<Net::BitTorrent::Session|Net::BitTorrent::Session>
-
-=item C<get_sessions ( )>
-
-Returns a list of loaded
-L<Net::BitTorrent::Session|Net::BitTorrent::Session> objects.
-
-See Also: L<add_session|/"add_session ( { ... } )">,
-L<remove_session|/"remove_session ( SESSION )">,
-L<Net::BitTorrent::Session|Net::BitTorrent::Session>
-
-=item C<get_sockaddr ( )>
-
-Return the address part of the sockaddr structure for the TCP socket.
-
-See also: L<IO::Socket::INET/sockaddr>
-
-=item C<get_sockport ( )>
-
-Return the port number that the TCP socket is using on the local host.
-
-See also: L<IO::Socket::INET/sockport>
+See the L<Events|/Events> section for a list of events sorted by their
+related classes.
 
 =back
 
-=head1 Callbacks
+=head1 Events
 
-=over
+C<Net::BitTorrent> and related classes trigger a number of events
 
-=item C<set_callback( TYPE, CODEREF )>
 
-L<Net::BitTorrent|Net::BitTorrent> provides a convenient callback system.  To set a
-callback, use the C<set_callback( )> method.  For example, to catch all
-attempts to read from a file, use
-C<$client-E<gt>set_callback( 'file_read', \&on_read )>.
 
-=back
 
-Here is the current list of events fired by L<Net::BitTorrent|Net::BitTorrent> sorted by
-their related classes:
 
-=head2 Peer level
 
-Peer level events are triggered by
-L<Net::BitTorrent::Session::Peer|Net::BitTorrent::Session::Peer> objects.
 
-=begin future?
 
-This list will be moved to N::B::P's POD.  Same goes for all the other
-callbacks.
 
-=end future?
-
-=over
-
-=item C<peer_connect>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_disconnect>
-
-Callback arguments: ( CLIENT, PEER, [REASON] )
-
-=item C<peer_incoming_bitfield>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_block>
-
-Callback arguments: ( CLIENT, PEER, BLOCK )
-
-=item C<peer_incoming_cancel>
-
-Callback arguments: ( CLIENT, PEER, REQUEST )
-
-=item C<peer_incoming_choke>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_data>
-
-Callback arguments: ( CLIENT, PEER, LENGTH )
-
-=item C<peer_incoming_disinterested>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_handshake>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_have>
-
-Callback arguments: ( CLIENT, PEER, INDEX )
-
-=item C<peer_incoming_interested>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_keepalive>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_incoming_packet>
-
-Callback arguments: ( CLIENT, PEER, PACKET )
-
-=item C<peer_incoming_request>
-
-Callback arguments: ( CLIENT, PEER, REQUEST )
-
-=item C<peer_incoming_unchoke>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_bitfield>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_block>
-
-Callback arguments: ( CLIENT, PEER, REQUEST )
-
-=item C<peer_outgoing_cancel>
-
-Callback arguments: ( CLIENT, PEER, BLOCK )
-
-=item C<peer_outgoing_choke>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_data>
-
-Callback arguments: ( CLIENT, PEER, LENGTH )
-
-=item C<peer_outgoing_disinterested>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_handshake>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_have>
-
-Callback arguments: ( CLIENT, PEER, INDEX )
-
-=item C<peer_outgoing_interested>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_keepalive>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_request>
-
-Callback arguments: ( CLIENT, PEER, BLOCK )
-
-=item C<peer_outgoing_unchoke>
-
-Callback arguments: ( CLIENT, PEER )
-
-=item C<peer_outgoing_port>
-
-Callback arguments: ( CLIENT, PEER )
-
-=back
-
-=head2 Tracker level
-
-Peer level events are triggered by
-L<Net::BitTorrent::Session::Tracker|Net::BitTorrent::Session::Tracker>
-objects.
-
-=over
-
-=item C<tracker_announce>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=item C<tracker_announce_okay>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=item C<tracker_connect>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=item C<tracker_disconnect>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=item C<tracker_error>
-
-Callback arguments: ( CLIENT, TRACKER, MESSAGE )
-
-=item C<tracker_incoming_data>
-
-Callback arguments: ( CLIENT, TRACKER, LENGTH )
-
-=item C<tracker_outgoing_data>
-
-Callback arguments: ( CLIENT, TRACKER, LENGTH )
-
-=item C<tracker_scrape>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=item C<tracker_scrape_okay>
-
-Callback arguments: ( CLIENT, TRACKER )
-
-=back
-
-=head2 File level
-
-File level events are triggered by
-L<Net::BitTorrent::Session::File|Net::BitTorrent::Session::File> objects.
-
-=over
-
-=item C<file_close>
-
-Callback arguments: ( CLIENT, FILE )
-
-=item C<file_error>
-
-Callback arguments: ( CLIENT, FILE, [REASON] )
-
-=item C<file_open>
-
-Callback arguments: ( CLIENT, FILE )
-
-=item C<file_read>
-
-Callback arguments: ( CLIENT, FILE, LENGTH )
-
-=item C<file_write>
-
-Callback arguments: ( CLIENT, FILE, LENGTH )
-
-=back
-
-=head2 Piece level
-
-Peer level events are triggered by
-L<Net::BitTorrent::Session::Piece|Net::BitTorrent::Session::Piece>
-objects.
-
-=over
-
-=item C<piece_hash_fail>
-
-Callback arguments: ( CLIENT, PIECE )
-
-=item C<piece_hash_pass>
-
-Callback arguments: ( CLIENT, PIECE )
-
-=back
-
-=head2 Block level
-
-Block level events are triggered by
-L<Net::BitTorrent::Session::Piece::Block|Net::BitTorrent::Session::Piece::Block>
-objects.
-
-=over
-
-=item C<block_write>
-
-Callback arguments: ( CLIENT, BLOCK )
-
-=back
-
-=head2 Debug level
-
-Debug level callbacks can be from anywhere and are not object specific.
-
-=over
-
-=item C<log>
-
-Callback arguments: ( CLIENT, LEVEL, STRING )
-
-See also: L<Log Levels|Net::BitTorrent::Util/"LOG LEVELS"> in
-L<Net::BitTorrent::Util|Net::BitTorrent::Util>
-
-=back
-
-=head1 Implemented Extensions
-
-See L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"Implemented Extensions">
-
-=head1 Bugs
-
-Numerous, I'm sure.
-
-Found bugs should be reported through
-http://code.google.com/p/net-bittorrent/issues/list.  Please include
-as much information as possible.  For more, see
-L<Net::BitTorrent::Todo|Net::BitTorrent::Todo> as well as
-L<Issue Tracker|Net::BitTorrent::Notes/"Issue Tracker">,
-L<Bug Reporting|Net::BitTorrent::Notes/"Bug Reporting">, and
-L<Co-Development and Patch Submission|Net::BitTorrent::Notes/"Co-Development and Patch Submission">
-information from the L<Net::BitTorrent::Notes|Net::BitTorrent::Notes>.
-
-=head1 Notes
-
-=head2 Support and Availability
-
-Visit the following for support and information related to
-L<Net::BitTorrent|Net::BitTorrent>:
-
-=over 4
-
-=item The project's website
-
-For wiki and subversion repository access, please visit the project's
-home: http://sankorobinson.com/net-bittorrent/.
-
-=item Bug and Issue Tracker
-
-Use http://code.google.com/p/net-bittorrent/issues/list for bug
-tracking.
-
-Before creating and sending a report, please review the following list:
-
-=over 2
-
-=item *
-
-Make sure you are using the most recent release of L<Net::BitTorrent|Net::BitTorrent>.
-This may mean checking out the latest svn commit.
-
-=item *
-
-Make sure the bug is reproducible.
-
-=item *
-
-See the complete checklist in the
-L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"Bug Reporting">.
-
-=back
-
-=back
-
-See L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"See Also">
-for links to a mailing list, svn information, and more.
-
-=head2 Dependencies
-
-L<Net::BitTorrent|Net::BitTorrent> requires L<version|version> and
-L<Digest::SHA|Digest::SHA> to function and relies upon L<Module::Build>
-for installation.  As of perl 5.10, these are all CORE modules; they come
-bundled with the distribution.
-
-=head2 Development Policy
-
-=over 4
-
-=item * B<All APIs are subject to change.>
-
-Changes to documented or well established parts will be clearly listed
-and archived in the F<CHANGES> file.
-
-Functions and parameters that are all_lower_case_and_contain_underscores
-are typically experimental and have a very good chance of being
-depreciated in a future version.
-
-=item * B<All undocumented functionality is subject to change without notice.>
-
-Because it's still early in its development,
-L<Net::BitTorrent|Net::BitTorrent> is filled with incomplete bits of
-stuff.  I understand some of it seems stable, but I reserve the right to
-change or eliminate code at any time without warning I<unless>
-functionality is defined in POD documentation.
-
-If you sift through the source and find something nifty that isn't
-described I<in full> in POD, don't expect your code to work with future
-releases.
-
-=back
-
-=head2 Examples
-
-For a demonstration of L<Net::BitTorrent|Net::BitTorrent>, see
-L<scripts/client.pl|scripts/client.pl> and
-L<scripts/web-gui.pl>.
-
-=head2 Installation
-
-This distribution uses L<Module::Build|Module::Build> for installation,
-so use the following procedure:
-
-  perl Build.PL
-  ./Build
-  ./Build test
-  ./Build install
-
-Or, if you're on a platform (like DOS or Windows) that doesn't require
-the "F<./>" notation, you can do this:
-
-  perl Build.PL
-  Build
-  Build test
-  Build install
-
-If you would like to contribute automated test reports (and I hope you
-do), first install L<CPAN::Reporter|CPAN::Reporter> from the CPAN shell
-and then install L<Net::BitTorrent|Net::BitTorrent>:
-
- $ cpan
- cpan> install CPAN::Reporter
- cpan> reload cpan
- cpan> o conf init test_report
-   [...follow the CPAN::Reporter setup prompts...]
- cpan> o conf commit
- cpan> install Net::BitTorrent
-
-For more on becoming a CPAN tester and why this is useful, please see the
-L<CPAN::Reporter|CPAN::Reporter/"Description"> documentation,
-http://cpantesters.perl.org/, and the CPAN Testers Wiki
-(http://cpantest.grango.org/).
-
-=head1 Alternative Event Processing
-
-To making integrating L<Net::BitTorrent|Net::BitTorrent> into an existing C<select>-based
-event loop just a little easier, an alternative way of doing event
-processing (vs. L<do_one_loop ( )|/"do_one_loop ( [TIMEOUT] )">) has been
-designed... uh, I mean ganked.  Simply call the
-L<process_connections( )|/"process_connections ( READERSREF, WRITERSREF, ERRORSREF )">
-method with references to the lists of readers, writers, and errors given
-to you by C<select>.  Connections that don't belong to the object will be
-ignored, and connections that do belong to the object will be removed
-from the C<select> lists so that you can use the lists for your own
-purposes.
-
-Here's a painfully simple example:
-
-  while (1) {
-      my ($rin, $win, $ein) = (q[], q[], q[]);
-      vec($rin, fileno($server), 1) = 1;
-      for my $object (values %{$bittorrent->_get_connections}) {
-          vec($rin, $object->_get_fileno, 1) = 1;
-          vec($win, $object->_get_fileno, 1) = 1
-              if $object ne $bittorrent and $object->_get_queue_outgoing;
-      }
-
-      # Add your other sockets to the bit vectors
-
-      $ein = $rin | $win;
-      my ($nfound) = select($rin, $win, $ein, 1);
-      $bittorrent->process_connections(\$rin, \$win, \$ein)
-          if $nfound and $nfound != -1;
-      $bittorrent->process_timers;    # Don't forget this!
-
-      # Now $rin, $win, and $ein only have the file descriptors not
-      # associated with Net::BitTorrent (related) objects in them -
-      # we can process our events.
-  }
-
-For a working demonstration, see
-L<scripts/web-gui.pl|scripts/web-gui.pl>.
-
-I<This is experimental and may be improved in the future.>
-
-=head1 See Also
-
-http://bittorrent.org/beps/bep_0003.html - BitTorrent Protocol
-Specification
-
-L<Net::BitTorrent::Notes|Net::BitTorrent::Notes> - Random stuff.  More
-jibba jabba.
-
-L<Peer ID Specification|Net::BitTorrent::Notes/"Peer ID Specification"> -
-The standard used to identify L<Net::BitTorrent|Net::BitTorrent> in the
-wild.
-
-=head1 Acknowledgments
-
-Bram Cohen, for designing the base protocol and letting the community
-decide what to do with it.
-
-L Rotger
-
-#bittorrent on Freenode for letting me idle.
-
-Michel Valdrighi
 
 =head1 Author
 
@@ -1633,20 +920,22 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
 
 This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl 5.10 (or higher).  See
-http://www.perl.com/perl/misc/Artistic.html or the F<LICENSE> file
-included with this distribution.
+it under the terms of The Artistic License 2.0.  See the F<LICENSE>
+file included with this distribution or
+http://www.perlfoundation.org/artistic_license_2_0.  For
+clarification, see http://www.perlfoundation.org/artistic_2_0_notes.
 
-All POD documentation is covered by the Creative Commons Attribution-
-Noncommercial-Share Alike 3.0 License
-(http://creativecommons.org/licenses/by-nc-sa/3.0/us/).
+When separated from the distribution, all POD documentation is covered
+by the Creative Commons Attribution-Share Alike 3.0 License.  See
+http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
+clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 25 2008-07-02 03:07:52Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
 
 =cut
