@@ -63,7 +63,7 @@ my $mb = Module::Build->new(
                  q[Socket]        => 1.77,        # dev on 1.80
                  q[Time::HiRes]   => 0,           # dev on 1.9712
                  q[Test::More]    => 0.8,         # dev on 0.8
-                 q[version]       => 0.76         # dev on 0.76|CORE in 5.10
+                 q[version]       => 0.74         # dev on 0.76|CORE in 5.10
     },
     recommends => {
         q[Data::Dumper] => 0,            # core...
@@ -97,6 +97,7 @@ my $mb = Module::Build->new(
 $mb->notes(okay_tcp          => $okay_tcp);
 $mb->notes(okay_udp          => $okay_udp);
 $mb->notes(automated_testing => $automated_testing);
+$mb->notes(release_testing   => ($ENV{RELEASE_TESTING}?1:0));
 $mb->notes(verbose           => $verbose);
 $mb->notes(test_suite        => \@tests);
 $mb->notes(gmtime            => gmtime);

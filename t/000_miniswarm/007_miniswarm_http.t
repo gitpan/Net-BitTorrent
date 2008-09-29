@@ -33,8 +33,10 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 chdir q[../../] if not -f $simple_dot_torrent;
 
 #
-my $build               = Module::Build->current;
+my $build    = Module::Build->current;
 my $okay_tcp = $build->notes(q[okay_tcp]);
+my $verbose  = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 {    # Simulate a private .torrent
@@ -47,6 +49,8 @@ my $BlockLength = 2**14;
 my $Seeds       = 1;
 my $Peers       = 5;
 my $Timeout     = 45;
+
+#
 plan tests => int($Seeds + $Peers);
 
 #
@@ -60,7 +64,9 @@ my $_infohash = q[2b3aaf361bd40540bf7e3bfd140b954b90e4dfbc];
 #
 $|++;
 SKIP: {
- skip q[TCP-based tests have been disabled.], ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}) unless $okay_tcp;
+    skip(q[TCP-based tests have been disabled.],
+         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+    ) unless $okay_tcp;
 
     #
     my %_tracker_data;
@@ -80,7 +86,7 @@ SKIP: {
     listen($httpd, SOMAXCONN)
         || skip_all(sprintf q[Failed to listen on port: [%d] %s], $^E, $^E);
     (undef, $_tracker_port, undef) = unpack(q[SnC4x8], getsockname($httpd));
-    diag(sprintf q[HTTP Mini-Tracker running on 127.0.0.1:%d],
+    warn(sprintf q[HTTP Mini-Tracker running on 127.0.0.1:%d],
          $_tracker_port);
 
     #
@@ -178,7 +184,7 @@ SKIP: {
                    #        : q[ ];
                    #}
                    #
-                   #diag(sprintf(q[(%02d|%02d) [%s] %.2f%%],
+                   #warn(sprintf(q[(%02d|%02d) [%s] %.2f%%],
                    #             $chr, $args->{q[Index]},
                    #             join(q[], @have), $completion
                    #     )

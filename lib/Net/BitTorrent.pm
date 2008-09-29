@@ -24,7 +24,7 @@ package Net::BitTorrent;
     #
     use version qw[qv];    # core as of 5.009
     our $SVN = q[$Id: BitTorrent.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use lib q[../../lib];

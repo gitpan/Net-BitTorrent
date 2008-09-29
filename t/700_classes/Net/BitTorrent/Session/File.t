@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Module::Build;
+
 #
 use lib q[../../../../../lib];
 $|++;
@@ -16,10 +17,11 @@ my $single_dot_torrent = q[./t/900_data/950_torrents/951_single.torrent];
 
 # Make sure the path is correct
 chdir q[../../../../../] if not -f $simple_dot_torrent;
-#
 
-my $build = Module::Build->current;
-my $okay_tcp = $build->notes(q[okay_tcp]);
+#
+my $build           = Module::Build->current;
+my $okay_tcp        = $build->notes(q[okay_tcp]);
+my $release_testing = $build->notes(q[release_testing]);
 
 #
 BEGIN {
@@ -33,7 +35,14 @@ BEGIN {
 }
 
 #
-{
+SKIP: {
+
+#     skip(
+#~         q[Fine grained regression tests skipped; turn on $ENV{RELESE_TESTING} to enable],
+#~         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+#~     ) if not $release_testing;
+#
+#
     my $client = Net::BitTorrent->new();
     my $session =
         Net::BitTorrent::Session->new({Client => $client,
@@ -91,8 +100,7 @@ BEGIN {
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
     my ($filehandle, $filename) = tempfile(DIR => $tempdir);
-    diag(sprintf(q[   File::Temp created '%s' for us to play with], $filename)
-    );
+    diag(sprintf(q[ File::Temp created '%s' for us to play with], $filename));
 
     #
     diag(q[Net::BitTorrent::Session::File->new() requires parameters...]);

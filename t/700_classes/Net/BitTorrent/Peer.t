@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Test::More;
 use Module::Build;
+
 #
 use lib q[../../../../lib];
 $|++;
@@ -15,17 +16,20 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 
 # Make sure the path is correct
 chdir q[../../../../] if not -f $simple_dot_torrent;
+
 #
-my $build               = Module::Build->current;
-my $okay_tcp = $build->notes(q[okay_tcp]);
-my $verbose             = $build->notes(q[verbose]);
+my $build           = Module::Build->current;
+my $okay_tcp        = $build->notes(q[okay_tcp]);
+my $release_testing = $build->notes(q[release_testing]);
+my $verbose         = $build->notes(q[verbose]);
 $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
+
 #
 my ($flux_capacitor, %peers) = (0, ());
 
 #
 BEGIN {
-     plan tests => 320;
+    plan tests => 320;
     *CORE::GLOBAL::time    # Let's do the time warp again!
         = sub () { return CORE::time + ($flux_capacitor * 60); };
 
@@ -45,12 +49,21 @@ BEGIN {
 
 #
 SKIP: {
-       skip q[Socket-based tests have been disabled.], ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}) unless $okay_tcp;
 
+#     skip(
+#~         q[Fine grained regression tests skipped; turn on $ENV{RELESE_TESTING} to enable],
+#~         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+#~     ) if not $release_testing;
+#
+#
+    skip(q[Socket-based tests have been disabled.],
+         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+    ) if not $okay_tcp;
+
+    #
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
-    warn(
-           sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
+    warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
     my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
     if (!$client) {
         warn(sprintf q[Socket error: [%d] %s], $!, $!);
@@ -97,9 +110,9 @@ SKIP: {
 
                 #
                 warn(sprintf(q[Read %d bytes from '%s'],
-                                    $_len, $_peer->_as_string
-                            )
-                    );
+                             $_len, $_peer->_as_string
+                     )
+                );
             }
         ),
         q[Installed 'peer_read' event handler]
@@ -126,9 +139,9 @@ SKIP: {
 
                 #
                 warn(sprintf(q[Wrote %d bytes from '%s'],
-                                    $_len, $_peer->_as_string
-                            )
-                    );
+                             $_len, $_peer->_as_string
+                     )
+                );
             }
         ),
         q[Installed 'peer_write' event handler]
@@ -154,13 +167,13 @@ SKIP: {
 
                 #
                 warn(sprintf(q[Disconnected from '%s'%s],
-                                    $_peer->_as_string,
-                                    ($_why
-                                     ? (q[ (] . $_why . q[)])
-                                     : q[]
-                                    )
-                            )
-                    );
+                             $_peer->_as_string,
+                             ($_why
+                              ? (q[ (] . $_why . q[)])
+                              : q[]
+                             )
+                     )
+                );
             }
         ),
         q[Installed 'peer_disconnect' event handler]
@@ -219,12 +232,12 @@ SKIP: {
                           ],
                           q[Correct args passed to 'packet_outgoing_request' event handler]
                 );
-                 warn(sprintf q[Requesting [I:%4d O:%6d L:%6d] from %s],
-                            $args->{q[Index]},
-                            $args->{q[Offset]},
-                            $args->{q[Length]},
-                            $args->{q[Peer]}->_as_string
-                    );
+                warn(sprintf q[Requesting [I:%4d O:%6d L:%6d] from %s],
+                     $args->{q[Index]},
+                     $args->{q[Offset]},
+                     $args->{q[Length]},
+                     $args->{q[Peer]}->_as_string
+                );
                 return 1;
             }
         ),
@@ -261,14 +274,11 @@ SKIP: {
                 );
 
                 #
-                 warn(
-                       sprintf(q[I have canceled [I:%4d O:%6d L:%6d] from %s],
-                               $args->{q[Index]},
-                               $args->{q[Offset]},
-                               $args->{q[Length]},
-                               $args->{q[Peer]}->_as_string
-                       )
-                    );
+                warn(sprintf(q[I have canceled [I:%4d O:%6d L:%6d] from %s],
+                             $args->{q[Index]},  $args->{q[Offset]},
+                             $args->{q[Length]}, $args->{q[Peer]}->_as_string
+                     )
+                );
             }
         ),
         q[Installed 'packet_outgoing_cancel' event handler]
@@ -293,7 +303,7 @@ SKIP: {
                     16384, q[Session downloaded amount updated]);
 
                 #
-                 warn(
+                warn(
                     sprintf
                         q[%s sent us [I:%4d O:%6d L:%6d] I have now downloaded %d bytes],
                     $args->{q[Peer]}->_as_string,
@@ -301,7 +311,7 @@ SKIP: {
                     $args->{q[Offset]},
                     $args->{q[Length]},
                     $args->{q[Peer]}->_session->_downloaded
-                    );
+                );
             }
         ),
         q[Installed 'packet_incoming_block' event handler]
@@ -377,8 +387,7 @@ SKIP: {
                 is_deeply($args, {}, q[  ... No other keys in $_[1]]);
 
                 #
-                 warn(
-                       sprintf(q[I am interested in %s], $_peer->_as_string));
+                warn(sprintf(q[I am interested in %s], $_peer->_as_string));
             }
         ),
         q[Installed 'packet_outgoing_interested' event handler]
@@ -403,8 +412,7 @@ SKIP: {
                 is_deeply($args, {}, q[  ... No other keys in $_[1]]);
 
                 #
-                 warn(
-                      sprintf(q[%s is interested in me], $_peer->_as_string));
+                warn(sprintf(q[%s is interested in me], $_peer->_as_string));
             }
         ),
         q[Installed 'packet_incoming_interested' event handler]
@@ -516,8 +524,7 @@ SKIP: {
                 is_deeply($args, {}, q[  ... No other keys in $_[1]]);
 
                 #
-                warn(
-                         sprintf(q[Sent bitfield to %s], $_peer->_as_string));
+                warn(sprintf(q[Sent bitfield to %s], $_peer->_as_string));
             }
         ),
         q[Installed 'packet_outgoing_bitfield' event handler]
@@ -960,7 +967,7 @@ SKIP: {
         my ($port, $packed_ip)
             = unpack_sockaddr_in(getsockname($server->_socket));
         warn(sprintf q[Creating new sockpair to connect to %s:%d],
-                    inet_ntoa($packed_ip), $port);
+             inet_ntoa($packed_ip), $port);
         my $outgoing;
         socket($outgoing, AF_INET, SOCK_STREAM, getprotobyname(q[tcp]))
             ? do {

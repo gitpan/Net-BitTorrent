@@ -18,9 +18,10 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 chdir q[../../../../../] if not -f $simple_dot_torrent;
 
 #
-my $build               = Module::Build->current;
-my $okay_tcp = $build->notes(q[okay_tcp]);
-my $verbose             = $build->notes(q[verbose]);
+my $build           = Module::Build->current;
+my $okay_tcp        = $build->notes(q[okay_tcp]);
+my $release_testing = $build->notes(q[release_testing]);
+my $verbose         = $build->notes(q[verbose]);
 $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
@@ -39,7 +40,14 @@ BEGIN {
 }
 
 #
-{
+SKIP: {
+
+#     skip(
+#~         q[Fine grained regression tests skipped; turn on $ENV{RELESE_TESTING} to enable],
+#~         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+#~     ) if not $release_testing;
+#
+#
     my $client = Net::BitTorrent->new();
     my $session =
         Net::BitTorrent::Session->new({Client => $client,
@@ -149,7 +157,7 @@ BEGIN {
     );
 
     #
-    warn(q[TODO: create a fake tracker and connect to it])
+    warn(q[TODO: create a fake tracker and connect to it]);
 }
 
 # $Id$

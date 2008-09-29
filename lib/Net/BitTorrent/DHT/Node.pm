@@ -207,17 +207,17 @@ use warnings;
             my ($self, $session) = @_;
             if (not defined $session) {
                 carp
-                    q[Net::BitTorrent::DHT::Node::Mainline->_query_announce_peer() requires a Net::BitTorrent::Session];
+                    q[Net::BitTorrent::DHT::Node->_query_announce_peer() requires a Net::BitTorrent::Session];
                 return;
             }
             if (not blessed $session) {
                 carp
-                    q[Net::BitTorrent::DHT::Node::Mainline->_query_announce_peer() requires a Net::BitTorrent::Session];
+                    q[Net::BitTorrent::DHT::Node->_query_announce_peer() requires a Net::BitTorrent::Session];
                 return;
             }
             if (not $session->isa(q[Net::BitTorrent::Session])) {
                 carp
-                    q[Net::BitTorrent::DHT::Node::Mainline->_query_announce_peer() requires a Net::BitTorrent::Session];
+                    q[Net::BitTorrent::DHT::Node->_query_announce_peer() requires a Net::BitTorrent::Session];
                 return;
             }
             if ($session->_private) {
@@ -587,7 +587,7 @@ use warnings;
 
 =head1 NAME
 
-Net::BitTorrent::DHT::Node::Mainline - Mainline (bencode) DHT Node
+Net::BitTorrent::DHT::Node - Mainline (bencode) DHT Node
 
 =head1 Constructor
 
@@ -595,7 +595,7 @@ Net::BitTorrent::DHT::Node::Mainline - Mainline (bencode) DHT Node
 
 =item C<new ( [ARGS] )>
 
-Creates a C<Net::BitTorrent::DHT::Node::Mainline> object.  This
+Creates a C<Net::BitTorrent::DHT::Node> object.  This
 constructor should not be used directly.
 
 =back
