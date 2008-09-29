@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w
 use strict;
-use warnings;
+use warnings;  use Test::More;
 use Module::Build;
+
+
 #
 use lib q[../../../../lib];
 $|++;
@@ -14,20 +16,18 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 
 # Make sure the path is correct
 chdir q[../../../../] if not -f $simple_dot_torrent;
-#
 
-my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+#
+my $build               = Module::Build->current;
+my $okay_tcp = $build->notes(q[okay_tcp]);
 
 #
 $|++;
 
 #
 BEGIN {
-    use Test::More;
     plan tests => 95;
-    diag(q[Testing Net::BitTorrent::Util]);
-    use_ok(q[Net::BitTorrent::Util], qw[:all]);
+     use_ok(q[Net::BitTorrent::Util], qw[:all]);
 }
 {    #
     diag(q[  Log Levels]);
@@ -213,3 +213,5 @@ BEGIN {
     #is( uncompact(qw[127.0.0.1:5000]),
     #    qq[\x7F\0\0\1\23\x88], q[large port number] );
 }
+
+# $Id$

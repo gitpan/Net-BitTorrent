@@ -143,6 +143,6 @@ Partial support currently
 
 =back
 
-=for svn $Id: Todo.pod 24 2008-07-01 23:52:15Z sanko@cpan.org $
+=for svn $Id: TODO.pod 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

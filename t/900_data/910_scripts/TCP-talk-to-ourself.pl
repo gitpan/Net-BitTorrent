@@ -1,5 +1,5 @@
 #!perl -w
-# $Id: talk-to-ourself.pl 27 2008-09-24 00:35:26Z sanko@cpan.org $
+# $Id$
 # Stolen from libwww-perl
 use strict;
 use warnings;

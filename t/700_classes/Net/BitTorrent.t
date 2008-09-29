@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w
 use strict;
 use warnings;
+use Test::More;
 use Module::Build;
+
 #
 use lib q[../../../lib];
 $|++;
@@ -14,16 +16,16 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 
 # Make sure the path is correct
 chdir q[../../../] if not -f $simple_dot_torrent;
-#
 
-my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+#
+my $build               = Module::Build->current;
+my $okay_tcp = $build->notes(q[okay_tcp]);
+my $verbose             = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 BEGIN {
-    use Test::More;
     plan tests => 99;
-    $SIG{__WARN__} = sub { diag shift };    # Quiet Carp
 
     # Ours
     use_ok(q[File::Temp],   qw[tempdir]);
@@ -34,10 +36,10 @@ BEGIN {
     use_ok(q[Net::BitTorrent]);
 }
 my ($tempdir) = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
-diag(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
+warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
 my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
 if (!$client) {
-    diag(sprintf q[Socket error: [%d] %s], $!, $!);
+    warn(sprintf q[Socket error: [%d] %s], $!, $!);
     skip(($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}),
          q[Failed to create client]
     );
@@ -50,16 +52,16 @@ END {
 }
 
 #
-diag(q[TODO: Install event handlers]);
+warn(q[TODO: Install event handlers]);
 
 #
-diag(q[Testing (private) Net::BitTorrent::__build_reserved()]);
+warn(q[Testing (private) Net::BitTorrent::__build_reserved()]);
 is(Net::BitTorrent::__build_reserved(), qq[\0\0\0\0\0\20\0\0],
     q[Net::BitTorrent::__build_reserved() currently only indicates that we support the ExtProtocol]
 );
 
 #
-diag(q[Testing (private) Net::BitTorrent::__socket_open()]);
+warn(q[Testing (private) Net::BitTorrent::__socket_open()]);
 is(Net::BitTorrent::__socket_open(), undef, q[__socket_open() returns undef]);
 is(Net::BitTorrent::__socket_open(2200),
     undef, q[__socket_open(2200) returns undef]);
@@ -106,14 +108,14 @@ is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, q[fdsa]),
     undef, q[ReusePort requires a bool value... [Disabled]]);
 is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, 100),
     undef, q[   ...take two.]);
-diag(q[ [Alpha] __socket_open() and new() accept textual]);
-diag(q[         hostnames (localhost, ganchan.somewhere.net, etc.)]);
-diag(q[         which are automatically resolved.]);
+warn(q[ [Alpha] __socket_open() and new() accept textual]);
+warn(q[         hostnames (localhost, ganchan.somewhere.net, etc.)]);
+warn(q[         which are automatically resolved.]);
 isa_ok(Net::BitTorrent::__socket_open(q[localhost], 5500, 1, 1),
        q[GLOB], q[__socket_open(q[localhost], 5500, 1, 1) [Undocumented]]);
 
 #
-diag(q[Testing Net::BitTorrent->_add_connection()]);
+warn(q[Testing Net::BitTorrent->_add_connection()]);
 
 #
 my $bt_top   = Net::BitTorrent->new();
@@ -153,7 +155,7 @@ is($bt_top->_add_connection($bt_wo, q[wo]),
     undef, q[BTW, we can only add a socket once]);
 
 #
-diag(q[TODO: Check list of _sockets()]);
+warn(q[TODO: Check list of _sockets()]);
 
 #use Data::Dump qw[pp];
 #warn pp $bt_top->_connections;
@@ -161,7 +163,7 @@ is(scalar(keys %{$bt_top->_connections}),
     4, q[Check list of _connections() == 4]);
 
 #
-diag(q[Testing Net::BitTorrent->_remove_connection()]);
+warn(q[Testing Net::BitTorrent->_remove_connection()]);
 is($bt_top->_remove_connection(),
     undef, q[_remove_connection requires one parameter:]);
 is($bt_top->_remove_connection(0), undef, q[   a socket.]);
@@ -173,7 +175,7 @@ is($bt_top->_remove_connection($bt_extra),
 
 # In reality, $bt_top->_connections() would contain a weak ref to
 # $bt_top itself... but this is a fake client.
-diag(q[Checking removal of all sockets...]);
+warn(q[Checking removal of all sockets...]);
 is_deeply($bt_top->_connections,
           {fileno($bt_top->_socket) => {Mode   => q[ro],
                                         Object => $bt_top
@@ -191,18 +193,18 @@ is($bt_top->do_one_loop(q[test]), undef, q[   ...but not random junk.]);
 is($bt_top->do_one_loop(-3),      undef, q[   ...or negative numbers.]);
 
 #
-diag(q[Reloading the sockets to test select() (We don't actually use these)]);
+warn(q[Reloading the sockets to test select() (We don't actually use these)]);
 ok($bt_top->_add_connection($bt_rw, q[rw]), q[   RW socket added]);
 ok($bt_top->_add_connection($bt_ro, q[ro]), q[   RO socket added]);
 ok($bt_top->_add_connection($bt_wo, q[wo]), q[   WO socket added]);
 
 #
-diag(  q[This next bit (tries) to create a server, client, and ]
+warn(  q[This next bit (tries) to create a server, client, and ]
      . q[the accepted loopback...]);
-diag(q[Think happy thoughts.]);
+warn(q[Think happy thoughts.]);
 
 #
-diag(q[Testing Net::BitTorrent->new()]);
+warn(q[Testing Net::BitTorrent->new()]);
 my $client_no_params = Net::BitTorrent->new();
 isa_ok($client_no_params, q[Net::BitTorrent], q[new( )]);
 
@@ -260,7 +262,7 @@ is($port, 20505, q[Correct port was opened (20505).]);
 #
 like($client_list_port->peerid, qr[^NB\d{3}[CS]-.{8}.{5}$],
      q[Peer ID conforms to spec.]);
-diag(q[Testing Net::BitTorrent->add_session()]);
+warn(q[Testing Net::BitTorrent->add_session()]);
 is($client->add_session(q[./t/900_data/950_torrents/952_multi.torrent]),
     undef, q[Needs hash ref params]);
 $session = $client->add_session(
@@ -299,7 +301,7 @@ like($client->_peers_per_session, qr[^\d+$],
 #use Data::Dump qw[pp];
 #use Devel::FindRef;warn Devel::FindRef::track $client;
 #
-diag(q[DHT stuff is undocumented alpha code]);
+warn(q[DHT stuff is undocumented alpha code]);
 is($client->_dht,       undef, q[DHT is disabled by default]);
 is($client->_use_dht,   undef, q[_use_dht() needs a parameter]);
 is($client->_use_dht(), undef, q[_use_dht() needs a parameter (round two)]);
@@ -348,3 +350,5 @@ is_deeply($client->_connections,
           },
           q[_sockets() returns the dht object and the client itself]
 );
+
+# $Id$

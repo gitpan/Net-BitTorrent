@@ -31,7 +31,8 @@ chdir q[../../] if not -f $simple_dot_torrent;
 #
 
 my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+my $okay_tcp = $build->notes(q[okay_tcp]);
+my $okay_udp = $build->notes(q[okay_udp]);
 
 #
 my $BlockLength = 2**14;
@@ -55,7 +56,8 @@ $|++;
 SKIP: {
     plan tests => int($Seeds + $Peers_DHT + 1) * 2;
 
-    skip q[Socket-based tests have been disabled.], ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}) unless $can_talk_to_ourself;
+    skip q[TCP-based tests have been disabled.], ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}) unless $okay_tcp;
+    skip q[UDP-based tests have been disabled.], ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}) unless $okay_udp;
 
     my %client;
 

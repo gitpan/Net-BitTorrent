@@ -17,7 +17,7 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 chdir q[../../../../../../] if not -f $simple_dot_torrent;
 #
 my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+my $okay_tcp = $build->notes(q[okay_tcp]);
 
 #
 my ($flux_capacitor, %peers) = (0, ());
@@ -64,3 +64,5 @@ BEGIN {
 
     #
 }
+
+# $Id$

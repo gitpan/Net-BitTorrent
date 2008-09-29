@@ -17,7 +17,7 @@ chdir q[../../../../../../] if not -f $simple_dot_torrent;
 #
 
 my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+my $okay_udp = $build->notes(q[okay_udp]);
 
 #
 my ($flux_capacitor, %peers) = (0, ());
@@ -64,3 +64,5 @@ BEGIN {
 
     #
 }
+
+# $Id$

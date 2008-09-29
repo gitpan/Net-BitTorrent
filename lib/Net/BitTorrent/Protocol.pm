@@ -12,8 +12,8 @@ package Net::BitTorrent::Protocol;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Protocol.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use vars               # core as of perl 5.002
@@ -446,7 +446,7 @@ package Net::BitTorrent::Protocol;
                        Payload => @payload
             } if @payload;
         }
-        elsif ((unpack(q[N], $$data) =~ m[\d])) {
+        elsif ((defined unpack(q[N], $$data)) and (unpack(q[N], $$data) =~ m[\d])) {
             if ((unpack(q[N], $$data) <= length($$data))) {
                 (my ($packet_data), $$data) = unpack(q[N/aa*], $$data);
                 (my ($type), $packet_data) = unpack(q[ca*], $packet_data);
@@ -718,11 +718,6 @@ package Net::BitTorrent::Protocol;
 #
 #     sub _parse_reserved {      # ...sub-packet, actually.
 #~         my $self = shift;
-#~         $client{$self}->_do_callback(q[log], TRACE,
-#~                                      sprintf(q[Entering %s for %s],
-#~                                              [caller 0]->[3], $$self
-#~                                      )
-#~         );
 #~         my ($reserved) = [map {ord} split(q[], $reserved{$self})];
 #~         $_supports_DHT{$self}         = ($reserved->[7] &= 0x01 ? 1 : 0);
 #~         $_supports_FastPeers{$self}   = ($reserved->[7] &= 0x04 ? 1 : 0);
@@ -1144,6 +1139,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: Protocol.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

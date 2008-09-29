@@ -9,7 +9,7 @@ package Net::BitTorrent::Session;
     use Cwd qw[cwd];                                # core as of perl 5
     use File::Spec::Functions qw[rel2abs catfile];  # core as of perl 5.00504
     use Scalar::Util qw[blessed weaken];            # core as of perl 5.007003
-    use List::Util qw[sum shuffle];                 # core as of perl 5.007003
+    use List::Util qw[sum shuffle max];                 # core as of perl 5.007003
     use Fcntl qw[O_RDONLY];                         # core as of perl 5
 
     #
@@ -21,8 +21,8 @@ package Net::BitTorrent::Session;
 
     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Session.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     # Debugging
     #use Data::Dump qw[pp];
@@ -179,15 +179,15 @@ package Net::BitTorrent::Session;
         #   - verify pieces string > 40
         #   - verify pieces string % 40 == 0
         if (length(unpack(q[H*], $TORRENT_DATA->{q[info]}{q[pieces]})) < 40)
-        {    # TODO: Create bad .torrent to trigger this
+        {    # TODO: Create bad .torrent to trigger this for tests
                 #$_client{$self}
-                #    ->_do_callback(q[log], ERROR, q[Broken torrent]);
+                #    ->_event(q[log], {Level=>ERROR, Msg=>q[Broken torrent: Pieces hash is less than 40 bytes]});
             return;
         }
         if (length(unpack(q[H*], $TORRENT_DATA->{q[info]}{q[pieces]})) % 40)
-        {       # TODO: Create bad .torrent to trigger this
+        {       # TODO: Create bad .torrent to trigger this for tests
                 #$_client{$self}
-                #    ->_do_callback(q[log], ERROR, q[Broken torrent]);
+                #    ->_event(q[log], {Level=>ERROR, Msg=>q[Broken torrent: Pieces hash will not break apart into even, 40 byte segments]});
             return;
         }
 
@@ -198,8 +198,8 @@ package Net::BitTorrent::Session;
         if ($infohash !~ m[^([0-9a-f]{40})$]) {
 
             # Could this ever really happen?
-            #$_client{$self}->_do_callback(q[log], ERROR,
-            #                             q[Improper info_hash]);
+            #$_client{$self}->_event(q[log], {Level=>ERROR,
+            #                             Msg=>q[Improper info_hash]});
             return;
         }
 
@@ -632,7 +632,7 @@ package Net::BitTorrent::Session;
                                    )
         );
         my $max_working_pieces
-            = int(($slots * $unchoked_peers) / $blocks_per_piece) + 1;
+            = max(3,int(($slots * $unchoked_peers) / $blocks_per_piece) + 1);
 
         #warn sprintf q[$max_working_pieces: %d], $max_working_pieces;
         #
@@ -894,6 +894,12 @@ package Net::BitTorrent::Session;
         #
         return 1;
     }
+        sub _as_string {
+            my ($self, $advanced) = @_;
+            my $dump = q[TODO];
+            return print STDERR qq[$dump\n] unless defined wantarray;
+            return $dump;
+        }
 
     # Destructor
     DESTROY {
@@ -1034,7 +1040,7 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Session.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: Session.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut
 

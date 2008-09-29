@@ -23,8 +23,8 @@ package Net::BitTorrent;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: BitTorrent.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use lib q[../../lib];
@@ -108,7 +108,7 @@ package Net::BitTorrent;
                 q[a20],
                 (sprintf(
                      q[NB%03d%1s-%8s%5s],
-                     (q[$Rev: 27 $] =~ m[(\d+)]g),
+                     (q[$Rev: 28 $] =~ m[(\d+)]g),
                      ($UNSTABLE_RELEASE ? q[S] : q[C]),
                      (join q[],
                       map {
@@ -383,8 +383,8 @@ package Net::BitTorrent;
                     accept(my ($new_socket), $_socket{$self})
                         or
 
-                       #$self->_do_callback(q[log], ERROR,
-                       #                   q[Failed to accept new connection])
+                       #$self->_event(q[log], {Level => ERROR,
+                       #                   Msg => q[Failed to accept new connection]})
                        #and
                         next POPSOCK;
 
@@ -642,7 +642,7 @@ package Net::BitTorrent;
         return $_tid{$self};
     }
 
-    # Utility, object-neutral functions
+    # Utility, object-agnostic functions
     sub __socket_open {
         my ($host, $port, $reuseaddr, $reuseport) = @_;
 
@@ -712,10 +712,17 @@ package Net::BitTorrent;
     }
 
     sub __build_reserved {
+        my ($self)=@_;
         my @reserved = qw[0 0 0 0 0 0 0 0];
         $reserved[5] |= 0x10;                     # Ext Protocol
         return join q[], map {chr} @reserved;
     }
+        sub _as_string {
+            my ($self, $advanced) = @_;
+            my $dump = q[TODO];
+            return print STDERR qq[$dump\n] unless defined wantarray;
+            return $dump;
+        }
 
     #
     DESTROY {
@@ -936,6 +943,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

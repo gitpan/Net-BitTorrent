@@ -14,8 +14,8 @@ use warnings;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id$];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Node.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     {
         my (%dht, %packed_host, %node_id, %added, %infohashes, %_token,
             %_last_seen);
@@ -54,7 +54,7 @@ use warnings;
                                 }
                             }
                             $s->_query_find_node(pack q[H40],
-                                                 $dht{$self}->_node_id);
+                                                 $dht{$self}->node_id);
                         },
                         Time   => time + 1,
                         Object => $self
@@ -83,7 +83,7 @@ use warnings;
             return inet_ntoa($addr);
         }
 
-        sub _node_id {
+        sub node_id {
             return if defined $_[1];
             return $node_id{$_[0]};
         }
@@ -129,7 +129,7 @@ use warnings;
                          {t => $tid,
                           y => q[q],
                           q => q[ping],
-                          a => {id => $dht{$self}->_node_id},
+                          a => {id => $dht{$self}->node_id},
                           v => sprintf(q[NB:%s], $Net::BitTorrent::VERSION)
                          }
                          )
@@ -150,7 +150,7 @@ use warnings;
                             }
                         }
                         $s->_query_find_node(pack q[H40],
-                                             $dht{$self}->_node_id);
+                                             $dht{$self}->node_id);
                     },
                     Time => (time + (60 * 30)),
                     Object => $self
@@ -168,7 +168,7 @@ use warnings;
                           y => q[q],
                           q => q[find_node],
                           a => {target => $target,
-                                id     => $dht{$self}->_node_id
+                                id     => $dht{$self}->node_id
                           },
                           v => sprintf(q[NB:%s], $Net::BitTorrent::VERSION)
                          }
@@ -194,7 +194,7 @@ use warnings;
                          q => q[get_peers],
                          a => {
                              info_hash => pack(q[H40], $session->infohash),
-                             id => $dht{$self}->_node_id
+                             id => $dht{$self}->node_id
                          },
                          v => sprintf(q[NB:%s], $Net::BitTorrent::VERSION)
                         }
@@ -263,7 +263,7 @@ use warnings;
                                       Object => $self
                                      }
                 );
-            $self->_node_id($packet->{q[a]}{q[id]});
+            $self->node_id($packet->{q[a]}{q[id]});
 
             #
             $dht{$self}->_send(
@@ -411,7 +411,7 @@ use warnings;
                           bencode(
                           {  y => q[r],
                              t => $packet->{q[t]},
-                             r => {id     => $dht{$self}->_node_id,
+                             r => {id     => $dht{$self}->node_id,
                                    token  => $packet->{q[a]}{q[info_hash]},
                                    values => \@nodes
                              },
@@ -430,7 +430,7 @@ use warnings;
                           bencode(
                           {y => q[r],
                            t => $packet->{q[t]},
-                           r => {id    => $dht{$self}->_node_id,
+                           r => {id    => $dht{$self}->node_id,
                                  token => $packet->{q[a]}{q[id]},
                                  nodes => $dht{$self}
                                      ->_locate_nodes_near_target($target)
@@ -487,7 +487,7 @@ use warnings;
                            },
                            y => q[r],
                            t => $packet->{q[t]},
-                           r => {id => $dht{$self}->_node_id},
+                           r => {id => $dht{$self}->node_id},
                            v => sprintf(q[NB%s], $Net::BitTorrent::VERSION)
                           }
                           )
@@ -519,7 +519,7 @@ use warnings;
                                         bencode(
                                         {y => q[r],
                                          t => $packet->{q[t]},
-                                         r => {id => $dht{$self}->_node_id}
+                                         r => {id => $dht{$self}->node_id}
                                         }
                                         )
                                    }
@@ -546,7 +546,7 @@ use warnings;
                                     bencode(
                                         {y => q[r],
                                          t => $packet->{q[t]},
-                                         r => {id => $dht{$self}->_node_id}
+                                         r => {id => $dht{$self}->node_id}
                                         }
                                     )
                                }
@@ -558,8 +558,6 @@ use warnings;
 
         sub _as_string {
             my ($self, $advanced) = @_;
-            $dht{$self}->_client->_do_callback(q[log], TRACE,
-                     sprintf(q[Entering %s for %s], [caller 0]->[3], $$self));
             my $dump = q[TODO];
             return print STDERR qq[$dump\n] unless defined wantarray;
             return $dump;
@@ -602,9 +600,15 @@ constructor should not be used directly.
 
 =back
 
-=head1 BUGS/TODO
+=head1 Methods
 
-=over 4
+=over
+
+=item C<node_id ( )>
+
+Get the Node ID used to identify this
+L<node|/Net::BitTorrent::DHT::Node> in the DHT swarm and our routing
+table.
 
 =back
 
@@ -632,6 +636,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id$
+=for svn $Id: Node.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

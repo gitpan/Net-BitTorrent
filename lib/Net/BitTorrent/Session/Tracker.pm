@@ -15,11 +15,11 @@ package Net::BitTorrent::Session::Tracker;
 
     #
     use version qw[qv];                     # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Tracker.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
-    my (%session,  %_urls);                  # params to new\
+    my (%session,  %_urls);                 # params to new\
     my (%complete, %incomplete);
 
     #
@@ -103,23 +103,20 @@ package Net::BitTorrent::Session::Tracker;
 
         #
         $_urls{$self} = [map ($_ =~ m[^http://]i
-                             ? Net::BitTorrent::Session::Tracker::HTTP->new(
+                              ? Net::BitTorrent::Session::Tracker::HTTP->new(
                                                     {URL => $_, Tier => $self}
-                                 )
-                             : Net::BitTorrent::Session::Tracker::UDP->new(
+                                  )
+                              : Net::BitTorrent::Session::Tracker::UDP->new(
                                                     {URL => $_, Tier => $self}
-                             ),
-                             @{$args->{q[URLs]}})
+                              ),
+                              @{$args->{q[URLs]}})
         ];
 
         #
-        $session{$self}->_client->_schedule(
-            {   Time => time,
-                Code => sub {
-                    $_urls{+shift}->[0]->_announce(q[started]);
-                },
-                Object => $self
-            }
+        $session{$self}->_client->_schedule({Time   => time,
+                                             Code   => \&_announce,
+                                             Object => $self
+                                            }
         );
 
         #
@@ -133,7 +130,7 @@ package Net::BitTorrent::Session::Tracker;
     # Accessors | Private
     sub _client  { return $session{+shift}->_client; }
     sub _session { return $session{+shift}; }
-    sub _urls {return $_urls{+shift};}
+    sub _urls    { return $_urls{+shift}; }
 
     # Methods | Private
     sub _set_complete {
@@ -144,6 +141,23 @@ package Net::BitTorrent::Session::Tracker;
     sub _set_incomplete {
         my ($self, $value) = @_;
         return $incomplete{$self} = $value;
+    }
+
+    sub _as_string {
+        my ($self, $advanced) = @_;
+        my $dump = q[TODO];
+        return print STDERR qq[$dump\n] unless defined wantarray;
+        return $dump;
+    }
+
+    sub _shuffle {    # push first (bad) to the end of the list
+        my ($self) = @_;
+        return (push(@{$_urls{$self}}, shift(@{$_urls{$self}})));
+    }
+
+    sub _announce {
+        my ($self) = @_;
+        return $_urls{$self}->[0]->_announce(q[started]);
     }
 
     #
@@ -218,6 +232,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Tracker.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: Tracker.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

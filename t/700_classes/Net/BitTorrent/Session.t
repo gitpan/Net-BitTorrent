@@ -2,6 +2,8 @@
 use strict;
 use warnings;
 use Module::Build;
+use Test::More;
+
 #
 use lib q[../../../../lib];
 $|++;
@@ -12,27 +14,22 @@ my $test_builder = Test::More->builder;
 #
 my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 my $credits_dot_txt    = q[./t/900_data/950_torrents/credits.txt];
+
 # Make sure the path is correct
 chdir q[../../../../] if not -f $simple_dot_torrent;
+
 #
-
-my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
-
-
-
-# Make sure the path is correct
-chdir q[../../../../] if not -f $simple_dot_torrent;
+my $build               = Module::Build->current;
+my $okay_tcp = $build->notes(q[okay_tcp]);
+my $verbose             = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 my ($flux_capacitor, %peers) = (0, ());
 
 #
 BEGIN {
-    use Test::More;
     plan tests => 41;
-$SIG{__WARN__} = sub {}; # Quiet Carp
-    # Ours
     use_ok(q[File::Temp],            qw[tempdir]);
     use_ok(q[Scalar::Util],          qw[/weak/]);
     use_ok(q[File::Spec::Functions], qw[rel2abs]);
@@ -43,11 +40,10 @@ $SIG{__WARN__} = sub {}; # Quiet Carp
     use_ok(q[Net::BitTorrent::Util]);
 }
 my ($tempdir) = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
- diag(
-           sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
+warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
 my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
 if (!$client) {
-     diag(sprintf q[Socket error: [%d] %s], $!, $!);
+    warn(sprintf q[Socket error: [%d] %s], $!, $!);
     skip(($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}),
          q[Failed to create client]
     );
@@ -64,12 +60,12 @@ END {
 }
 
 #
-diag(q[Very simple .torrent file]);
+warn(q[Very simple .torrent file]);
 is($session->path,
     rel2abs($simple_dot_torrent),
     q[Absolute paths returned from path()]);
 is_deeply($session->trackers, [], q[Empty list of trackers]);
-is($session->_complete,      0,     q[Download is incomplete]);
+is($session->_complete,     0,     q[Download is incomplete]);
 is($session->_downloaded,   0,     q[Nothing has been downloaded]);
 is($session->_uploaded,     0,     q[Nothing has been uploaded]);
 is($session->size,          49998, q[Full size is correct]);
@@ -137,7 +133,7 @@ isa_ok(Net::BitTorrent::Session->new({Path        => $simple_dot_torrent,
 );
 
 # TODO: Test BaseDir param
-diag(q[TODO: Test BaseDir param]);
+warn(q[TODO: Test BaseDir param]);
 
 #
 is( Net::BitTorrent::Session->new(
@@ -148,17 +144,15 @@ is( Net::BitTorrent::Session->new(
 );
 
 # Back to the original...
-is($session->_downloaded, 0,           q[    _downloaded == 0]);
-is($session->_add_downloaded(1024), 1024,  q[_add_downloaded(1024)]);
-is($session->_add_downloaded(-1024), 1024, q[_add_downloaded(-1024)]);
+is($session->_downloaded,             0,    q[    _downloaded == 0]);
+is($session->_add_downloaded(1024),   1024, q[_add_downloaded(1024)]);
+is($session->_add_downloaded(-1024),  1024, q[_add_downloaded(-1024)]);
 is($session->_add_downloaded('dude'), 1024, q[_add_downloaded('dude')]);
-is($session->_downloaded, 1024,           q[    _downloaded == 1024]);
+is($session->_downloaded,             1024, q[    _downloaded == 1024]);
+is($session->_uploaded,               0,    q[    _uploaded == 0]);
+is($session->_add_uploaded(1024),     1024, q[_add_uploaded(1024)]);
+is($session->_add_uploaded(-1024),    1024, q[_add_uploaded(-1024)]);
+is($session->_add_uploaded('dude'),   1024, q[_add_uploaded('dude')]);
+is($session->_uploaded,               1024, q[    _uploaded == 1024]);
 
-is($session->_uploaded, 0,           q[    _uploaded == 0]);
-is($session->_add_uploaded(1024), 1024,  q[_add_uploaded(1024)]);
-is($session->_add_uploaded(-1024), 1024, q[_add_uploaded(-1024)]);
-is($session->_add_uploaded('dude'), 1024, q[_add_uploaded('dude')]);
-is($session->_uploaded, 1024,           q[    _uploaded == 1024]);
-
-
-
+# $Id$

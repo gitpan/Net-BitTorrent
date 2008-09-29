@@ -524,6 +524,6 @@ Print the manual page and exit.
 This is a B<very> basic demonstration of a full C<Net::BitTorrent>-based
 client.
 
-=for svn $Id$
+=for svn $Id: client.pl 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

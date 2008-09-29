@@ -15,8 +15,8 @@ package Net::BitTorrent::Peer;
 
     #
     use version qw[qv];                     # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Peer.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use lib q[../../../lib];
@@ -1040,7 +1040,7 @@ END
             #
             if ($piece) {
 
-                #warn q[$self == ] . $self->as_string;
+                #warn q[$self == ] . $self->_as_string;
                 #warn pp \%requests_out;
                 #warn q[Num requests: ] . scalar(@{$requests_out{$self}});
                 #warn q[Before Request: ] . pp $piece;
@@ -1481,6 +1481,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: Peer.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

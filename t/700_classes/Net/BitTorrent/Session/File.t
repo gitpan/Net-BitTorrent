@@ -19,7 +19,7 @@ chdir q[../../../../../] if not -f $simple_dot_torrent;
 #
 
 my $build = Module::Build->current;
-my $can_talk_to_ourself = $build->notes(q[can_talk_to_ourself]);
+my $okay_tcp = $build->notes(q[okay_tcp]);
 
 #
 BEGIN {
@@ -344,3 +344,5 @@ SKIP: {
         diag(q[TODO: check if file actually exists]);
     }
 }
+
+# $Id$

@@ -19,8 +19,8 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
     #
     use version qw[qv];                     # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (%url, %tier);                              # param to new()
@@ -73,8 +73,10 @@ package Net::BitTorrent::Session::Tracker::HTTP;
     # Methods | Private
     sub _announce {
         my ($self, $event) = @_;
+        #warn sprintf q[%s | %s_announce(%s)], scalar(localtime), $self,
+        #    ($event || q[]);
         if (defined $event) {
-            if ($event !~ m[^(?:st(?:art|opp)|complet)ed$]) { # being silly...
+            if ($event !~ m[^(?:st(?:art|opp)|complet)ed$]) { # don't be silly
                 carp sprintf q[Invalid event for announce: %s], $event;
                 return;
             }
@@ -189,10 +191,14 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
             # Reschedule announce
             $tier{$self}->_client->_schedule(
-                                      {Time   => time + 30,
-                                       Code   => sub { $self->_announce(); },
-                                       Object => $self
-                                      }
+                {   Time => time + 30,
+                    Code => sub {
+                        my ($s) = @_;
+                        $tier{$s}->_shuffle;
+                        return $tier{$s}->_announce();
+                    },
+                    Object => $self
+                }
             );
             return;
         }
@@ -212,10 +218,14 @@ package Net::BitTorrent::Session::Tracker::HTTP;
                 #return;
                 # Reschedule announce
                 $tier{$self}->_client->_schedule(
-                                      {Time   => time + 30,
-                                       Code   => sub { shift->_announce(); },
-                                       Object => $self
-                                      }
+                    {   Time => time + 30,
+                        Code => sub {
+                            my ($s) = @_;
+                            $tier{$s}->_shuffle;
+                            return $tier{$s}->_announce();
+                        },
+                        Object => $self
+                    }
                 );
                 return;
             }
@@ -245,10 +255,14 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
                 # Reschedule announce
                 $tier{$self}->_client->_schedule(
-                                      {Time   => time + 30,
-                                       Code   => sub { shift->_announce(); },
-                                       Object => $self
-                                      }
+                    {   Time => time + 30,
+                        Code => sub {
+                            my ($s) = @_;
+                            $tier{$s}->_shuffle;
+                            return $tier{$s}->_announce();
+                        },
+                        Object => $self
+                    }
                 );
                 return;
             }
@@ -281,16 +295,14 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
                 # Reschedule announce
                 $tier{$self}->_client->_schedule(
-                                      {Time => (
-                                              time + (
-                                                  defined $data->{q[interval]}
-                                                  ? $data->{q[interval]}
-                                                  : 1800
-                                              )
-                                       ),
-                                       Code   => sub { shift->_announce(); },
-                                       Object => $self
-                                      }
+                        {Time => (time + (defined $data->{q[interval]}
+                                          ? $data->{q[interval]}
+                                          : 1800
+                                  )
+                         ),
+                         Code   => sub { return $tier{+shift}->_announce() },
+                         Object => $self
+                        }
                 );
             }
             $tier{$self}->_client->_remove_connection($self);
@@ -308,14 +320,21 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
             # Reschedule announce
             $tier{$self}->_client->_schedule(
-                                      {Time   => time + 300,
-                                       Code   => sub { shift->_announce(); },
-                                       Object => $self
-                                      }
+                       {Time   => time + 300,
+                        Code   => sub { return $tier{+shift}->_announce(); },
+                        Object => $self
+                       }
             );
             return;
         }
         return ($actual_read, $actual_write);
+    }
+
+    sub _as_string {
+        my ($self, $advanced) = @_;
+        my $dump = q[TODO];
+        return print STDERR qq[$dump\n] unless defined wantarray;
+        return $dump;
     }
 
     #
@@ -388,6 +407,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut

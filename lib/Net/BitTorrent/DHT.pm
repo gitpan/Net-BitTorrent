@@ -13,8 +13,8 @@ package Net::BitTorrent::DHT;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: BitTorrent.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 27 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     # Debugging
     #use Data::Dump qw[pp];
@@ -169,7 +169,7 @@ package Net::BitTorrent::DHT;
         }
 
         # Accesors | Public
-        sub _node_id {
+        sub node_id {
             return if defined $_[1];
             return $node_id{$_[0]};
         }
@@ -192,7 +192,7 @@ package Net::BitTorrent::DHT;
                     my $timestamp = $routing_table{$self}{$_}->_last_seen;
                     ($timestamp < (time - (60 * 30)))
                         or ($timestamp < (time - (60 * 5))
-                        and (not defined $routing_table{$self}{$_}->_node_id))
+                         and (not defined $routing_table{$self}{$_}->node_id))
                 } keys %{$routing_table{$self}};
                 for my $node (@expired_nodes) {
 
@@ -207,7 +207,7 @@ package Net::BitTorrent::DHT;
             my @hosts = sort keys %{$routing_table{$self}};
         NODE: for my $packed_host (@hosts) {
                 my $node = $routing_table{$self}{$packed_host};
-                if (    (not defined $node->_node_id)
+                if (    (not defined $node->node_id)
                     and ($node->_last_seen < (time - (60 * 5))))
                 {   delete $routing_table{$self}{$packed_host};
                     next NODE;
@@ -226,8 +226,8 @@ package Net::BitTorrent::DHT;
             return if not defined $target;
             return [
                 sort {
-                    ($a->_node_id ^ $target) cmp($b->_node_id ^ $target)
-                    } grep { defined $_->_node_id }
+                    ($a->node_id ^ $target) cmp($b->node_id ^ $target)
+                    } grep { defined $_->node_id }
                     values %{$routing_table{$self}}
             ]->[0 .. 8];
         }
@@ -247,8 +247,8 @@ package Net::BitTorrent::DHT;
                     q[Net::BitTorrent::DHT->_send() requires a 'node' parameter];
                 return;
             }
-            if (defined $args->{q[node]}->_node_id
-                and $args->{q[node]}->_node_id eq $node_id{$self})
+            if (defined $args->{q[node]}->node_id
+                and $args->{q[node]}->node_id eq $node_id{$self})
             {   carp q[Cannot send packet to ourself!];
                 return;
             }
@@ -256,7 +256,7 @@ package Net::BitTorrent::DHT;
                          0,              $args->{q[node]}->_packed_host)
                 )
             {   carp sprintf q[Cannot send %d bytes to %s: [%d] %s],
-                    length($args->{q[packet]}), $args->{q[node]}->_node_id,
+                    length($args->{q[packet]}), $args->{q[node]}->node_id,
                     $^E, $^E;
                 return;
             }
@@ -292,8 +292,9 @@ package Net::BitTorrent::DHT;
             my $packed_host = recv($socket{$self}, my ($_data), $read, 0);
             if (defined $packed_host) {
                 $actual_read = length $_data;
-                my ($packet, $leftover) = bdecode($_data);    # TODO: if $leftover, loop
-                if (defined $packet) {
+                my ($packet, $leftover)
+                    = bdecode($_data);    # TODO: if $leftover, loop
+                if ((defined $packet) and (ref $packet eq q[HASH])) {
                     $routing_table{$self}{$packed_host} ||=
                         Net::BitTorrent::DHT::Node->new(
                                               {dht         => $self,
@@ -302,10 +303,12 @@ package Net::BitTorrent::DHT;
                                               }
                         );
                     my $node = $routing_table{$self}{$packed_host};
-                    if (ref $packet ne q[HASH]) { # An attempt to track down a strange bug...
-                    require Data::Dumper;
-                    warn Data::Dumper->Dump([$packet],[ qw[Packet]]);
-                }
+                    if (ref $packet ne q[HASH])
+                    {    # An attempt to track down a strange bug...
+                        require Data::Dumper;
+                        warn Data::Dumper->Dump([$packet, $leftover],
+                                                [qw[Packet Leftover]]);
+                    }
                     if (defined $packet->{q[y]}
                         and $packet->{q[y]} eq q[q])
                     {   my %dispatch = (
@@ -388,7 +391,6 @@ package Net::BitTorrent::DHT;
                 else {       # May be AZ. May be garbage. ...same thing.
                              #warn pp $data;
 
-
                     # XXX - Do stuff with the node
                 }
             }
@@ -434,7 +436,7 @@ package Net::BitTorrent::DHT;
             return 1;
         }
 
-        sub as_string {
+        sub _as_string {
             my ($self, $advanced) = @_;
             my $dump = q[TODO];
             return print STDERR qq[$dump\n] unless defined wantarray;
@@ -471,7 +473,7 @@ Net::BitTorrent::DHT - Kademlia based Distributed Hash Table
 
 =head1 Constructor
 
-=over 4
+=over
 
 =item C<new ( [ARGS] )>
 
@@ -489,25 +491,24 @@ used directly.
 Get the Node ID used to identify this L<client|/Net::BitTorrent> in the
 DHT swarm.
 
-=item C<as_string ( [ VERBOSE ] )>
-
-Returns a 'ready to print' dump of the C<Net::BitTorrent::DHT> object's
-data structure.  If called in void context, the structure is printed to
-C<STDERR>.
-
-See also: L<Net::BitTorrent|Net::BitTorrent/as_string>
-
 =back
 
-=head1 BUGS/TODO
+=head1 Bugs
 
-=over 4
+=over
 
 =item *
 
 Currently, the routing table is flat.
 
 =back
+
+=head1 Notes
+
+While bandwidth to/from DHT nodes is not limited like other traffic,
+it is taken into account and "drained" from the rate limiter.  If
+there's a burst of DHT traffic, the peer traffic will be limited to
+avoid the total to exceed the global limit.
 
 =head1 Author
 
@@ -534,6 +535,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 27 2008-09-24 00:35:26Z sanko@cpan.org $
+=for svn $Id: DHT.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
 
 =cut
