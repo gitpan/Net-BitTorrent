@@ -11,6 +11,7 @@ lib/Net/BitTorrent/Session/Tracker.pm
 lib/Net/BitTorrent/Session/Tracker/HTTP.pm
 lib/Net/BitTorrent/Session/Tracker/UDP.pm
 lib/Net/BitTorrent/Util.pm
+lib/Net/BitTorrent/Version.pm
 LICENSE
 MANIFEST			This list of files
 META.yml

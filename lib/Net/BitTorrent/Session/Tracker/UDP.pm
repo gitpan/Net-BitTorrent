@@ -1,3 +1,4 @@
+#!C:\perl\bin\perl.exe 
 package Net::BitTorrent::Session::Tracker::UDP;
 {
     use strict;      # core as of perl 5
@@ -5,7 +6,7 @@ package Net::BitTorrent::Session::Tracker::UDP;
 
     #
     use Carp qw[carp];                      # core as of perl 5
-    use Scalar::Util qw[blessed weaken];    # core since perl 5.007003
+    use Scalar::Util qw[blessed weaken refaddr];    # core since perl 5.007003
                                             #
     use version qw[qv];                     # core as of 5.009
     our $SVN = q[$Id: UDP.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
@@ -47,9 +48,9 @@ package Net::BitTorrent::Session::Tracker::UDP;
         $self = bless \$args->{q[URL]}, $class;
 
         #
-        $url{$self}  = $args->{q[URL]};
-        $tier{$self} = $args->{q[Tier]};
-        weaken $tier{$self};
+        $url{refaddr $self}  = $args->{q[URL]};
+        $tier{refaddr $self} = $args->{q[Tier]};
+        weaken $tier{refaddr $self};
 
         #
         return $self;
@@ -78,9 +79,9 @@ package Net::BitTorrent::Session::Tracker::UDP;
         my ($self) = @_;
 
         #
-        delete $tier{$self};
-        delete $url{$self};
-        delete $socket{$self};
+        delete $tier{refaddr $self};
+        delete $url{refaddr $self};
+        delete $socket{refaddr $self};
 
         #
         return 1;

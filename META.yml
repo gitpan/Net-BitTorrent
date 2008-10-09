@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.027_003
+version: 0.027_004
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -39,7 +39,7 @@ recommends:
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
-    version: 0.027_003
+    version: 0.027_004
   Net::BitTorrent::DHT:
     file: lib/Net/BitTorrent/DHT.pm
     version: 0.028
@@ -70,6 +70,9 @@ provides:
   Net::BitTorrent::Util:
     file: lib/Net/BitTorrent/Util.pm
     version: 0.028
+  Net::BitTorrent::Version:
+    file: lib/Net/BitTorrent/Version.pm
+    version: 0.027_004
 generated_by: 'Sanko Robinson <sanko@cpan.org>'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

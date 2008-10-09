@@ -1,3 +1,4 @@
+#!C:\perl\bin\perl.exe 
 package Net::BitTorrent::Protocol;
 {
     use strict;      # core as of perl 5

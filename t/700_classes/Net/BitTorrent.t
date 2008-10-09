@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!C:\perl\bin\perl.exe -w
 use strict;
 use warnings;
 use Test::More;
@@ -112,26 +112,23 @@ TODO: {
             q[GLOB],
             q[   ...unless we ask to reuse the address.  In which case... [Undocumented]]
         );
-    }
-    my ($port_two, $packed_ip_two)
-        = unpack_sockaddr_in(getsockname($socket_two));
-    is($port_two, 5500, q[   ...we could accept connections on port 5500...]);
-    is($packed_ip_two, inet_aton(q[127.0.0.1]),
-        q[   ...if we were open to the outside world.]);
-    is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, q[fdsa]),
-        undef, q[ReuseAddr requires a bool value...]);
-    is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 100),
-        undef, q[   ...take two.]);
-    is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, q[fdsa]),
-        undef, q[ReusePort requires a bool value... [Disabled]]);
-    is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, 100),
-        undef, q[   ...take two.]);
-    warn(q[ [Alpha] __socket_open() and new() accept textual]);
-    warn(q[         hostnames (localhost, ganchan.somewhere.net, etc.)]);
-    warn(q[         which are automatically resolved.]);
-TODO: {
-        local $TODO
-            = q[Undocumented stuff may fail. ...that's why it's undocumented.];
+        my ($port_two, $packed_ip_two)
+            = unpack_sockaddr_in(getsockname($socket_two));
+        is($port_two, 5500,
+            q[   ...we could accept connections on port 5500...]);
+        is($packed_ip_two, inet_aton(q[127.0.0.1]),
+            q[   ...if we were open to the outside world.]);
+        is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, q[fdsa]),
+            undef, q[ReuseAddr requires a bool value...]);
+        is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 100),
+            undef, q[   ...take two.]);
+        is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, q[fdsa]),
+            undef, q[ReusePort requires a bool value... [Disabled]]);
+        is(Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, 100),
+            undef, q[   ...take two.]);
+        warn(q[ [Alpha] __socket_open() and new() accept textual]);
+        warn(q[         hostnames (localhost, ganchan.somewhere.net, etc.)]);
+        warn(q[         which are automatically resolved.]);
         isa_ok(Net::BitTorrent::__socket_open(q[localhost], 5500, 1, 1),
                q[GLOB],
                q[__socket_open(q[localhost], 5500, 1, 1) [Undocumented]]

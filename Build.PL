@@ -11,9 +11,10 @@ $|++;
 # http://cpantest.grango.org/wiki/CPANAuthorNotes
 my $automated_testing = $ENV{q[AUTOMATED_TESTING]}
     || $ENV{q[PERL_MM_USE_DEFAULT]};
-my $okay_tcp = okay_tcp();
-my $okay_udp = okay_udp();
-my $verbose  = grep {m[^-v$]i} @ARGV;
+my $is_developer = ((-d q[.svn]) ? 1 : 0) or ($ENV{RELEASE_TESTING} ? 1 : 0);
+my $okay_tcp     = okay_tcp();
+my $okay_udp     = okay_udp();
+my $verbose = grep {m[^-v$]i} @ARGV;    # see M:B::API's args()
 my @tests;
 find \&find_cb, sort qw[t/000_miniswarm/ t/700_classes/];
 
@@ -44,7 +45,7 @@ my $mb = Module::Build->new(
     license     => q[artistic_2],        # requires MB 0.2808_01 or better
     dist_author       => q[Sanko Robinson <sanko@cpan.org>],
     dist_abstract     => q[BitTorrent peer-to-peer protocol],
-    dist_version_from => q[lib/Net/BitTorrent.pm],
+    dist_version_from => q[lib/Net/BitTorrent/Version.pm],
     build_requires    => {
                q[Module::Build] => 0.30,        # dev on 0.30
                                                 # min 0.2808_01 for artistic_2
@@ -97,10 +98,17 @@ my $mb = Module::Build->new(
 $mb->notes(okay_tcp          => $okay_tcp);
 $mb->notes(okay_udp          => $okay_udp);
 $mb->notes(automated_testing => $automated_testing);
-$mb->notes(release_testing   => ($ENV{RELEASE_TESTING}?1:0));
+$mb->notes(release_testing   => $is_developer);
 $mb->notes(verbose           => $verbose);
 $mb->notes(test_suite        => \@tests);
 $mb->notes(gmtime            => gmtime);
+
+# M::B is lazy and leaves this file behind on Win32 but it needs that to wrap
+# things up...
+# $mb->add_to_cleanup(qw[./Build.bat]);
+# I'm lazy and... well... yeah...
+$mb->fix_shebang_line(@tests);
+$mb->fix_shebang_line(@{($mb->rscan_dir(q[./lib], qr/\.pm$/))[0]});
 
 # Break it off, let's go.
 $mb->create_build_script;
