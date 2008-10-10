@@ -50,12 +50,11 @@ BEGIN {
 #
 SKIP: {
 
-#     skip(
-#~         q[Fine grained regression tests skipped; turn on $ENV{RELESE_TESTING} to enable],
-#~         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
-#~     ) if not $release_testing;
-#
-#
+     skip(
+         q[Fine grained regression tests skipped; turn on $ENV{RELESE_TESTING} to enable],
+         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+     ) if not $release_testing;
+
     skip(q[Socket-based tests have been disabled.],
          ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
     ) if not $okay_tcp;

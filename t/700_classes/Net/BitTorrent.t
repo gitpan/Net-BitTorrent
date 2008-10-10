@@ -20,6 +20,7 @@ chdir q[../../../] if not -f $simple_dot_torrent;
 #
 my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
+my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
 $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
@@ -103,10 +104,16 @@ SKIP: {
         q[Retrying Net::BitTorrent::__socket_open(q[127.0.0.1], 5500) returns undef...]
     );
 TODO: {
+        eval {
+            $socket_two
+                = Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, 1);
+        };
+        todo_skip
+            q[Undocumented stuff may fail. ...that's why it's undocumented.],
+            8
+            if not defined $socket_two;
         local $TODO
             = q[Undocumented stuff may fail. ...that's why it's undocumented.];
-        $socket_two
-            = Net::BitTorrent::__socket_open(q[127.0.0.1], 5500, 1, 1);
         isa_ok(
             $socket_two,
             q[GLOB],
@@ -252,8 +259,9 @@ TODO: {
         undef, sprintf q[new({LocalPort => %d}) (Attempt to reuse port)],
         $client->_port);
 TODO: {
-        local $TODO
-            = q[Undocumented stuff may fail. ...that's why it's undocumented.];
+        todo_skip
+            q[Undocumented stuff may fail. ...that's why it's undocumented.],
+            2;
         is( Net::BitTorrent->new(
                       {LocalPort => $client->_port, LocalAddr => q[127.0.0.1]}
             ),
@@ -334,59 +342,70 @@ TODO: {
     #use Data::Dump qw[pp];
     #use Devel::FindRef;warn Devel::FindRef::track $client;
     #
-TODO: {
-        local $TODO
-            = q[Undocumented stuff may fail. ...that's why it's undocumented.];
-        is($client->_dht,     undef, q[DHT is disabled by default]);
-        is($client->_use_dht, undef, q[_use_dht() needs a parameter]);
-        is($client->_use_dht(), undef,
-            q[_use_dht() needs a parameter (round two)]);
-        is($client->_dht, undef, q[DHT is still disabled]);
-        ok($client->_use_dht(1), q[DHT has been enabled]);
-        isa_ok($client->_dht, q[Net::BitTorrent::DHT], q[DHT is active]);
-        is(scalar(keys %{$client->_connections}),
-            2, q[Check list of _connections() == 2]);
-        is_deeply($client->_connections,
-                  {fileno($client->_socket) => {Mode   => q[ro],
-                                                Object => $client
-                   },
-                   fileno($client->_dht->_socket) => {Mode   => q[ro],
-                                                      Object => $client->_dht
-                   }
-                  },
-                  q[_sockets() returns the dht object and the client itself]
-        );
-        is($client->_use_dht(1), undef, q[DHT is already enabled]);
-        isa_ok($client->_dht, q[Net::BitTorrent::DHT],
-               q[DHT is still active]);
-        ok($client->_use_dht(0), q[DHT has been disabled]);
-        is($client->_dht, undef, q[DHT is disabled]);
-        is(scalar(keys %{$client->_connections}),
-            1, q[Check list of _connections() == 1]);
-        is_deeply($client->_connections,
-                  {fileno($client->_socket) => {Mode   => q[ro],
-                                                Object => $client
-                   },
-                  },
-                  q[_sockets() returns the dht object and the client itself]
-        );
-        is($client->_use_dht(0), undef, q[DHT has been disabled (round two)]);
-        is($client->_dht,        undef, q[DHT is disabled (round two)]);
-        ok($client->_use_dht(1), q[DHT has been enabled (round three?)]);
-        isa_ok($client->_dht, q[Net::BitTorrent::DHT],
-               q[DHT is active (round three?)]);
-        is(scalar(keys %{$client->_connections}),
-            2, q[Check list of _connections() == 2]);
-        is_deeply($client->_connections,
-                  {fileno($client->_socket) => {Mode   => q[ro],
-                                                Object => $client
-                   },
-                   fileno($client->_dht->_socket) => {Mode   => q[ro],
-                                                      Object => $client->_dht
-                   }
-                  },
-                  q[_sockets() returns the dht object and the client itself]
-        );
+SKIP: {
+    TODO: {
+
+  #todo_skip q[Undocumented stuff may fail. ...that's why it's undocumented.],
+  #    20;
+            skip(q[UDP-based tests have been disabled.],
+                 (      $test_builder->{q[Expected_Tests]}
+                      - $test_builder->{q[Curr_Test]}
+                 )
+            ) if not $okay_udp;
+            is($client->_dht,     undef, q[DHT is disabled by default]);
+            is($client->_use_dht, undef, q[_use_dht() needs a parameter]);
+            is($client->_use_dht(), undef,
+                q[_use_dht() needs a parameter (round two)]);
+            is($client->_dht, undef, q[DHT is still disabled]);
+            ok($client->_use_dht(1), q[DHT has been enabled]);
+            isa_ok($client->_dht, q[Net::BitTorrent::DHT], q[DHT is active]);
+            is(scalar(keys %{$client->_connections}),
+                2, q[Check list of _connections() == 2]);
+            is_deeply($client->_connections,
+                      {fileno($client->_socket) => {Mode   => q[ro],
+                                                    Object => $client
+                       },
+                       fileno($client->_dht->_socket) => {
+                                                       Mode   => q[ro],
+                                                       Object => $client->_dht
+                       }
+                      },
+                      q[_sockets() returns the dht object and the client itself]
+            );
+            is($client->_use_dht(1), undef, q[DHT is already enabled]);
+            isa_ok($client->_dht, q[Net::BitTorrent::DHT],
+                   q[DHT is still active]);
+            ok($client->_use_dht(0), q[DHT has been disabled]);
+            is($client->_dht, undef, q[DHT is disabled]);
+            is(scalar(keys %{$client->_connections}),
+                1, q[Check list of _connections() == 1]);
+            is_deeply($client->_connections,
+                      {fileno($client->_socket) => {Mode   => q[ro],
+                                                    Object => $client
+                       },
+                      },
+                      q[_sockets() returns the dht object and the client itself]
+            );
+            is($client->_use_dht(0), undef,
+                q[DHT has been disabled (round two)]);
+            is($client->_dht, undef, q[DHT is disabled (round two)]);
+            ok($client->_use_dht(1), q[DHT has been enabled (round three?)]);
+            isa_ok($client->_dht, q[Net::BitTorrent::DHT],
+                   q[DHT is active (round three?)]);
+            is(scalar(keys %{$client->_connections}),
+                2, q[Check list of _connections() == 2]);
+            is_deeply($client->_connections,
+                      {fileno($client->_socket) => {Mode   => q[ro],
+                                                    Object => $client
+                       },
+                       fileno($client->_dht->_socket) => {
+                                                       Mode   => q[ro],
+                                                       Object => $client->_dht
+                       }
+                      },
+                      q[_sockets() returns the dht object and the client itself]
+            );
+        }
     }
 }
 

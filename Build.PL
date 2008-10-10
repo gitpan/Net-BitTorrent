@@ -59,7 +59,7 @@ my $mb = Module::Build->new(
                  q[File::Path]    => 0,           # dev on 2.04
                  q[File::Spec]    => 0,           # dev on 3.2701
                  q[Module::Build] => 0.30,        # dev on 0.30
-                 q[perl]          => 5.008001,    # dev on 5.11
+                 q[perl]          => q[5.8.1],    # dev on 5.11
                  q[Scalar::Util]  => 1.19,        # dev on 1.19
                  q[Socket]        => 1.77,        # dev on 1.80
                  q[Time::HiRes]   => 0,           # dev on 1.9712
@@ -71,7 +71,7 @@ my $mb = Module::Build->new(
              #q[Data::Dump] => 0,              # _should_ be core...
         ($^O eq q[MSWin32]
          ? (q[Encode] => 0,
-            q[perl]   => 5.008007,
+            q[perl]   => q[5.8.7],
             q[utf8]   => 0,          # utf8::is_utf8 internal as of Perl 5.8.1
             q[Win32]  => 0,
             q[Win32API::File] => 0.10,

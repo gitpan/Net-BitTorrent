@@ -128,8 +128,8 @@ SKIP: {
            q[Requires a blessed 'Client' object (3)]
     );
 TODO: {
-        local $TODO
-            = q[Undocumented stuff may fail. ...that's why it's undocumented.];
+        todo_skip q[Undocumented stuff may fail. ...that's why it's undocumented.],
+            2;
 
         # Undocumented BlockLength parameter tests
         isa_ok(Net::BitTorrent::Session->new({Path   => $simple_dot_torrent,

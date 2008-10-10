@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Module::Build;
+    use Test::More;
 
 #
 use lib q[../../../../../lib];
@@ -22,11 +23,12 @@ chdir q[../../../../../] if not -f $simple_dot_torrent;
 my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
+my $verbose         = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 BEGIN {
-    use Test::More;
-    plan tests => 140;
+     plan tests => 140;
     use_ok(q[File::Temp], qw[tempfile tempdir]);
     use_ok(q[File::Spec]);
     use_ok(q[Net::BitTorrent::Session::File]);
@@ -96,14 +98,13 @@ SKIP: {
     );
 
     #
-    diag(q[Testing Net::BitTorrent::Session::File]);
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
     my ($filehandle, $filename) = tempfile(DIR => $tempdir);
-    diag(sprintf(q[ File::Temp created '%s' for us to play with], $filename));
+    warn(sprintf(q[ File::Temp created '%s' for us to play with], $filename));
 
     #
-    diag(q[Net::BitTorrent::Session::File->new() requires parameters...]);
+    warn(q[Net::BitTorrent::Session::File->new() requires parameters...]);
     is(Net::BitTorrent::Session::File->new(),
         undef, q[Net::BitTorrent::Session::File->new( )]);
     is( Net::BitTorrent::Session::File->new(Path => $filename),
@@ -209,7 +210,7 @@ SKIP: {
                                             }
         );
     isa_ok($file, q[Net::BitTorrent::Session::File], q[Path => ] . $filename);
-    diag(q[Check all sorts of stuff...]);
+    warn(q[Check all sorts of stuff...]);
     is($file->priority, 2, q[   ...priority() defaults to 2]);
     is($file->set_priority(), undef,
         q[   ...set_priority() requires a parameter]);
@@ -285,7 +286,7 @@ SKIP: {
         ;                                                         # 0 but true
     ok($file->_close(), q[Close the file]);
     is($file->_systell(), undef, q[Cannot seek on a closed file]);
-    diag(q[TODO: systell wence param]);
+    warn(q[TODO: systell wence param]);
 
     #
     ok($file->_open(q[r]), q['r' opens the file for read]);
@@ -298,7 +299,7 @@ SKIP: {
     ok($file->_mkpath, q[mkpath]);
 
     #
-    diag(q[Testing utf8 handling...]);
+    warn(q[Testing utf8 handling...]);
 SKIP: {
         skip(sprintf(q[Requires perl 5.8.1 or better; you have v%vd], $^V),
              10)
@@ -349,7 +350,7 @@ SKIP: {
         is($utf8_file->_read(15), undef, q[Cannot read from closed file]);
 
         #
-        diag(q[TODO: check if file actually exists]);
+        warn(q[TODO: check if file actually exists]);
     }
 }
 

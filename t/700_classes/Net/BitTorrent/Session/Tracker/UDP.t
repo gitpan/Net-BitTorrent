@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Module::Build;
+    use Test::More;
 
 #
 use lib q[../../../../../../lib];
@@ -20,13 +21,14 @@ chdir q[../../../../../../] if not -f $simple_dot_torrent;
 my $build           = Module::Build->current;
 my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
+my $verbose         = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 my ($flux_capacitor, %peers) = (0, ());
 
 #
 BEGIN {
-    use Test::More;
     plan tests => 4;
 
     # Ours
@@ -35,7 +37,7 @@ BEGIN {
 
     # Mine
     use_ok(q[Net::BitTorrent]);
-    use_ok(q[Net::BitTorrent::Session]);
+    use_ok(q[Net::BitTorrent::Session::Tracker::UDP]);
 }
 SKIP: {
 
@@ -47,7 +49,7 @@ SKIP: {
 #
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
-    diag(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
+    warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
     my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
     if (!$client) {
         diag(sprintf q[Socket error: [%d] %s], $!, $!);

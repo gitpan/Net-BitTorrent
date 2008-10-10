@@ -31,6 +31,7 @@ t/700_classes/Net/BitTorrent/Session/Tracker.t
 t/700_classes/Net/BitTorrent/Session/Tracker/HTTP.t
 t/700_classes/Net/BitTorrent/Session/Tracker/UDP.t
 t/700_classes/Net/BitTorrent/Util.t
+t/700_classes/Net/BitTorrent/Version.t
 t/900_data/910_scripts/TCP-talk-to-ourself.pl
 t/900_data/910_scripts/UDP-talk-to-ourself.pl
 t/900_data/930_miniswarm/seed/1291672777_30adc6a421_o.jpg
