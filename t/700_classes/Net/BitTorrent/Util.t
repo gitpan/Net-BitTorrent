@@ -18,9 +18,10 @@ my $simple_dot_torrent = q[./t/900_data/950_torrents/953_miniswarm.torrent];
 chdir q[../../../../] if not -f $simple_dot_torrent;
 
 #
-my $build           = Module::Build->current;
-my $okay_tcp        = $build->notes(q[okay_tcp]);
-my $release_testing = $build->notes(q[release_testing]);
+my $build    = Module::Build->current;
+my $okay_tcp = $build->notes(q[okay_tcp]);
+my $verbose  = $build->notes(q[verbose]);
+$SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 
 #
 $|++;
@@ -214,4 +215,4 @@ SKIP: {
     #    qq[\x7F\0\0\1\23\x88], q[large port number] );
 }
 
-# $Id$
+# $Id: Util.t 29 2008-10-11 15:19:36Z sanko@cpan.org $

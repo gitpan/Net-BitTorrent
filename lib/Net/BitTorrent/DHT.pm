@@ -11,17 +11,19 @@ package Net::BitTorrent::DHT;
     use lib q[../../../lib/];
     use Net::BitTorrent::Util qw[:log :bencode :compact];
     use Net::BitTorrent::DHT::Node;
+    use Net::BitTorrent::Version;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: DHT.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     # Debugging
     #use Data::Dump qw[pp];
     {
         my (%socket, %_client, %fileno, %tid, %outstanding_queries);
-        my (%node_id, %routing_table, %backup_nodes, %extra);
+        my (%node_id, %routing_table, %nodes, %extra);
+        my %REGISTRY;
 
         #
         sub new {
@@ -44,15 +46,7 @@ package Net::BitTorrent::DHT;
                     =~ m[^(?:(?:(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2})[.]?){4})$];
             if (defined $args->{q[Client]}
                 and $args->{q[Client]}->isa(q[Net::BitTorrent]))
-            {   my $node_id = sha1(
-                    (join(
-                         q[],
-                         map {
-                             [q[a] .. q[z], q[A] .. q[Z]]->[rand(52)]
-                             } 1 .. 300
-                     )
-                    )
-                );
+            {   my $node_id = Net::BitTorrent::Version->gen_node_id();
                 $self = bless \$node_id, $class;
                 $_client{refaddr $self} = $args->{q[Client]};
                 weaken $_client{refaddr $self};
@@ -63,8 +57,8 @@ package Net::BitTorrent::DHT;
                 );
                 $node_id{refaddr $self}       = $node_id;
                 $routing_table{refaddr $self} = {};
-                $backup_nodes{refaddr $self}  = q[];
-                $tid{refaddr $self}           = qq[\0] x 5;    # 26^5 before rollover
+                $nodes{refaddr $self} = q[];
+                $tid{refaddr $self} = qq[\0] x 5;    # 26^5 before rollover
                 $_client{refaddr $self}->_schedule(
                                           {Code   => sub { shift->_pulse() },
                                            Time   => time,
@@ -72,6 +66,11 @@ package Net::BitTorrent::DHT;
                                           }
                 );
             }
+
+            #
+            weaken($REGISTRY{refaddr $self} = $self);
+
+            #
             return $self;
         }
 
@@ -126,25 +125,21 @@ package Net::BitTorrent::DHT;
             my $ip = gethostbyaddr($packed_ip, AF_INET);
 
             #$_client{refaddr $self}->_remove_connection($self);
-            $_client{refaddr $self}->_add_connection($self, q[ro]) or return;
             return ($_socket, inet_ntoa($packed_ip), $_port);
         }
 
         # Accessors | Private
         sub _client {
             return if defined $_[1];
-            return $_client{refaddr +$_[0]};
+            return $_client{refaddr + $_[0]};
         }
 
         sub _routing_table {
             return if defined $_[1];
-            return $routing_table{refaddr +$_[0]};
+            return $routing_table{refaddr + $_[0]};
         }
 
-        sub _socket {
-            return if defined $_[1];
-            return $socket{refaddr +$_[0]};
-        }
+        sub _socket { my ($self) = @_; return $socket{refaddr $self}; }
 
         sub _queue_outgoing {    # no-op
             return if defined $_[1];
@@ -153,27 +148,46 @@ package Net::BitTorrent::DHT;
 
         sub _port {
             return                if defined $_[1];
-            $_[0]->_open_socket() if not $socket{refaddr +$_[0]};
-            return                if not $socket{refaddr +$_[0]};
+            $_[0]->_open_socket() if not $socket{refaddr + $_[0]};
+            return                if not $socket{refaddr + $_[0]};
             my ($_port, undef)
-                = unpack_sockaddr_in(getsockname($socket{refaddr +$_[0]}));
+                = unpack_sockaddr_in(getsockname($socket{refaddr + $_[0]}));
             return $_port;
         }
 
         sub _host {
             return                if defined $_[1];
-            $_[0]->_open_socket() if not $socket{refaddr +$_[0]};
-            return                if not $socket{refaddr +$_[0]};
+            $_[0]->_open_socket() if not $socket{refaddr + $_[0]};
+            return                if not $socket{refaddr + $_[0]};
             my (undef, $addr)
-                = unpack_sockaddr_in(getsockname($socket{refaddr +$_[0]}));
+                = unpack_sockaddr_in(getsockname($socket{refaddr + $_[0]}));
             return inet_ntoa($addr);
         }
-
+ sub _compact_nodes {
+            return if defined $_[1];
+            return $nodes{refaddr + $_[0]};
+        }
         # Accesors | Public
         sub node_id {
             return if defined $_[1];
-            return $node_id{refaddr +$_[0]};
+            return $node_id{refaddr + $_[0]};
         }
+
+
+        # Setters | Private
+        sub _set_node_id { # XXX - untested
+            return if not defined $_[1];
+            return $node_id{refaddr + $_[0]} = $_[1];
+        }
+
+         sub _append_compact_nodes { # XXX - untested
+        my ($self, $nodes) = @_;
+        return if not defined $_client{refaddr $self};
+        if (not $nodes) { return; }
+        $nodes{refaddr $self} ||= q[];
+        return $nodes{refaddr $self}
+            = compact(uncompact($nodes{refaddr $self} . $nodes));
+    }
 
         # Methods | Private
         sub _pulse {
@@ -190,18 +204,21 @@ package Net::BitTorrent::DHT;
             }
             {    # get rid of old, useless DHT nodes...
                 my @expired_nodes = grep {
-                    my $timestamp = $routing_table{refaddr $self}{$_}->_last_seen;
+                    my $timestamp
+                        = $routing_table{refaddr $self}{$_}->_last_seen;
                     ($timestamp < (time - (60 * 30)))
                         or ($timestamp < (time - (60 * 5))
-                         and (not defined $routing_table{refaddr $self}{$_}->node_id))
+                            and (not defined $routing_table{refaddr $self}{$_}
+                                 ->node_id)
+                        )
                 } keys %{$routing_table{refaddr $self}};
                 for my $node (@expired_nodes) {
 
-                    #$backup_nodes{refaddr $self} .=
-                    #    compact(sprintf(q[%s:%s],
-                    #                    $routing_table{refaddr $self}{$node}->host,
-                    #                    $routing_table{refaddr $self}{$node}->port)
-                    #    );
+              #$nodes{refaddr $self} .=
+              #    compact(sprintf(q[%s:%s],
+              #                    $routing_table{refaddr $self}{$node}->host,
+              #                    $routing_table{refaddr $self}{$node}->port)
+              #    );
                     delete $routing_table{refaddr $self}{$node};
                 }
             }
@@ -214,10 +231,11 @@ package Net::BitTorrent::DHT;
                     next NODE;
                 }
             }
-            $_client{refaddr $self}->_schedule({Code   => sub { shift->_pulse },
-                                        Time   => time + 30,
-                                        Object => $self
-                                       }
+            $_client{refaddr $self}->_schedule(
+                                            {Code => sub { shift->_pulse },
+                                             Time   => time + 30,
+                                             Object => $self
+                                            }
             );
             return;
         }
@@ -253,8 +271,11 @@ package Net::BitTorrent::DHT;
             {   carp q[Cannot send packet to ourself!];
                 return;
             }
-            if (not send($socket{refaddr $self}, $args->{q[packet]},
-                         0,              $args->{q[node]}->_packed_host)
+            if (not send($socket{refaddr $self},
+                         $args->{q[packet]},
+                         0,
+                         $args->{q[node]}->_packed_host
+                )
                 )
             {   carp sprintf q[Cannot send %d bytes to %s: [%d] %s],
                     length($args->{q[packet]}), $args->{q[node]}->node_id,
@@ -270,8 +291,8 @@ package Net::BitTorrent::DHT;
                                            type      => $args->{q[type]},
                                            args      => $args
                 };
-                weaken $outstanding_queries{refaddr $self}{$args->{q[t]}}{q[args]}
-                    {q[node]};
+                weaken $outstanding_queries{refaddr $self}{$args->{q[t]}}
+                    {q[args]}{q[node]};
             }
 
             #
@@ -290,7 +311,8 @@ package Net::BitTorrent::DHT;
             return if not $read;
             $self->_open_socket() if not defined $socket{refaddr $self};
             my ($actual_read) = 0;
-            my $packed_host = recv($socket{refaddr $self}, my ($_data), $read, 0);
+            my $packed_host
+                = recv($socket{refaddr $self}, my ($_data), $read, 0);
             if (defined $packed_host) {
                 $actual_read = length $_data;
                 my ($packet, $leftover)
@@ -354,12 +376,12 @@ package Net::BitTorrent::DHT;
                         );
                         if (defined $packet->{q[r]}) {
 
-                       #use Data::Dumper;
-                       #warn qq[DHT Reply:\n]
-                       #        . Data::Dumper->Dump(
-                       #        [$packet,
-                       #        $outstanding_queries{refaddr $self}{$packet->{q[t]}}],
-                       #                             [qw[packet for]]);
+               #use Data::Dumper;
+               #warn qq[DHT Reply:\n]
+               #        . Data::Dumper->Dump(
+               #        [$packet,
+               #        $outstanding_queries{refaddr $self}{$packet->{q[t]}}],
+               #                             [qw[packet for]]);
                             if (defined $outstanding_queries{refaddr $self}
                                 {$packet->{q[t]}})
                             {   my $type = $outstanding_queries{refaddr $self}
@@ -371,11 +393,11 @@ package Net::BitTorrent::DHT;
                                     require Data::Dumper;
                                     die qq[Unhandled DHT Reply:\n]
                                         . Data::Dumper->Dump(
-                                               [$packet,
-                                                $outstanding_queries{refaddr $self}
-                                                    {$packet->{q[t]}}
-                                               ],
-                                               [qw[packet for]]
+                                        [   $packet,
+                                            $outstanding_queries{refaddr $self}
+                                                {$packet->{q[t]}}
+                                        ],
+                                        [qw[packet for]]
                                         );
                                 }
                                 delete $outstanding_queries{refaddr $self}
@@ -402,20 +424,22 @@ package Net::BitTorrent::DHT;
             return if defined $_[1];
             my ($self) = @_;
             my ($len) = ($tid{refaddr $self} =~ m[^([a-z]+)]);
-            $tid{refaddr $self} = (($tid{refaddr $self} =~ m[^z*(\0*)$])
-                           ? ($tid{refaddr $self} =~ m[\0]
-                              ? pack(q[a] . (length $tid{refaddr $self}),
-                                     (q[a] x (length($len || q[]) + 1))
-                                  )
-                              : (q[a] . (qq[\0] x (length($tid{refaddr $self}) - 1)))
-                               )
-                           : ++$tid{refaddr $self}
+            $tid{refaddr $self} = (
+                    ($tid{refaddr $self} =~ m[^z*(\0*)$])
+                    ? ($tid{refaddr $self} =~ m[\0]
+                       ? pack(q[a] . (length $tid{refaddr $self}),
+                              (q[a] x (length($len || q[]) + 1))
+                           )
+                       : (q[a] . (qq[\0] x (length($tid{refaddr $self}) - 1)))
+                        )
+                    : ++$tid{refaddr $self}
             );
             return $tid{refaddr $self};
         }
 
         sub _add_node {
             my ($self, $node) = @_;
+            $self->_append_compact_nodes(compact($node));
             if (scalar(keys %{$routing_table{refaddr $self}}) < 300)
             {    # xxx - make this max variable
                 my ($host, $port) = split q[:], $node, 2;
@@ -430,7 +454,7 @@ package Net::BitTorrent::DHT;
                                               }
                     );
             }
-            return $backup_nodes{refaddr $self} .= compact($node);
+            return;
         }
 
         sub _disconnect {    # noop
@@ -444,20 +468,41 @@ package Net::BitTorrent::DHT;
             return $dump;
         }
 
-        #
+        sub CLONE {
+            for my $_oID (keys %REGISTRY) {
+
+                #  look under oID to find new, cloned reference
+                my $_obj = $REGISTRY{$_oID};
+                my $_nID = refaddr $_obj;
+
+                #  relocate data
+                for (@CONTENTS) {
+                    $_->{$_nID} = $_->{$_oID};
+                    delete $_->{$_oID};
+                }
+
+                # do some silly stuff to avoid user mistakes
+                #weaken($_client{$_nID} = $_client{$_oID});
+                weaken $_client{$_nID};
+                delete $outstanding_queries{$_nID};
+
+                #  update he weak refernce to the new, cloned object
+                weaken($REGISTRY{$_nID} = $_obj);
+                delete $REGISTRY{$_oID};
+            }
+            return 1;
+        }
+
+        # Destructor
         DESTROY {
             my ($self) = @_;
 
-            #
-            delete $socket{refaddr $self};
-            delete $fileno{refaddr $self};
-            delete $node_id{refaddr $self};
-            delete $_client{refaddr $self};
-            delete $tid{refaddr $self};
-            delete $routing_table{refaddr $self};
-            delete $backup_nodes{refaddr $self};
-            delete $outstanding_queries{refaddr $self};
-            delete $extra{refaddr $self};
+            #warn q[Goodbye, ] . $$self;
+            # Clean all data
+            for (@CONTENTS) {
+                delete $_->{refaddr $self};
+            }
+            delete $REGISTRY{refaddr $self};
 
             #
             return 1;
@@ -536,6 +581,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
+=for svn $Id: DHT.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
 
 =cut

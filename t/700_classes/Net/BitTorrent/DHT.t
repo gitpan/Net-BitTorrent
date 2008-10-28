@@ -85,4 +85,4 @@ SKIP: {
     #
 }
 
-# $Id$
+# $Id: DHT.t 29 2008-10-11 15:19:36Z sanko@cpan.org $

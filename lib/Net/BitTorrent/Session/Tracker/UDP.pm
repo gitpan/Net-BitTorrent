@@ -5,16 +5,18 @@ package Net::BitTorrent::Session::Tracker::UDP;
     use warnings;    # core as of perl 5.006
 
     #
-    use Carp qw[carp];                      # core as of perl 5
+    use Carp qw[carp];                              # core as of perl 5
     use Scalar::Util qw[blessed weaken refaddr];    # core since perl 5.007003
-                                            #
-    use version qw[qv];                     # core as of 5.009
-    our $SVN = q[$Id: UDP.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+                                                    #
+    use version qw[qv];                             # core as of 5.009
+    our $SVN = q[$Id: UDP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
-    my (%url, %tier);                       # param to new()
-    my (%socket);
+    my (@CONTENTS) = \my (
+                  %url, %tier,                                # param to new()
+                  %socket);
+    my %REGISTRY;
 
     #
     sub new {
@@ -51,6 +53,7 @@ package Net::BitTorrent::Session::Tracker::UDP;
         $url{refaddr $self}  = $args->{q[URL]};
         $tier{refaddr $self} = $args->{q[Tier]};
         weaken $tier{refaddr $self};
+        weaken($REGISTRY{refaddr $self} = $self);
 
         #
         return $self;
@@ -74,14 +77,40 @@ package Net::BitTorrent::Session::Tracker::UDP;
         return $dump;
     }
 
-    #
+    sub CLONE {
+        for my $_oID (keys %REGISTRY) {
+
+            #  look under oID to find new, cloned reference
+            my $_obj = $REGISTRY{$_oID};
+            my $_nID = refaddr $_obj;
+
+            #  relocate data
+            for (@CONTENTS) {
+                $_->{$_nID} = $_->{$_oID};
+                delete $_->{$_oID};
+            }
+
+            # do some silly stuff to avoid user mistakes
+            #weaken($_client{$_nID} = $_client{$_oID});
+            weaken tier {$_nID};
+
+            #  update he weak refernce to the new, cloned object
+            weaken($REGISTRY{$_nID} = $_obj);
+            delete $REGISTRY{$_oID};
+        }
+        return 1;
+    }
+
+    # Destructor
     DESTROY {
         my ($self) = @_;
 
-        #
-        delete $tier{refaddr $self};
-        delete $url{refaddr $self};
-        delete $socket{refaddr $self};
+        #warn q[Goodbye, ] . $$self;
+        # Clean all data
+        for (@CONTENTS) {
+            delete $_->{refaddr $self};
+        }
+        delete $REGISTRY{refaddr $self};
 
         #
         return 1;
@@ -142,6 +171,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
+=for svn $Id: UDP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
 
 =cut

@@ -11,8 +11,8 @@ package Net::BitTorrent::Util;
     #
     #
     use version qw[qv];                        # core as of 5.009
-    our $SVN = q[$Id: Util.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 28 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Util.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use vars                                   # core as of perl 5.002
@@ -99,8 +99,8 @@ package Net::BitTorrent::Util;
             while ($leftover and $leftover !~ s|^e||s) {
                 my ($key, $value);
                 ($key,   $leftover) = bdecode($leftover);
-                ($value, $leftover) = bdecode($leftover);
-                $return->{$key} = $value;
+                ($value, $leftover) = bdecode($leftover) if $leftover;
+                $return->{$key} = $value if defined $key;
             }
             return wantarray ? (\%$return, $leftover) : \%$return;
         }
@@ -269,6 +269,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 28 2008-09-26 22:47:04Z sanko@cpan.org $
+=for svn $Id: Util.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
 
 =cut

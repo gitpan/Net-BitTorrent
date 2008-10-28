@@ -84,6 +84,10 @@ Parts that aren't handled internally are described here with sample code
 to get you started.  In the future, this will probably be in a separate
 pod.
 
+=head2 Get basic info from a.torrent without adding it to a client
+
+[TODO]
+
 =head2 Pause and Resume a .torrent Session
 
 [TODO]
@@ -672,6 +676,6 @@ jurisdiction).
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Notes.pod 28 2008-09-26 22:47:04Z sanko@cpan.org $
+=for svn $Id: Notes.pod 29 2008-10-11 15:19:36Z sanko@cpan.org $
 
 =cut

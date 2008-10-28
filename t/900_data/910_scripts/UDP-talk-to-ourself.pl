@@ -1,5 +1,5 @@
 #!perl -w
-# $Id$
+# $Id: UDP-talk-to-ourself.pl 29 2008-10-11 15:19:36Z sanko@cpan.org $
 # Stolen from IO
 use strict;
 use warnings;

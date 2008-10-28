@@ -683,4 +683,4 @@ SKIP: {
     is(parse_packet(\$blah_3), undef, q[Bad/unknown packet]);
 }
 
-# $Id$
+# $Id: Protocol.t 29 2008-10-11 15:19:36Z sanko@cpan.org $
