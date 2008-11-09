@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe 
+#!C:\perl\bin\perl.exe
 package Net::BitTorrent::Version;
 {
     use strict;
@@ -6,8 +6,8 @@ package Net::BitTorrent::Version;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: Version.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 6; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Version.pm 31 2008-11-01 17:22:17Z sanko@cpan.org $];
+    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 7; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent/$VERSION ($^O)];    # ext protocol
 
     sub gen_peerid {
@@ -15,7 +15,7 @@ package Net::BitTorrent::Version;
             q[a20],
             (sprintf(
                  q[NB%03d%1s-%8s%5s],
-                 $VERSION_BASE,      # formerly: (q[$Rev: 29 $] =~ m[(\d+)]g),
+                 $VERSION_BASE,      # formerly: (q[$Rev: 31 $] =~ m[(\d+)]g),
                  ($UNSTABLE_RELEASE ? q[U] : q[S]),
                  (join q[],
                   map {
@@ -136,7 +136,7 @@ See the PAUSE FAQ section entitled "Developer Releases"
 This would be the stable CPAN release C<v0.393>/SVN r393.  The C<--SVN>
 signature does not imply an unstable build.
 
-=item C<NB003X-9E-ayR6-I<lt>3BTE>
+=item C<NB003X-9E-ayR6-I<lt>3BT>
 
 Improper Peer ID; the sixth char is neither 'C<S>' nor 'C<U>'.
 
@@ -188,6 +188,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Version.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Version.pm 31 2008-11-01 17:22:17Z sanko@cpan.org $
 
 =cut

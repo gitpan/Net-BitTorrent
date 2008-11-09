@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe 
+#!C:\perl\bin\perl.exe
 package Net::BitTorrent::Protocol;
 {
     use strict;      # core as of perl 5
@@ -13,8 +13,8 @@ package Net::BitTorrent::Protocol;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: Protocol.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Protocol.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use vars               # core as of perl 5.002
@@ -447,8 +447,9 @@ package Net::BitTorrent::Protocol;
                        Payload => @payload
             } if @payload;
         }
-        elsif ((defined unpack(q[N], $$data)) and (unpack(q[N], $$data) =~ m[\d])) {
-            if ((unpack(q[N], $$data) <= length($$data))) {
+        elsif (    (defined unpack(q[N], $$data))
+               and (unpack(q[N], $$data) =~ m[\d]))
+        {   if ((unpack(q[N], $$data) <= length($$data))) {
                 (my ($packet_data), $$data) = unpack(q[N/aa*], $$data);
                 (my ($type), $packet_data) = unpack(q[ca*], $packet_data);
 
@@ -482,11 +483,13 @@ package Net::BitTorrent::Protocol;
                                )
                     };
                 }
-                else {
-                    require Data::Dumper;
-                    carp q[Unhandled/Unknown packet where ]
-                        . Data::Dumper->Dump([$type, $packet],
-                                             [qw[Type Packet]]);
+                elsif (eval q[require Data::Dump]) {
+                    carp sprintf <<'END',
+Unhandled/Unknown packet where:
+Type   = %s
+Packet = %s
+END
+                        Data::Dump::pp($type), Data::Dump::pp($packet);
                 }
             }
         }
@@ -1140,6 +1143,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Protocol.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

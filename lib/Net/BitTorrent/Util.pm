@@ -11,8 +11,8 @@ package Net::BitTorrent::Util;
     #
     #
     use version qw[qv];                        # core as of 5.009
-    our $SVN = q[$Id: Util.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Util.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use vars                                   # core as of perl 5.002
@@ -66,7 +66,7 @@ package Net::BitTorrent::Util;
     }
 
     sub bdecode {      # needs work
-        my($string)=@_;
+        my ($string) = @_;
         return if not defined $string;
         my ($return, $leftover);
         if (   $string =~ m[^([1-9]\d*):]s
@@ -98,7 +98,7 @@ package Net::BitTorrent::Util;
             $leftover = $1;
             while ($leftover and $leftover !~ s|^e||s) {
                 my ($key, $value);
-                ($key,   $leftover) = bdecode($leftover);
+                ($key, $leftover) = bdecode($leftover);
                 ($value, $leftover) = bdecode($leftover) if $leftover;
                 $return->{$key} = $value if defined $key;
             }
@@ -269,6 +269,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Util.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

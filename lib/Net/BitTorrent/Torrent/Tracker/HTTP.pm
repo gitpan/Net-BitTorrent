@@ -1,5 +1,5 @@
-#!C:\perl\bin\perl.exe 
-package Net::BitTorrent::Session::Tracker::HTTP;
+#!C:\perl\bin\perl.exe
+package Net::BitTorrent::Torrent::Tracker::HTTP;
 {
     use strict;      # core as of perl 5
     use warnings;    # core as of perl 5.006
@@ -20,8 +20,8 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: HTTP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (@CONTENTS) = \my (
@@ -52,7 +52,7 @@ package Net::BitTorrent::Session::Tracker::HTTP;
             carp __PACKAGE__ . q[->new() requires a 'Tier' param];
             return;
         }
-        if (not $args->{q[Tier]}->isa(q[Net::BitTorrent::Session::Tracker])) {
+        if (not $args->{q[Tier]}->isa(q[Net::BitTorrent::Torrent::Tracker])) {
             carp __PACKAGE__ . q[->new() requires a blessed Tracker 'Tier'];
             return;
         }
@@ -142,34 +142,41 @@ package Net::BitTorrent::Session::Tracker::HTTP;
         );
 
         #
-        my $infohash = $_tier{refaddr $self}->_session->infohash;
+        my $infohash = $_tier{refaddr $self}->_torrent->infohash;
         $infohash =~ s|(..)|\%$1|g;    # urlencode
         my %query_hash = (
-             q[info_hash]  => $infohash,
-             q[peer_id]    => $_tier{refaddr $self}->_client->peerid,
-             q[port]       => $_tier{refaddr $self}->_client->_port,
-             q[uploaded]   => $_tier{refaddr $self}->_session->_uploaded,
-             q[downloaded] => $_tier{refaddr $self}->_session->_downloaded,
-             q[left]       => (
-                 $_tier{refaddr $self}->_session->_piece_length * sum(
-                     split(q[],
-                           unpack(
-                               q[b*], $_tier{refaddr $self}->_session->_wanted
-                           )
-                     )
-                 )
-             ),
-             q[key]        => $^T,
-             q[numwant]    => 200,
-             q[compact]    => 1,
-             q[no_peer_id] => 1,
-             (defined($event{refaddr $self})
-              ? (q[event] => $event{refaddr $self})
-              : ()
-             )
+               q[info_hash]  => $infohash,
+               q[peer_id]    => $_tier{refaddr $self}->_client->peerid(),
+               q[port]       => $_tier{refaddr $self}->_client->_port(),
+               q[uploaded]   => $_tier{refaddr $self}->_torrent->uploaded(),
+               q[downloaded] => $_tier{refaddr $self}->_torrent->downloaded(),
+               q[left]       => (
+                   $_tier{refaddr $self}
+                       ->_torrent->raw_data->{q[info]}{q[piece length]} * sum(
+                       split(q[],
+                             unpack(
+                                   q[b*],
+                                   ($_tier{refaddr $self}->_torrent->_wanted()
+                                        || q[]
+                                   )
+                             )
+                       )
+                       )
+               ),
+               q[key]        => $^T,
+               q[numwant]    => 200,
+               q[compact]    => 1,
+               q[no_peer_id] => 1,
+               (defined($event{refaddr $self})
+                ? (q[event] => $event{refaddr $self})
+                : ()
+               )
         );
-        my $url
-            = $path
+
+        #use Data::Dump qw[pp];
+        #warn pp \%query_hash;
+        my $url 
+            = $path 
             . ($path =~ m[\?] ? q[&] : q[?])
             . (join q[&],
                map { sprintf q[%s=%s], $_, $query_hash{$_} }
@@ -194,6 +201,7 @@ package Net::BitTorrent::Session::Tracker::HTTP;
     sub _rw {
         my ($self, $read, $write, $error) = @_;
         my ($actual_read, $actual_write) = (0, 0);
+        return if not defined $_tier{refaddr $self}->_client;
 
         #
         if ($error) {
@@ -271,8 +279,8 @@ package Net::BitTorrent::Session::Tracker::HTTP;
                     {   Time => time + 30,
                         Code => sub {
                             my ($s) = @_;
-                            $_tier{refaddr$s}->_shuffle;
-                            return $_tier{refaddr$s}->_announce();
+                            $_tier{refaddr $s}->_shuffle;
+                            return $_tier{refaddr $s}->_announce();
                         },
                         Object => $self
                     }
@@ -297,7 +305,7 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
                         # XXX - cache resolve
                         $_tier{refaddr $self}
-                            ->_session->_append_compact_nodes(
+                            ->_torrent->_append_compact_nodes(
                                                            $data->{q[peers]});
                         $_tier{refaddr $self}
                             ->_set_complete($data->{q[complete]});
@@ -352,7 +360,7 @@ package Net::BitTorrent::Session::Tracker::HTTP;
     sub _as_string {
         my ($self, $advanced) = @_;
         my $dump = q[TODO];
-        return print STDERR qq[$dump\n] unless defined wantarray;
+        return print STDERR qq[$dump\n] unless wantarray;
         return $dump;
     }
 
@@ -402,7 +410,7 @@ package Net::BitTorrent::Session::Tracker::HTTP;
 
 =head1 NAME
 
-Net::BitTorrent::Session::Tracker::HTTP - Single HTTP BitTorrent Tracker
+Net::BitTorrent::Torrent::Tracker::HTTP - Single HTTP BitTorrent Tracker
 
 =head1 Constructor
 
@@ -410,7 +418,7 @@ Net::BitTorrent::Session::Tracker::HTTP - Single HTTP BitTorrent Tracker
 
 =item C<new ( [ARGS] )>
 
-Creates a C<Net::BitTorrent::Session::Tracker::HTTP> object.  This
+Creates a C<Net::BitTorrent::Torrent::Tracker::HTTP> object.  This
 constructor should not be used directly.
 
 =back
@@ -449,6 +457,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

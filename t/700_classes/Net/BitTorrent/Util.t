@@ -215,4 +215,4 @@ SKIP: {
     #    qq[\x7F\0\0\1\23\x88], q[large port number] );
 }
 
-# $Id: Util.t 29 2008-10-11 15:19:36Z sanko@cpan.org $
+# $Id: Util.t 30 2008-10-29 15:28:58Z sanko@cpan.org $

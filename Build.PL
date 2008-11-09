@@ -40,10 +40,104 @@ FTW
  ****************************************************************************
 FAIL
 
+# in expectation of future developments (combined profiling in NYTProf)
+my $class = $is_developer    #&& 0
+    ? Module::Build->subclass(class => q[Net::BitTorrent::Build],
+                              code  => <<'SUBCLASS' ) : q[Module::Build];
+    sub ACTION_profile {
+        my ($self) = @_;
+
+        print qq[...?\n];
+
+        unless (Module::Build::ModuleInfo->find_module_by_name('Devel::NYTProf')) {
+            warn(qq[Cannot run testcover action unless Devel::NYTProf is installed.\n]);
+            return;
+        }
+
+        #unless (Module::Build::ModuleInfo->find_module_by_name('Devel::Cover')) {
+        #    warn("Cannot run testcover action unless Devel::Cover is installed.\n");
+        #    return;
+        #}
+
+        $self->add_to_cleanup('nytprof.out', 'nytprof');
+        $self->depends_on('code');
+
+        # See whether any of the *.pm files have changed since last time
+        # testcover was run.  If so, start over.
+        #if (-e 'cover_db') {
+        #    my $pm_files = $self->rscan_dir
+        #        (File::Spec->catdir($self->blib, 'lib'), file_qr('\.pm$') );
+        #    my $cover_files = $self->rscan_dir('cover_db', sub {-f $_ and not /\.html$/});
+        #    $self->do_system(qw(cover -delete))
+        #        unless $self->up_to_date($pm_files,         $cover_files)
+        #            && $self->up_to_date($self->test_files, $cover_files);
+        #}
+
+        local $Test::Harness::switches    =
+        local $Test::Harness::Switches    =
+        local $ENV{HARNESS_PERL_SWITCHES} = q[-d:NYTProf];
+
+        $self->notes(profile   => 1);
+
+        $self->depends_on(q[test]);
+        $self->do_system(q[nytprofhtml --open]);
+
+        $self->notes(profile   => 0); # clean up
+    }
+
+    sub ACTION_tidy {
+        my $self = shift;
+        unless (Module::Build::ModuleInfo->find_module_by_name('Perl::Tidy')) {
+            warn(qq[Cannot run tidy action unless Perl::Tidy is installed.\n]);
+            return;
+        }
+        require Perl::Tidy;
+        my @files =
+            map { File::Spec->rel2abs(q[./] . $_) }
+                sort(values %{$self->find_pm_files},
+                    keys %{$self->script_files});
+        Perl::Tidy::perltidy(argv => <<'END' . join q[ ], @files);
+--brace-tightness=2
+--block-brace-tightness=1
+--block-brace-vertical-tightness=2
+--paren-tightness=2
+--paren-vertical-tightness=2
+--square-bracket-tightness=2
+--square-bracket-vertical-tightness=2
+--brace-tightness=2
+--brace-vertical-tightness=2
+
+--delete-old-whitespace
+--no-indent-closing-brace
+--line-up-parentheses
+--no-outdent-keywords
+--no-outdent-long-quotes
+--no-space-for-semicolon
+--swallow-optional-blank-lines
+
+--continuation-indentation=4
+--maximum-line-length=78
+
+--want-break-before='% + - * / x != == >= <= =~ !~ < > | & >= < = **= += *= &= <<= &&= -= /= |= \ >>= ||= .= %= ^= x= ? :'
+
+--standard-error-output
+--warning-output
+
+--backup-and-modify-in-place
+--backup-file-extension=tidy
+
+END
+        $self->add_to_cleanup(map{File::Spec->abs2rel($_.q[.tidy])}@files);
+        $self->depends_on(q[code]);
+        return 1;
+    }
+
+SUBCLASS
+
 #
-my $mb = Module::Build->new(
-    module_name => q[Net::BitTorrent],
-    license     => q[artistic_2],        # requires MB 0.2808_01 or better
+my $mb = $class->new(
+    module_name       => q[Net::BitTorrent],
+    license           => q[artistic_2],                      # M::B 0.2808_01+
     dist_author       => q[Sanko Robinson <sanko@cpan.org>],
     dist_abstract     => q[BitTorrent peer-to-peer protocol],
     dist_version_from => q[lib/Net/BitTorrent/Version.pm],
@@ -66,20 +160,22 @@ my $mb = Module::Build->new(
     build_requires => {q[Module::Build] => 0.30,        # dev on 0.30
                        q[Test::More]    => 0.80,        # dev on 0.80
     },
-    recommends => {
-        q[Data::Dumper] => 0,            # dev on 2.121_17|core
-        ($^O eq q[MSWin32]               # For extended charset filenames
-         ? (q[Encode]         => 0,           # dev on 2.26
-            q[perl]           => q[5.8.7],    # dev on 5.11.0
-            q[utf8]           => 0,           # dev on 1.07
-            q[Win32]          => 0,           # dev on 0.38
-            q[Win32API::File] => 0.10,        # dev on 0.1001_01
-             )
-         : ()
-        )
+    recommends => {q[Data::Dump] => 0},    # debug output
+    auto_features => {
+        win32_utf8_support => {
+            description => q[Support for Wide-char filenames on Windows],
+            requires    => {
+                         q[Encode]         => 0,           # dev on 2.26
+                         q[perl]           => q[5.8.7],    # dev on 5.11.0
+                         q[utf8]           => 0,           # dev on 1.07
+                         q[Win32]          => 0,           # dev on 0.38
+                         q[Win32API::File] => 0.10,        # dev on 0.1001_01
+            },
+        }
     },
-    test_files => \@tests,
-    meta_merge => {
+    script_files => qw[.\scripts\bittorrent.pl],
+    test_files   => \@tests,
+    meta_merge   => {
          resources => {
              bugtracker =>
                  q[http://code.google.com/p/net-bittorrent/issues/list],
@@ -105,14 +201,7 @@ $mb->notes(gmtime            => gmtime);
 $mb->notes(verbose => scalar grep {m[^v$]} keys %{$mb->args()});
 $mb->notes(threads => $Config::Config{q[useithreads]} ? 1 : 0);
 
-# M::B is lazy and leaves this file behind on Win32 but it needs that to wrap
-# things up...
-# $mb->add_to_cleanup(qw[./Build.bat]);
-# I'm lazy and... well... yeah...
-$mb->fix_shebang_line(@tests);
-$mb->fix_shebang_line(@{($mb->rscan_dir(q[./lib], qr[\.pm$]))[0]});
-
-# Break it off, let's go.
+# okay, let's go
 $mb->create_build_script;
 exit 0;
 
@@ -163,6 +252,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Build.PL 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Build.PL 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

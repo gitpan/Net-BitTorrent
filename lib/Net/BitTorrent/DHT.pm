@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe 
+#!C:\perl\bin\perl.exe
 package Net::BitTorrent::DHT;
 {
     use Socket
@@ -15,8 +15,8 @@ package Net::BitTorrent::DHT;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: DHT.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     # Debugging
     #use Data::Dump qw[pp];
@@ -57,7 +57,7 @@ package Net::BitTorrent::DHT;
                 );
                 $node_id{refaddr $self}       = $node_id;
                 $routing_table{refaddr $self} = {};
-                $nodes{refaddr $self} = q[];
+                $nodes{refaddr $self}         = q[];
                 $tid{refaddr $self} = qq[\0] x 5;    # 26^5 before rollover
                 $_client{refaddr $self}->_schedule(
                                           {Code   => sub { shift->_pulse() },
@@ -138,7 +138,6 @@ package Net::BitTorrent::DHT;
             return if defined $_[1];
             return $routing_table{refaddr + $_[0]};
         }
-
         sub _socket { my ($self) = @_; return $socket{refaddr $self}; }
 
         sub _queue_outgoing {    # no-op
@@ -163,31 +162,32 @@ package Net::BitTorrent::DHT;
                 = unpack_sockaddr_in(getsockname($socket{refaddr + $_[0]}));
             return inet_ntoa($addr);
         }
- sub _compact_nodes {
+
+        sub _compact_nodes {
             return if defined $_[1];
             return $nodes{refaddr + $_[0]};
         }
+
         # Accesors | Public
         sub node_id {
             return if defined $_[1];
             return $node_id{refaddr + $_[0]};
         }
 
-
         # Setters | Private
-        sub _set_node_id { # XXX - untested
+        sub _set_node_id {    # XXX - untested
             return if not defined $_[1];
             return $node_id{refaddr + $_[0]} = $_[1];
         }
 
-         sub _append_compact_nodes { # XXX - untested
-        my ($self, $nodes) = @_;
-        return if not defined $_client{refaddr $self};
-        if (not $nodes) { return; }
-        $nodes{refaddr $self} ||= q[];
-        return $nodes{refaddr $self}
-            = compact(uncompact($nodes{refaddr $self} . $nodes));
-    }
+        sub _append_compact_nodes {    # XXX - untested
+            my ($self, $nodes) = @_;
+            return if not defined $_client{refaddr $self};
+            if (not $nodes) { return; }
+            $nodes{refaddr $self} ||= q[];
+            return $nodes{refaddr $self}
+                = compact(uncompact($nodes{refaddr $self} . $nodes));
+        }
 
         # Methods | Private
         sub _pulse {
@@ -326,12 +326,13 @@ package Net::BitTorrent::DHT;
                                               }
                         );
                     my $node = $routing_table{refaddr $self}{$packed_host};
-                    if (ref $packet ne q[HASH])
-                    {    # An attempt to track down a strange bug...
-                        require Data::Dumper;
-                        warn Data::Dumper->Dump([$packet, $leftover],
-                                                [qw[Packet Leftover]]);
-                    }
+
+                    #if (ref $packet ne q[HASH])
+                    #{    # An attempt to track down a strange bug...
+                    #    require Data::Dump;
+                    #    warn Data::Dump->Dump([$packet, $leftover],
+                    #                            [qw[Packet Leftover]]);
+                    #}
                     if (defined $packet->{q[y]}
                         and $packet->{q[y]} eq q[q])
                     {   my %dispatch = (
@@ -352,10 +353,10 @@ package Net::BitTorrent::DHT;
                             and defined $dispatch{$packet->{q[q]}})
                         {   $dispatch{$packet->{q[q]}}($node, $packet);
                         }
-                        else {    # xxx - do something drastic
-                            require Data::Dumper;
+                        elsif (eval q[require Data::Dump])
+                        {    # xxx - do something drastic
                             carp q[Unhandled DHT packet: ]
-                                . Data::Dumper->Dump([$packet], [qw[Packet]]);
+                                . Data::Dump::pp($packet);
                         }
                     }
                     elsif (defined $packet->{q[y]}
@@ -389,25 +390,28 @@ package Net::BitTorrent::DHT;
                                 if (defined $dispatch{$type}) {
                                     $dispatch{$type}($node, $packet);
                                 }
-                                else {
-                                    require Data::Dumper;
-                                    die qq[Unhandled DHT Reply:\n]
-                                        . Data::Dumper->Dump(
-                                        [   $packet,
-                                            $outstanding_queries{refaddr $self}
-                                                {$packet->{q[t]}}
-                                        ],
-                                        [qw[packet for]]
-                                        );
+                                elsif (eval q[require Data::Dump]) {
+                                    carp sprintf
+                                        <<'END',
+Unhandled DHT Reply:
+     $packet = %s;
+$outstanding = %s;
+END
+                                        Data::Dump::pp($packet),
+                                        Data::Dump::pp(
+                                           $outstanding_queries{refaddr $self}
+                                               {$packet->{q[t]}});
+                                    return;
                                 }
+                                else { return; }
                                 delete $outstanding_queries{refaddr $self}
                                     {$packet->{q[t]}};
                             }
                         }
-                        elsif (require Data::Dumper)
-                        {    # XXX - turn into a callback
-                            warn q[Unhandled DHT Reply]
-                                . Data::Dumper->Dump([$packet], [qw[packet]]);
+                        elsif (eval q[require Data::Dump])
+                        {    # XXX - turn into a callback?
+                            warn q[Unhandled DHT Reply: ]
+                                . Data::Dump::pp($packet);
                         }
                     }
                 }
@@ -464,7 +468,7 @@ package Net::BitTorrent::DHT;
         sub _as_string {
             my ($self, $advanced) = @_;
             my $dump = q[TODO];
-            return print STDERR qq[$dump\n] unless defined wantarray;
+            return print STDERR qq[$dump\n] unless wantarray;
             return $dump;
         }
 
@@ -581,6 +585,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: DHT.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

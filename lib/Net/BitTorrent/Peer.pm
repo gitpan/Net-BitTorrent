@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe 
+#!C:\perl\bin\perl.exe
 package Net::BitTorrent::Peer;
 {
     use strict;      # core as of perl 5
@@ -16,8 +16,8 @@ package Net::BitTorrent::Peer;
 
     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: Peer.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Peer.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     use lib q[../../../lib];
@@ -29,7 +29,7 @@ package Net::BitTorrent::Peer;
     #use Data::Dump qw[pp];
     #
     my (@CONTENTS) = \my (
-        %_client, %_socket, %_session,    # possible params to new()
+        %_client, %_socket, %_torrent,    # possible params to new()
         %_data_out, %_data_in, %peerid, %_bitfield,
         %_am_choking,         # this client is choking the peer
         %_am_interested,      # this client is interested in the peer
@@ -51,7 +51,7 @@ package Net::BitTorrent::Peer;
         #     + Socket    (GLOB)
         #   - Outgoing peers:
         #     + Address   (IPv4:port)
-        #     + Session   (blessed Net::BitTorrent::Session object)
+        #     + Torrent   (blessed Net::BitTorrent::Torrent object)
         # Returns:
         #   - Blessed Net::BitTorrent::Peer object on sucess
         #   - undef on failure
@@ -134,18 +134,18 @@ END
                     q[Net::BitTorrent::Peer->new({}) requires an IPv4:port 'Address'];
                 return;
             }
-            elsif (not defined $args->{q[Session]}) {
-                carp q[Net::BitTorrent::Peer->new({}) requires a 'Session'];
+            elsif (not defined $args->{q[Torrent]}) {
+                carp q[Net::BitTorrent::Peer->new({}) requires a 'Torrent'];
                 return;
             }
-            elsif (not blessed $args->{q[Session]}) {
+            elsif (not blessed $args->{q[Torrent]}) {
                 carp
-                    q[Net::BitTorrent::Peer->new({}) requires a blessed 'Session'];
+                    q[Net::BitTorrent::Peer->new({}) requires a blessed 'Torrent'];
                 return;
             }
-            elsif (not $args->{q[Session]}->isa(q[Net::BitTorrent::Session]))
+            elsif (not $args->{q[Torrent]}->isa(q[Net::BitTorrent::Torrent]))
             {   carp
-                    q[Net::BitTorrent::Peer->new({}) requires a blessed 'Session'];
+                    q[Net::BitTorrent::Peer->new({}) requires a blessed 'Torrent'];
                 return;
             }
             socket(my ($socket), PF_INET, SOCK_STREAM, getprotobyname(q[tcp]))
@@ -178,18 +178,18 @@ END
                     pack_sockaddr_in($port, inet_aton($host)));
 
             #
-            $_client{refaddr $self} = $args->{q[Session]}->_client;
+            $_client{refaddr $self} = $args->{q[Torrent]}->_client;
             weaken $_client{refaddr $self};
-            $_session{refaddr $self} = $args->{q[Session]};
-            weaken $_session{refaddr $self};
+            $_torrent{refaddr $self} = $args->{q[Torrent]};
+            weaken $_torrent{refaddr $self};
             ${$_bitfield{refaddr $self}} = pack(q[b*],
-                             qq[\0] x $_session{refaddr $self}->_piece_count);
+                             qq[\0] x $_torrent{refaddr $self}->_piece_count);
 
             # Add initial handshake to outgoing queue
             $_data_out{refaddr $self}
                 = build_handshake($_client{refaddr $self}->__build_reserved,
                                   pack(q[H*],
-                                       $_session{refaddr $self}->infohash),
+                                       $_torrent{refaddr $self}->infohash),
                                   $_client{refaddr $self}->peerid
                 );
             $_data_in{refaddr $self} = q[];
@@ -259,7 +259,7 @@ END
 
     # Accessors | Private | General
     sub _socket   { return $_socket{refaddr +shift} }
-    sub _session  { return $_session{refaddr +shift} }
+    sub _torrent  { return $_torrent{refaddr +shift} }
     sub _bitfield { return ${$_bitfield{refaddr +shift}} }
 
     sub _port {
@@ -290,9 +290,21 @@ END
     # Methods | Private
     sub _rw {
         my ($self, $read, $write, $error) = @_;
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
 
         #
         if ($error) { weaken $self; $self->_disconnect($^E); return }
+        if (defined $_torrent{refaddr $self}
+            and $_torrent{refaddr $self}->status & 2)
+        {   weaken $self;
+            $self->_disconnect(q[Hashchecking]);
+            return;
+        }
 
         #warn $read;
         #warn $write;
@@ -378,529 +390,18 @@ END
 
                     #
                     my %dispatch = (
-                        &HANDSHAKE => sub {
-                            my ($self, $payload) = @_;
-                            $_last_contact{refaddr $self} = time;
-                            ($_clutter{refaddr $self}{q[reserved]},
-                             undef, $peerid{refaddr $self}
-                            ) = @{$payload};
-                            $_clutter{refaddr $self}{q[support]}
-                                {q[extended protocol]} = (
-                                ord(substr(
-                                        $_clutter{refaddr $self}{q[reserved]},
-                                        5,
-                                        1
-                                    )
-                                    ) & 0x10
-                                ) ? 1 : 0;
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_handshake],
-                                        {Peer => $self, Payload => $payload});
-                            if ($peerid{refaddr $self} eq
-                                $_client{refaddr $self}->peerid)
-                            {   weaken $self;
-                                $self->_disconnect(
-                                           q[...we've connected to ourself.]);
-                                return;
-                            }
-
-                            #
-                            if (not defined $_session{refaddr $self})
-                            {    # Incoming peer
-                                $_session{refaddr $self}
-                                    = $_client{refaddr $self}
-                                    ->_locate_session(
-                                               unpack(q[H40], $payload->[1]));
-
-                                #
-                                if (not defined $_session{refaddr $self}) {
-                                    weaken $self;
-                                    $self->_disconnect(
-                                        sprintf
-                                            q[We aren't serving this torrent: %s],
-                                        unpack(q[H40], $payload->[1])
-                                    );
-                                    return;
-                                }
-                                if (!$_session{refaddr $self}->status() & 1) {
-
-=for status
-        # (201=Started, 961=Force Download, 1000=finished)
-        #     1 = Started
-        #     2 = Checking
-        #     4 = Start after check
-        #     8 = Checked
-        #    16 = Error
-        #    32 = Paused
-        #    64 = Queued
-        #   128 = Loaded
-        #   256 =
-        #   512 = Force
-        #  1000 = Complete
-=cut
-                                    weaken $self;
-                                    $self->_disconnect(
-                                        sprintf
-                                            q[This torrent is loaded but stopped: %s],
-                                        unpack(q[H40], $payload->[1])
-                                    );
-                                    return;
-                                }
-
-                                #
-                                weaken $_session{refaddr $self};
-                                ${$_bitfield{refaddr $self}}
-                                    = pack(q[b*],
-                                           qq[\0] x $_session{refaddr $self}
-                                               ->_piece_count);
-                                if ($threads::shared::threads_shared) {
-                                    threads::shared::share(
-                                                   $_bitfield{refaddr $self});
-                                }
-
-                                #
-                                $_data_out{refaddr $self} .=
-                                    build_handshake(
-                                    $_client{refaddr $self}->__build_reserved,
-                                    pack(q[H40],
-                                         $_session{refaddr $self}->infohash),
-                                    $_client{refaddr $self}->peerid
-                                    );
-                                $self->_send_bitfield;
-                                $self->_send_extended_handshake;
-
-                      # XXX - add socket as rw
-                      #$_client{refaddr $self}->_add_socket(
-                      #           $_socket{refaddr $self},
-                      #           ($_data_out{refaddr $self} ? q[rw] : q[ro]),
-                      #           sub { $self->_rw(@_); }
-                      #);
-                            }
-                        },
-                        &KEEPALIVE => sub {
-                            my ($self) = @_;
-                            return if !defined $_session{refaddr $self};
-
-                            #
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_keepalive],
-                                         {Peer => $self});
-
-                            #
-                            return 1;
-                        },
-                        &CHOKE => sub {
-                            my ($self) = @_;
-                            return if !defined $_session{refaddr $self};
-
-                            #
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_choke],
-                                         {Peer => $self});
-
-                            #
-                            ${$_peer_choking{refaddr $self}}  = 1;
-                            ${$_am_interested{refaddr $self}} = 0;    # lies
-
-                            #
-                            for my $request (@{$requests_out{refaddr $self}})
-                            {   my $piece = $_session{refaddr $self}
-                                    ->_piece_by_index($request->{q[Index]});
-
-                                #warn pp $piece;
-                                #warn pp $request;
-                                delete $piece->{q[Blocks_Requested]}
-                                    ->[$request->{q[_vec_offset]}]
-                                    ->{refaddr $self};
-                            }
-
-                            #
-                            return $requests_out{refaddr $self} = [];
-                        },
-                        &UNCHOKE => sub {
-                            my ($self) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-                            ${$_peer_choking{refaddr $self}} = 0;
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_unchoke],
-                                         {Peer => $self});
-                            $self->_request_block(2);
-
-                            #
-                            #$_client{refaddr $self}->_schedule(
-                            #                    {Time   => time + 30,
-                            #                     Code   => \&_request_block,
-                            #                     Object => $self
-                            #                    }
-                            #   ) unless $request;
-                            #
-                            return 1;
-                        },
-                        &INTERESTED => sub {
-                            my ($self) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-
-                            #
-                            ${$_peer_interested{refaddr $self}} = 1;
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_interested],
-                                         {Peer => $self});
-
-                            # TODO: not this
-                            $_data_out{refaddr $self} .= build_unchoke();
-                            ${$_am_choking{refaddr $self}} = 0;
-                            $_client{refaddr $self}
-                                ->_event(q[packet_outgoing_unchoke],
-                                         {Peer => $self});
-
-                            #
-                            return 1;
-                        },
-                        &NOT_INTERESTED => sub {
-                            my ($self) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_not_interested],
-                                         {Peer => $self});
-                            ${$_peer_interested{refaddr $self}} = 1;
-                            ${$_am_choking{refaddr $self}}      = 1;
-                            return 1;
-                        },
-                        &HAVE => sub {
-                            my ($self, $index) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_have],
-                                         {Peer => $self, Index => $index});
-                            vec(${$_bitfield{refaddr $self}}, $index, 1) = 1;
-                            $self->_check_interest;
-                            if (${$_am_interested{refaddr $self}}
-                                and not ${$_peer_choking{refaddr $self}})
-                            {   $self->_request_block;
-                            }
-                        },
-                        &BITFIELD => sub {
-                            my ($self, $payload) = @_;
-                            return if !defined $_session{refaddr $self};
-
-                            #
-                            ${$_bitfield{refaddr $self}}
-                                = $packet->{q[Payload]};
-
-                            #
-                            $_client{refaddr $self}
-                                ->_event(q[packet_incoming_bitfield],
-                                         {Peer => $self});
-
-                            #
-                            return $self->_check_interest;
-                        },
-                        &REQUEST => sub {
-                            my ($self, $payload) = @_;
-                            return if !defined $_session{refaddr $self};
-
-                            #
-                            $_client{refaddr $self}->_event(
-                                                   q[packet_incoming_request],
-                                                   {Peer   => $self,
-                                                    Index  => $payload->[0],
-                                                    Offset => $payload->[1],
-                                                    Length => $payload->[2]
-                                                   }
-                            );
-
-                            #
-                            if (not @{$requests_in{refaddr $self}}) {
-                                $_client{refaddr $self}->_schedule(
-                                                 {Time   => time + 15,
-                                                  Code   => \&_fill_requests,
-                                                  Object => $self
-                                                 }
-                                );
-                            }
-
-                            #
-                            return push @{$requests_in{refaddr $self}},
-                                {Index  => $payload->[0],
-                                 Offset => $payload->[1],
-                                 Length => $payload->[2]
-                                };
-                        },
-                        &PIECE => sub {
-                            my ($self, $payload) = @_;
-
-                            #return if $_session{refaddr $self}->state() & 64;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-
-                            #
-                            my ($index, $offset, $data) = @{$payload};
-                            my $length = length($data);
-
-                            #
-                            my ($request) = grep {
-                                        ($_->{q[Index]} == $index)
-                                    and ($_->{q[Offset]} == $offset)
-                                    and ($_->{q[Length]} == $length)
-                            } @{$requests_out{refaddr $self}};
-
-                            #
-                            if (not defined $request) {
-                                weaken $self;
-                                $self->_disconnect(
-                                       q[Handed a piece we never asked for.]);
-                                return;
-                            }
-
-                            # Even if the block is junk...
-                            $_session{refaddr $self}
-                                ->_add_downloaded($request->{q[Length]});
-
-                            #
-                            @{$requests_out{refaddr $self}} = grep {
-                                       ($_->{q[Index]} != $index)
-                                    or ($_->{q[Offset]} != $offset)
-                                    or ($_->{q[Length]} != $length)
-                            } @{$requests_out{refaddr $self}};
-
-                            #
-                            $_client{refaddr $self}->_event(
-                                                     q[packet_incoming_block],
-                                                     {Index  => $index,
-                                                      Offset => $offset,
-                                                      Length => $length,
-                                                      Peer   => $self
-                                                     }
-                            );
-
-                            # perlref
-                            my $piece = $_session{refaddr $self}
-                                ->_piece_by_index($index);
-
-                            #
-                            if (not defined $piece) {
-                                weaken $self;
-                                $self->_disconnect(
-                                     q[sent a block to a non-existant piece]);
-                                return;
-                            }
-
-                            #
-                            if (not $_session{refaddr $self}
-                                ->_write_data($index, $offset, \$data))
-                            {    #warn $^E;
-
-               #$_client{refaddr $self}->_del_socket($_socket{refaddr $self});
-                                return;
-                            }
-
-                            #
-                            #warn q[Before change ] . pp $piece;
-                            $piece->{q[Blocks_Recieved]}
-                                ->[$request->{q[_vec_offset]}] = 1;
-
-                            #
-                            #carp sprintf q[Waking sleeping piece up: %d],
-                            #    $request->{q[Index]}
-                            #    if $piece->{q[Slow]};
-                            $piece->{q[Slow]}  = 0;
-                            $piece->{q[Touch]} = time;
-
-                            #warn q[After change  ] . pp $piece;
-                            #
-                            if (not grep { $_ == 0 }
-                                @{$piece->{q[Blocks_Recieved]}})
-                            {
-                                if ($_session{refaddr $self}
-                                    ->_check_piece_by_index($index))
-                                {   for my $p (
-                                          @{$_session{refaddr $self}->_peers})
-                                    {   $_data_out{$p} .= build_have($index);
-                                        $_client{refaddr $self}
-                                            ->_add_connection($p, q[rw]);
-                                    }
-                                }
-                            }
-
-                            #
-                            if ($piece->{q[Endgame]}) {
-
-                                # cancel duplicate requests with other peers
-                                for my $peer (
-                                             $_session{refaddr $self}->_peers)
-                                {   for my $x (
-                                          reverse 0 ..
-                                          $#{${$requests_out{refaddr $peer}}})
-                                    {
-                                        if ((${$requests_out{refaddr $peer}}
-                                             ->[$x]->{q[Index]} == $index
-                                            )
-                                            and (
-                                                ${  $requests_out{refaddr $peer}
-                                                }->[$x]->{q[Offset]}
-                                                == $offset
-                                            )
-                                            and (
-                                                ${  $requests_out{refaddr $peer}
-                                                }->[$x]->{q[Length]}
-                                                == $length
-                                            )
-                                            )
-                                        {
-
-                                            #
-                                            $_data_out{refaddr $peer } .=
-                                                build_cancel(
-                                                        $request->{q[Index]},
-                                                        $request->{q[Offset]},
-                                                        $request->{q[Length]}
-                                                );
-
-                                            #
-                                            $_client{refaddr $self}->_event(
-                                                    q[packet_outgoing_cancel],
-                                                    {Index  => $index,
-                                                     Offset => $offset,
-                                                     Length => $length,
-                                                     Peer   => $peer
-                                                    }
-                                            );
-
-                                            #
-                                            $_client{refaddr $self}
-                                                ->_add_connection($peer,
-                                                                  q[rw]);
-
-                                            #
-                                            splice(
-                                                @{  ${  $requests_out{refaddr $peer
-                                                            }
-                                                        }
-                                                    },
-                                                $x, 1
-                                            );
-
-                                            #
-                                            last;
-                                        }
-                                    }
-                                }
-                            }
-
-                            #
-                            if ($self->_check_interest) {
-                                if (not $self->_request_block)
-                                {    # Try again later...
-                                    $_client{refaddr $self}->_schedule(
-                                        {   Time => time + 30,
-                                            Code => sub {
-                                                my $s = shift;
-                                                return if not defined $s;
-                                                if ($s->_check_interest) {
-                                                    if (not
-                                                        $self->_request_block)
-                                                    {   $_client{refaddr $self}
-                                                            ->_schedule(
-                                                            {   Time => time
-                                                                    + 30,
-                                                                Code => sub {
-                                                                    my $s
-                                                                        = shift;
-                                                                    return
-                                                                        if not
-                                                                            defined
-                                                                            $s;
-                                                                    if ($s
-                                                                        ->_check_interest
-                                                                        )
-                                                                    {   $s
-                                                                            ->_request_block;
-                                                                    }
-                                                                },
-                                                                Object =>
-                                                                    $self
-                                                            }
-                                                            );
-                                                    }
-                                                }
-                                            },
-                                            Object => $self
-                                        }
-                                    );
-                                }
-                            }
-
-                            #
-                            return 1;
-                        },
-                        &CANCEL => sub {
-                            my ($self, $payload) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-                            my ($index, $offset, $length) = @$payload;
-                            $_client{refaddr $self}->_event(
-                                                    q[packet_incoming_cancel],
-                                                    {Index  => $index,
-                                                     Offset => $offset,
-                                                     Length => $length,
-                                                     Peer   => $self
-                                                    }
-                            );
-                            for my $x (
-                                 reverse 0 .. $#{$requests_in{refaddr $self}})
-                            {
-                                if (($requests_in{refaddr $self}->[$x]
-                                     ->{q[Index]} == $index
-                                    )
-                                    and ($requests_in{refaddr $self}->[$x]
-                                         ->{q[Offset]} == $offset)
-                                    and ($requests_in{refaddr $self}->[$x]
-                                         ->{q[Length]} == $length)
-                                    )
-                                {   splice(@{$requests_in{refaddr $self}},
-                                           $x, 1);
-                                }
-                            }
-
-                            #warn q[Remaining requests: ]
-                            #        . pp $requests_in{refaddr $self};
-                            return 1;
-                        },
-                        &EXTPROTOCOL => sub {
-                            my ($self, $payload) = @_;
-                            return if !defined $_session{refaddr $self};
-                            $_last_contact{refaddr $self} = time;
-                            my ($id, $packet) = @{$payload};
-                            if ($packet) {
-                                if ($id == 0) {
-                                    if (defined $_client{refaddr $self}->_dht
-                                        and defined $packet->{q[p]})
-                                    {   my (undef, $packed_ip)
-                                            = unpack_sockaddr_in(
-                                                   getpeername(
-                                                       $_socket{refaddr $self}
-                                                   )
-                                            );
-                                        my $node
-                                            = sprintf(q[%s:%d],
-                                                      inet_ntoa($packed_ip),
-                                                      $packet->{q[p]});
-                                        $_client{refaddr $self}
-                                            ->_dht->_add_node($node);
-                                    }
-                                }
-                                $_client{refaddr $self}->_event(
-                                                  q[packet_incoming_extended],
-                                                  {Payload => $packet,
-                                                   ID      => $id,
-                                                   Peer    => $self
-                                                  }
-                                );
-                            }
-                        }
+                                 &HANDSHAKE      => \&__handle_handshake,
+                                 &KEEPALIVE      => \&__handle_keepalive,
+                                 &CHOKE          => \&__handle_choke,
+                                 &UNCHOKE        => \&__handle_unchoke,
+                                 &INTERESTED     => \&__handle_interested,
+                                 &NOT_INTERESTED => \&__handle_not_interested,
+                                 &HAVE           => \&__handle_have,
+                                 &BITFIELD       => \&__handle_bitfield,
+                                 &REQUEST        => \&__handle_request,
+                                 &PIECE          => \&__handle_piece,
+                                 &CANCEL         => \&__handle_cancel,
+                                 &EXTPROTOCOL    => \&__handle_ext_protocol
                     );
 
                     #
@@ -908,8 +409,8 @@ END
                         $dispatch{$packet->{q[Type]}}($self,
                                                       $packet->{q[Payload]});
                     }
-                    else {
-                        die q[Unknown packet! ] . pp $packet;
+                    elsif (require q[Data::Dump]) {
+                        die q[Unknown packet! ] . Data::Dump::pp($packet);
                     }
                 }
             }
@@ -924,24 +425,526 @@ END
         return ($actual_read, $actual_write);
     }
 
+    sub __handle_handshake {
+        my ($self, $payload) = @_;
+        $_last_contact{refaddr $self} = time;
+        ($_clutter{refaddr $self}{q[reserved]}, undef, $peerid{refaddr $self})
+            = @{$payload};
+        $_clutter{refaddr $self}{q[support]}{q[extended protocol]}
+            = (
+              ord(substr($_clutter{refaddr $self}{q[reserved]}, 5, 1)) & 0x10)
+            ? 1
+            : 0;
+        $_client{refaddr $self}->_event(q[packet_incoming_handshake],
+                                        {Peer => $self, Payload => $payload});
+        if ($peerid{refaddr $self} eq $_client{refaddr $self}->peerid) {
+            weaken $self;
+            $self->_disconnect(q[...we've connected to ourself.]);
+            return;
+        }
+
+        #
+        if (not defined $_torrent{refaddr $self}) {    # Incoming peer
+            $_torrent{refaddr $self} = $_client{refaddr $self}
+                ->_locate_torrent(unpack(q[H40], $payload->[1]));
+
+            #
+            if (not defined $_torrent{refaddr $self}) {
+                weaken $self;
+                $self->_disconnect(
+                                sprintf q[We aren't serving this torrent: %s],
+                                unpack(q[H40], $payload->[1]));
+                return;
+            }
+            if (defined $_torrent{refaddr $self}
+                and !($_torrent{refaddr $self}->status & 1))
+            {   weaken $self;
+                $self->_disconnect(q[We aren't serving this torrent]);
+                return;
+            }
+
+            #
+            weaken $_torrent{refaddr $self};
+            ${$_bitfield{refaddr $self}} = pack(q[b*],
+                             qq[\0] x $_torrent{refaddr $self}->_piece_count);
+            if ($threads::shared::threads_shared) {
+                threads::shared::share($_bitfield{refaddr $self});
+            }
+
+            #
+            $_data_out{refaddr $self} .=
+                build_handshake($_client{refaddr $self}->__build_reserved,
+                                pack(q[H40],
+                                     $_torrent{refaddr $self}->infohash),
+                                $_client{refaddr $self}->peerid
+                );
+            $self->_send_bitfield;
+            $self->_send_extended_handshake;
+
+            # XXX - add socket as rw
+            #$_client{refaddr $self}->_add_socket(
+            #           $_socket{refaddr $self},
+            #           ($_data_out{refaddr $self} ? q[rw] : q[ro]),
+            #           sub { $self->_rw(@_); }
+            #);
+        }
+    }
+
+    sub __handle_keepalive {
+        my ($self) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+
+        #
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_keepalive], {Peer => $self});
+
+        #
+        return 1;
+    }
+
+    sub __handle_choke {
+        my ($self) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+
+        #
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_choke], {Peer => $self});
+
+        #
+        ${$_peer_choking{refaddr $self}}  = 1;
+        ${$_am_interested{refaddr $self}} = 0;    # lies
+
+        #
+        for my $request (@{$requests_out{refaddr $self}}) {
+            my $piece = $_torrent{refaddr $self}
+                ->_piece_by_index($request->{q[Index]});
+
+            #warn pp $piece;
+            #warn pp $request;
+            delete $piece->{q[Blocks_Requested]}->[$request->{q[_vec_offset]}]
+                ->{refaddr $self};
+        }
+
+        #
+        return $requests_out{refaddr $self} = [];
+    }
+
+    sub __handle_unchoke {
+        my ($self) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_last_contact{refaddr $self} = time;
+        ${$_peer_choking{refaddr $self}} = 0;
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_unchoke], {Peer => $self});
+        $self->_request_block(2);
+
+        #
+        #$_client{refaddr $self}->_schedule(
+        #                    {Time   => time + 30,
+        #                     Code   => \&_request_block,
+        #                     Object => $self
+        #                    }
+        #   ) unless $request;
+        #
+        return 1;
+    }
+
+    sub __handle_interested {
+        my ($self) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_last_contact{refaddr $self} = time;
+
+        #
+        ${$_peer_interested{refaddr $self}} = 1;
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_interested], {Peer => $self});
+
+        # XXX - don't automatically unchoke people!
+        if (!($_torrent{refaddr $self}->status & 32)) {
+            $_data_out{refaddr $self} .= build_unchoke();
+            ${$_am_choking{refaddr $self}} = 0;
+            $_client{refaddr $self}
+                ->_event(q[packet_outgoing_unchoke], {Peer => $self});
+        }
+
+        #
+        return 1;
+    }
+
+    sub __handle_not_interested {
+        my ($self) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_last_contact{refaddr $self} = time;
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_not_interested], {Peer => $self});
+        ${$_peer_interested{refaddr $self}} = 1;
+        ${$_am_choking{refaddr $self}}      = 1;
+        return 1;
+    }
+
+    sub __handle_have {
+        my ($self, $index) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_client{refaddr $self}->_event(q[packet_incoming_have],
+                                        {Peer => $self, Index => $index});
+        vec(${$_bitfield{refaddr $self}}, $index, 1) = 1;
+        $self->_check_interest;
+        if (${$_am_interested{refaddr $self}}
+            and not ${$_peer_choking{refaddr $self}})
+        {   $self->_request_block;
+        }
+    }
+
+    sub __handle_bitfield {
+        my ($self, $payload) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+
+        #
+        ${$_bitfield{refaddr $self}} = $payload;
+
+        #
+        $_client{refaddr $self}
+            ->_event(q[packet_incoming_bitfield], {Peer => $self});
+
+        #
+        return $self->_check_interest;
+    }
+
+    sub __handle_request {
+        my ($self, $payload) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+
+        #
+        $_client{refaddr $self}->_event(q[packet_incoming_request],
+                                        {Peer   => $self,
+                                         Index  => $payload->[0],
+                                         Offset => $payload->[1],
+                                         Length => $payload->[2]
+                                        }
+        );
+
+        #
+        if (not @{$requests_in{refaddr $self}}) {
+            $_client{refaddr $self}->_schedule({Time   => time + 15,
+                                                Code   => \&_fill_requests,
+                                                Object => $self
+                                               }
+            );
+        }
+
+        #
+        return push @{$requests_in{refaddr $self}},
+            {Index  => $payload->[0],
+             Offset => $payload->[1],
+             Length => $payload->[2]
+            };
+    }
+
+    sub __handle_piece {
+        my ($self, $payload) = @_;
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+
+        #return if $_torrent{refaddr $self}->status () & 64;
+        return if !defined $_torrent{refaddr $self};
+        $_last_contact{refaddr $self} = time;
+
+        #
+        my ($index, $offset, $data) = @{$payload};
+        my $length = length($data);
+
+        #
+        my ($request) = grep {
+                    ($_->{q[Index]} == $index)
+                and ($_->{q[Offset]} == $offset)
+                and ($_->{q[Length]} == $length)
+        } @{$requests_out{refaddr $self}};
+
+        #
+        if (not defined $request) {
+            weaken $self;
+            $self->_disconnect(q[Handed a piece we never asked for.]);
+            return;
+        }
+
+        # Even if the block is junk...
+        $_torrent{refaddr $self}->_add_downloaded($request->{q[Length]});
+
+        #
+        @{$requests_out{refaddr $self}} = grep {
+                   ($_->{q[Index]} != $index)
+                or ($_->{q[Offset]} != $offset)
+                or ($_->{q[Length]} != $length)
+        } @{$requests_out{refaddr $self}};
+
+        #
+        $_client{refaddr $self}->_event(q[packet_incoming_block],
+                                        {Index  => $index,
+                                         Offset => $offset,
+                                         Length => $length,
+                                         Peer   => $self
+                                        }
+        );
+
+        # perlref
+        my $piece = $_torrent{refaddr $self}->_piece_by_index($index);
+
+        #
+        if (not defined $piece) {
+            weaken $self;
+            $self->_disconnect(q[sent a block to a non-existant piece]);
+            return;
+        }
+
+        #
+        if (not $_torrent{refaddr $self}->_write_data($index, $offset, \$data)
+            )
+        {    #warn $^E;
+
+            #$_client{refaddr $self}->_del_socket($_socket{refaddr $self});
+            return;
+        }
+
+        #
+        #warn q[Before change ] . pp $piece;
+        $piece->{q[Blocks_Recieved]}->[$request->{q[_vec_offset]}] = 1;
+
+        #
+        #carp sprintf q[Waking sleeping piece up: %d],
+        #    $request->{q[Index]}
+        #    if $piece->{q[Slow]};
+        $piece->{q[Slow]}  = 0;
+        $piece->{q[Touch]} = time;
+
+        #
+        # cancel duplicate requests with other peers | Endgame stuff
+        for my $peer ($_torrent{refaddr $self}->_peers) {
+            for my $x (reverse 0 .. $#{$requests_out{refaddr $peer}}) {
+                if (    (defined $requests_out{refaddr $peer}->[$x])
+                    and
+                    ($requests_out{refaddr $peer}->[$x]->{q[Index]} == $index)
+                    and ($requests_out{refaddr $peer}->[$x]->{q[Offset]}
+                         == $offset)
+                    and ($requests_out{refaddr $peer}->[$x]->{q[Length]}
+                         == $length)
+                    )
+                {   $_data_out{refaddr $peer } .=
+                        build_cancel($request->{q[Index]},
+                                     $request->{q[Offset]},
+                                     $request->{q[Length]}
+                        );
+
+                    #
+                    $_client{refaddr $self}->_event(q[packet_outgoing_cancel],
+                                                    {Index  => $index,
+                                                     Offset => $offset,
+                                                     Length => $length,
+                                                     Peer   => $peer
+                                                    }
+                    );
+
+                    #
+                    $_client{refaddr $self}->_add_connection($peer, q[rw]);
+
+                    #
+                    splice(@{$requests_out{refaddr $peer }}, $x, 1);
+
+                    #
+                    last;
+                }
+            }
+        }
+
+        #warn q[After change  ] . pp $piece;
+        #
+        if (not grep { $_ == 0 } @{$piece->{q[Blocks_Recieved]}}) {
+            if ($_torrent{refaddr $self}->_check_piece_by_index($index)
+                and defined $_torrent{refaddr $self})
+            {   for my $p ($_torrent{refaddr $self}->_peers) {
+                    $_data_out{$p} .= build_have($index);
+                    $_client{refaddr $self}->_add_connection($p, q[rw]);
+                }
+            }
+        }
+
+        #
+        if ($self->_check_interest) {
+            if (not $self->_request_block) {    # Try again later...
+                $_client{refaddr $self}->_schedule(
+                    {   Time => time + 30,
+                        Code => sub {
+                            my $s = shift;
+                            return if not defined $s;
+                            if ($s->_check_interest) {
+                                if (not $self->_request_block) {
+                                    $_client{refaddr $self}->_schedule(
+                                        {   Time => time + 30,
+                                            Code => sub {
+                                                my $s = shift;
+                                                return
+                                                    if not defined $s;
+                                                if ($s->_check_interest) {
+                                                    $s->_request_block;
+                                                }
+                                            },
+                                            Object => $self
+                                        }
+                                    );
+                                }
+                            }
+                        },
+                        Object => $self
+                    }
+                );
+            }
+        }
+
+        #
+        return 1;
+    }
+
+    sub __handle_cancel {
+        my ($self, $payload) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_last_contact{refaddr $self} = time;
+        my ($index, $offset, $length) = @$payload;
+        $_client{refaddr $self}->_event(q[packet_incoming_cancel],
+                                        {Index  => $index,
+                                         Offset => $offset,
+                                         Length => $length,
+                                         Peer   => $self
+                                        }
+        );
+        for my $x (reverse 0 .. $#{$requests_in{refaddr $self}}) {
+            if (    ($requests_in{refaddr $self}->[$x]->{q[Index]} == $index)
+                and
+                ($requests_in{refaddr $self}->[$x]->{q[Offset]} == $offset)
+                and
+                ($requests_in{refaddr $self}->[$x]->{q[Length]} == $length))
+            {   splice(@{$requests_in{refaddr $self}}, $x, 1);
+            }
+        }
+
+        #warn q[Remaining requests: ]
+        #        . pp $requests_in{refaddr $self};
+        return 1;
+    }
+
+    sub __handle_ext_protocol {
+        my ($self, $payload) = @_;
+        return if !defined $_torrent{refaddr $self};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        $_last_contact{refaddr $self} = time;
+        my ($id, $packet) = @{$payload};
+        if ($packet) {
+            if ($id == 0) {
+                if (    defined $_client{refaddr $self}->_dht
+                    and defined $packet->{q[p]})
+                {   my (undef, $packed_ip)
+                        = unpack_sockaddr_in(
+                                        getpeername($_socket{refaddr $self}));
+                    my $node = sprintf(q[%s:%d],
+                                       inet_ntoa($packed_ip),
+                                       $packet->{q[p]});
+                    $_client{refaddr $self}->_dht->_add_node($node);
+                }
+            }
+            $_client{refaddr $self}->_event(q[packet_incoming_extended],
+                                            {Payload => $packet,
+                                             ID      => $id,
+                                             Peer    => $self
+                                            }
+            );
+        }
+    }
+
     sub _check_interest {
         my ($self) = @_;
 
         #
-        if (not defined $_session{refaddr $self}) { return; }
+        if (not defined $_torrent{refaddr $self}) { return; }
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
 
         #
         my $interesting  = ${$_am_interested{refaddr $self}};
-        my $session_have = $_session{refaddr $self}->bitfield();
-        my $session_want = $_session{refaddr $self}->_wanted();
-        my $relevence    = ${$_bitfield{refaddr $self}} & $session_want;
+        my $torrent_have = $_torrent{refaddr $self}->bitfield();
+        my $torrent_want = $_torrent{refaddr $self}->_wanted();
+        my $relevence    = ${$_bitfield{refaddr $self}} & $torrent_want;
 
 #warn sprintf
 #    q[pieces:%d|phave:%d|ihave:%d|iwant:%d|rel:%d|int?:%d v. %d | 1st: %d | %s],
-#    $_session{refaddr $self}->_piece_count,
+#    $_torrent{refaddr $self}->_piece_count,
 #    sum(split(q[], unpack(q[b*], (${$_bitfield{refaddr $self}})))),
-#    sum(split(q[], unpack(q[b*], ($session_have)))),
-#    sum(split(q[], unpack(q[b*], ($session_want)))),
+#    sum(split(q[], unpack(q[b*], ($torrent_have)))),
+#    sum(split(q[], unpack(q[b*], ($torrent_want)))),
 #    sum(split(q[], unpack(q[b*], $relevence))),
 #    ${$_am_interested{refaddr $self}},
 #    ((index(unpack(q[b*], $relevence), 1, 0) != -1) ? 1 : 0),
@@ -1051,7 +1054,7 @@ END
             }
 
             #
-            my $piece = $_session{refaddr $self}
+            my $piece = $_torrent{refaddr $self}
                 ->_piece_by_index($request->{q[Index]});
 
             #
@@ -1105,38 +1108,31 @@ END
 
         #
         return if ${$_peer_choking{refaddr $self}};
-
-        #return if $_session{refaddr $self}->status() ^ 1; # Stopped
-        return if $_session{refaddr $self}->status() & 32;    # Paused
-        return if $_session{refaddr $self}->status() & 2;     # Hash checking
-
-=for status
-        # (201=Started, 961=Force Download, 1000=finished)
-        #     1 = Started
-        #     2 = Checking
-        #     4 = Start after check
-        #     8 = Checked
-        #    16 = Error
-        #    32 = Paused
-        #    64 = Queued
-        #   128 = Loaded
-        #   256 =
-        #   512 = Force
-        #  1000 = Complete
-=cut
+        if (!($_torrent{refaddr $self}->status & 1)) {
+            weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        if ($_torrent{refaddr $self}->status & 32) {    # paused
+            return;
+        }
 
         #
         my $return = 0;
 
-        #warn sprintf q[for (%d .. %d) { [...] }],
-        #    max(1, scalar(@{$requests_out{refaddr $self}})),
-        #    max(3, int((2**21) / $_session{refaddr $self}->_piece_length));
-        # ~2M/peer or at least three requests
+#warn sprintf q[for (%d .. %d) { [...] }],
+#    max(1, scalar(@{$requests_out{refaddr $self}})),
+#    max(3, int((2**21) / $_torrent{refaddr $self}->raw_data->{q[info]}{q[piece length]}));
+# ~2M/peer or at least three requests
         my $range
             = defined $_range
             ? [1 .. $_range]
             : [max(1, scalar(@{$requests_out{refaddr $self}})) .. max(
-                    12, int((2**21) / $_session{refaddr $self}->_piece_length)
+                                12,
+                                int((2**21)
+                                    / $_torrent{refaddr $self}
+                                        ->raw_data->{q[info]}{q[piece length]}
+                                )
                )
             ];
 
@@ -1145,7 +1141,7 @@ END
         for (@$range) {
 
             #
-            my $piece = $_session{refaddr $self}->_pick_piece($self);
+            my $piece = $_torrent{refaddr $self}->_pick_piece($self);
 
             #
             if ($piece) {
@@ -1157,8 +1153,8 @@ END
             #warn q[Endgame? ] . $piece->{q[Endgame]};
                 my $vec_offset;
                 if ($piece->{q[Endgame]}) {
-                    warn q[Endgame!];
 
+           #warn q[Endgame!];
            # This next bit selects the least requested block (max 3 requests),
            #   makes sure this peer isn't already sitting on this request
            #   and... I just lost my train of thought; It's Friday afternoon.
@@ -1237,7 +1233,7 @@ END
                     ->{refaddr $self};
 
       #use Data::Dump qw[pp];
-      #warn q[After request: ] . pp $_session{refaddr $self}->_piece_by_index(
+      #warn q[After request: ] . pp $_torrent{refaddr $self}->_piece_by_index(
       #                $piece->{q[Index]}
       #);
       #
@@ -1284,13 +1280,19 @@ END
 
     sub _send_bitfield {    # XXX - or fast packet
         my ($self) = @_;
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
 
         #
         return if not defined $_socket{refaddr $self};
 
         #
         my @have = split q[], unpack q[b*],
-            $_session{refaddr $self}->bitfield;
+            $_torrent{refaddr $self}->bitfield;
 
         #
         if (((sum(@have) * 8) < $#have)) {
@@ -1315,6 +1317,12 @@ END
 
     sub _send_extended_handshake {
         my ($self) = @_;
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
 
         #
         return if not defined $_socket{refaddr $self};
@@ -1347,6 +1355,12 @@ END
 
     sub _send_keepalive {
         my ($self) = @_;
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
 
         #
         return if not defined $self;
@@ -1374,6 +1388,17 @@ END
         return if not defined $self;
         return if not @{$requests_in{refaddr $self}};
         return if ${$_am_choking{refaddr $self}};
+        if (defined $_torrent{refaddr $self}
+            and !($_torrent{refaddr $self}->status & 1))
+        {   weaken $self;
+            $self->_disconnect(q[We aren't serving this torrent]);
+            return;
+        }
+        if (defined $_torrent{refaddr $self}
+            and ($_torrent{refaddr $self}->status & 32))
+        {    # paused
+            return;
+        }
 
         #
         $_client{refaddr $self}->_schedule({Time   => time + 60,
@@ -1387,11 +1412,11 @@ END
                and @{$requests_in{refaddr $self}})
         {   my $request = shift @{$requests_in{refaddr $self}};
             next
-                unless $_session{refaddr $self}
+                unless $_torrent{refaddr $self}
                     ->_check_piece_by_index($request->{q[Index]});
 
             # Accounting...
-            $_session{refaddr $self}->_add_uploaded($request->{q[Length]});
+            $_torrent{refaddr $self}->_add_uploaded($request->{q[Length]});
 
             #
             $_client{refaddr $self}->_event(q[packet_outgoing_block],
@@ -1404,7 +1429,7 @@ END
             $_data_out{refaddr $self} .=
                 build_piece($request->{q[Index]},
                             $request->{q[Offset]},
-                            $_session{refaddr $self}->_read_data(
+                            $_torrent{refaddr $self}->_read_data(
                                                         $request->{q[Index]},
                                                         $request->{q[Offset]},
                                                         $request->{q[Length]}
@@ -1424,6 +1449,12 @@ END
 
     sub _send_choke {
         my ($self) = @_;
+        if (defined $_torrent{refaddr $self}
+            and $_torrent{refaddr $self}->status & 2)
+        {   weaken $self;
+            $self->_disconnect(q[Hashchecking]);
+            return;
+        }
 
         #
         return if ${$_am_choking{refaddr $self}} == 1;
@@ -1489,7 +1520,7 @@ END
             = !$advanced
             ? $$self
             : q[TODO];
-        return print STDERR qq[$dump\n] unless defined wantarray;
+        return print STDERR qq[$dump\n] unless wantarray;
         return $dump;
     }
 
@@ -1506,7 +1537,7 @@ END
                 delete $_->{$_oID};
             }
             weaken $_client{$_nID};
-            weaken $_session{$_nID};
+            weaken $_torrent{$_nID};
 
             #  update he weak refernce to the new, cloned object
             weaken($REGISTRY{$_nID} = $_obj);
@@ -1521,9 +1552,9 @@ END
 
         #warn q[Goodbye, ] . $$self;
         # remove incomplete requests
-        if ($_session{refaddr $self}) {
+        if ($_torrent{refaddr $self}) {
             for my $request (@{$requests_out{refaddr $self}}) {
-                my $piece = $_session{refaddr $self}
+                my $piece = $_torrent{refaddr $self}
                     ->_piece_by_index($request->{q[Index]});
                 delete $piece->{q[Blocks_Requested]}
                     ->[$request->{q[_vec_offset]}]->{refaddr $self};
@@ -1602,6 +1633,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Peer.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

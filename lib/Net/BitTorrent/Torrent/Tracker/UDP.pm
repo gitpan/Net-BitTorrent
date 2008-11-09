@@ -1,5 +1,5 @@
-#!C:\perl\bin\perl.exe 
-package Net::BitTorrent::Session::Tracker::UDP;
+#!C:\perl\bin\perl.exe
+package Net::BitTorrent::Torrent::Tracker::UDP;
 {
     use strict;      # core as of perl 5
     use warnings;    # core as of perl 5.006
@@ -9,8 +9,8 @@ package Net::BitTorrent::Session::Tracker::UDP;
     use Scalar::Util qw[blessed weaken refaddr];    # core since perl 5.007003
                                                     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: UDP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (@CONTENTS) = \my (
@@ -41,7 +41,7 @@ package Net::BitTorrent::Session::Tracker::UDP;
             carp __PACKAGE__ . q[->new() requires a 'Tier' param];
             return;
         }
-        if (not $args->{q[Tier]}->isa(q[Net::BitTorrent::Session::Tracker])) {
+        if (not $args->{q[Tier]}->isa(q[Net::BitTorrent::Torrent::Tracker])) {
             carp __PACKAGE__ . q[->new() requires a blessed Tracker 'Tier'];
             return;
         }
@@ -73,7 +73,7 @@ package Net::BitTorrent::Session::Tracker::UDP;
     sub _as_string {
         my ($self, $advanced) = @_;
         my $dump = q[TODO];
-        return print STDERR qq[$dump\n] unless defined wantarray;
+        return print STDERR qq[$dump\n] unless wantarray;
         return $dump;
     }
 
@@ -124,7 +124,7 @@ package Net::BitTorrent::Session::Tracker::UDP;
 
 =head1 NAME
 
-Net::BitTorrent::Session::Tracker::UDP - Single UDP BitTorrent Tracker
+Net::BitTorrent::Torrent::Tracker::UDP - Single UDP BitTorrent Tracker
 
 =head1 Constructor
 
@@ -132,7 +132,7 @@ Net::BitTorrent::Session::Tracker::UDP - Single UDP BitTorrent Tracker
 
 =item C<new ( [ARGS] )>
 
-Creates a C<Net::BitTorrent::Session::Tracker::UDP> object.  This
+Creates a C<Net::BitTorrent::Torrent::Tracker::UDP> object.  This
 constructor should not be used directly.
 
 =back
@@ -171,6 +171,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: UDP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

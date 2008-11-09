@@ -81,4 +81,4 @@ SKIP: {
         q[DHT node id conforms to spec.]);
 }
 
-# $Id: Version.t 29 2008-10-11 15:19:36Z sanko@cpan.org $
+# $Id: Version.t 30 2008-10-29 15:28:58Z sanko@cpan.org $

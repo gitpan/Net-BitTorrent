@@ -59,15 +59,15 @@ SKIP: {
              )
         );
     }
-    my $session = $client->add_session({Path    => $simple_dot_torrent,
+    my $torrent = $client->add_torrent({Path    => $simple_dot_torrent,
                                         BaseDir => $tempdir
                                        }
     );
     warn sprintf q[%d|%d], 4, $test_builder->{q[Curr_Test]};
 
     END {
-        return if not defined $session;
-        for my $file (@{$session->files}) { $file->_close() }
+        return if not defined $torrent;
+        for my $file (@{$torrent->files}) { $file->_close() }
     }
 
     #
@@ -76,4 +76,4 @@ SKIP: {
     #
 }
 
-# $Id: Node.t 29 2008-10-11 15:19:36Z sanko@cpan.org $
+# $Id: Node.t 31 2008-11-01 17:22:17Z sanko@cpan.org $

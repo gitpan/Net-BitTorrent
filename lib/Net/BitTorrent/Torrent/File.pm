@@ -1,5 +1,5 @@
-#!C:\perl\bin\perl.exe 
-package Net::BitTorrent::Session::File;
+#!C:\perl\bin\perl.exe
+package Net::BitTorrent::Torrent::File;
 {
     use strict;      # core as of perl 5
     use warnings;    # core as of perl 5.006
@@ -15,23 +15,23 @@ package Net::BitTorrent::Session::File;
     #    qw[splitpath catpath];
     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: File.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: File.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (@CONTENTS) = \my (
-           %path,     %session, %size,   %index,         # parameters to new()
+           %path,     %torrent, %size,   %index,         # parameters to new()
            %priority, %mode,    %handle, %win32_handle);
     my %REGISTRY = ();
 
     # Constructor
     sub new {
 
-        # Creates a new N::B::Session object
+        # Creates a new N::B::Torrent object
         # Accepts parameters as key/value pairs in a hash reference
         # Required parameters:
         #  - Path    (filename)
-        #  - Session (blessed N::B::Session object)
+        #  - Torrent (blessed N::B::Torrent object)
         #  - Size    (length of this file when complete)
         # Returns
         #    - a new blessed object on success
@@ -51,62 +51,62 @@ package Net::BitTorrent::Session::File;
         # Param validation... Ugh...
         if (not defined $args) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires ]
             #    . q[parameters a set of parameters];
             return;
         }
         if (ref($args) ne q[HASH]) {
 
-            #carp q[Net::BitTorrentS::Session::File->new({}) requires ]
+            #carp q[Net::BitTorrentS::Torrent::File->new({}) requires ]
             #    . q[parameters to be passed as a hashref];
             return;
         }
         if (not defined $args->{q[Path]}) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires a ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires a ]
             #    . q['Path' parameter];
             return;
         }
-        if (not defined $args->{q[Session]}) {
+        if (not defined $args->{q[Torrent]}) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires a ]
-            #    . q['Session' parameter];
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires a ]
+            #    . q['Torrent' parameter];
             return;
         }
-        if (not blessed $args->{q[Session]}) {
+        if (not blessed $args->{q[Torrent]}) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires a ]
-            #    . q[blessed 'Session' object];
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires a ]
+            #    . q[blessed 'Torrent' object];
             return;
         }
-        if (not $args->{q[Session]}->isa(q[Net::BitTorrent::Session])) {
+        if (not $args->{q[Torrent]}->isa(q[Net::BitTorrent::Torrent])) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires a ]
-            #    . q[blessed Net::BitTorrent::Session object in the ]
-            #    . q['Session' parameter];
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires a ]
+            #    . q[blessed Net::BitTorrent::Torrent object in the ]
+            #    . q['Torrent' parameter];
             return;
         }
         if (not defined $args->{q[Size]}) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires a ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires a ]
             #    . q['Size' parameter];
             return;
         }
         if ($args->{q[Size]} !~ m[^\d+$]) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires an ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires an ]
             #    . q[integer value for 'Size'];
             return;
         }
         if (not defined $args->{q[Index]}) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires an ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires an ]
             #    . q['Index' parameter];
             return;
         }
         if ($args->{q[Index]} !~ m[^\d+$]) {
 
-            #carp q[Net::BitTorrent::Session::File->new({}) requires an ]
+            #carp q[Net::BitTorrent::Torrent::File->new({}) requires an ]
             #    . q[integer value for 'Index'];
             return;
         }
@@ -114,8 +114,8 @@ package Net::BitTorrent::Session::File;
         #
         $self = bless \$args->{q[Path]}, $class;
         $path{refaddr $self}    = $args->{q[Path]};
-        $session{refaddr $self} = $args->{q[Session]};
-        weaken $session{refaddr $self};
+        $torrent{refaddr $self} = $args->{q[Torrent]};
+        weaken $torrent{refaddr $self};
         $size{refaddr $self}  = $args->{q[Size]};
         $index{refaddr $self} = $args->{q[Index]};
         $priority{refaddr $self} = 2;    # default in 0-3 range where...
@@ -143,20 +143,20 @@ package Net::BitTorrent::Session::File;
         if (not defined $newval) {
 
 #carp
-#    q[Net::BitTorrent::Session::File->set_priority() requires an priority parameter];
+#    q[Net::BitTorrent::Torrent::File->set_priority() requires an priority parameter];
             return;
         }
         if ($newval !~ m[^\d+$]) {
 
    #carp
-   #    q[Net::BitTorrent::Session::File->set_priority() requires an integer];
+   #    q[Net::BitTorrent::Torrent::File->set_priority() requires an integer];
             return;
         }
         return $priority{refaddr $self} = $newval;
     }
     sub mode    { return $mode{refaddr +shift} }
     sub size    { return $size{refaddr +shift} }
-    sub session { return $session{refaddr +shift} }
+    sub torrent { return $torrent{refaddr +shift} }
     sub index   { return $index{refaddr +shift} }
     sub path    { return $path{refaddr +shift} }
 
@@ -169,13 +169,13 @@ package Net::BitTorrent::Session::File;
         my ($self, $mode) = @_;
         if (not defined $mode) {
 
-            #carp q[Net::BitTorrent::Session::File->_open() requires a mode];
+            #carp q[Net::BitTorrent::Torrent::File->_open() requires a mode];
             return;
         }
         if ($mode !~ m[^[rw]$]) {
 
            #carp
-           #    q[Malformed mode to Net::BitTorrent::Session::File->_open(): ]
+           #    q[Malformed mode to Net::BitTorrent::Torrent::File->_open(): ]
            #    . $mode;
             return;
         }
@@ -197,14 +197,16 @@ package Net::BitTorrent::Session::File;
         #
         my $mode_Fcntl = $mode eq q[r] ? O_RDONLY : O_WRONLY;
         if (not $self->_sysopen(($mode eq q[r] ? (O_RDONLY) : (O_WRONLY)))) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                  q[file_error],
                  {File    => $self,
                   Message => sprintf(q[Cannot open file for %s: %s],
                                      ($mode eq q[r] ? q[read] : q[write]), $^E
                   )
                  }
-            );
+                )
+                if defined $torrent{refaddr $self}->_client
+                    and $mode eq q[w];
             return;
         }
 
@@ -216,7 +218,7 @@ package Net::BitTorrent::Session::File;
                       (($mode{refaddr $self} eq q[r]) ? LOCK_SH : LOCK_EX)
             )
             )
-        {   $session{refaddr $self}->_client->_event(
+        {   $torrent{refaddr $self}->_client->_event(
                  q[file_error],
                  {File    => $self,
                   Message => sprintf(q[Cannot lock file for %s: %s],
@@ -224,13 +226,19 @@ package Net::BitTorrent::Session::File;
                   )
                  }
             );
+            $torrent{refaddr $self}->_set_error(
+                             sprintf(q[Cannot lock '%s' for %s: %s],
+                                     $path{refaddr $self},
+                                     ($mode eq q[r] ? q[read] : q[write]), $^E
+                             )
+            );
             return;
         }
 
         #
-        $session{refaddr $self}->_client->_event(q[file_open],
+        $torrent{refaddr $self}->_client->_event(q[file_open],
                                 {File => $self, Mode => $mode{refaddr $self}})
-            if defined $session{refaddr $self}->_client();
+            if defined $torrent{refaddr $self}->_client();
 
         #
         return defined $handle{refaddr $self};
@@ -240,25 +248,33 @@ package Net::BitTorrent::Session::File;
         my ($self, $data) = @_;
         if (not defined $data) {return}
         if (not $handle{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
-                           q[file_error],
-                           {File    => $self,
-                            Message => q[Cannot read from file: File not open]
-                           }
+            $torrent{refaddr $self}->_client->_event(
+                            q[file_error],
+                            {File    => $self,
+                             Message => q[Cannot write to file: File not open]
+                            }
+            );
+            $torrent{refaddr $self}->_set_error(
+                               sprintf(q[Cannot write to '%s': File not open],
+                                       $path{refaddr $self})
             );
             return;
         }
         elsif ($mode{refaddr $self} ne q[w]) {
-            $session{refaddr $self}->_client->_event(
-                 q[file_error],
-                 {File    => $self,
-                  Message => q[Cannot read from file: File not open for write]
-                 }
+            $torrent{refaddr $self}->_client->_event(
+                  q[file_error],
+                  {File    => $self,
+                   Message => q[Cannot write to file: File not open for write]
+                  }
+            );
+            $torrent{refaddr $self}->_set_error(
+                     sprintf(q[Cannot write to '%s': File not open for write],
+                             $path{refaddr $self})
             );
             return;
         }
         elsif (($self->_systell + length($data)) > $size{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                 q[file_error],
                 {File    => $self,
                  Message => sprintf(
@@ -271,6 +287,21 @@ package Net::BitTorrent::Session::File;
                  )
                 }
             );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    <<'END', $path{refaddr $self},
+Cannot write to '%s': Beyond end of file.
+
+This may be a bug in Net::BitTorrent.
+Status for bug report: (tell: %d | data:%d bytes | size: %d) (%d > %d)
+END
+                    $self->_systell,
+                    length($data),
+                    $size{refaddr $self},
+                    ($self->_systell + length($data)),
+                    $size{refaddr $self}
+                )
+            );
             return;
         }
         truncate($handle{refaddr $self}, $size{refaddr $self})
@@ -280,7 +311,7 @@ package Net::BitTorrent::Session::File;
             = syswrite($handle{refaddr $self}, $data, $expected_length);
         if (defined $actual_length) {
             if ($actual_length != $expected_length) {
-                $session{refaddr $self}->_client->_event(
+                $torrent{refaddr $self}->_client->_event(
                     q[file_error],
                     {File    => $self,
                      Message => sprintf(
@@ -289,11 +320,18 @@ package Net::BitTorrent::Session::File;
                      )
                     }
                 );
+                $torrent{refaddr $self}->_set_error(
+                    sprintf(
+                        q[Cannot write %d bytes to '%s': Wrote %d bytes instead (%s)],
+                        length($data),  $path{refaddr $self},
+                        $actual_length, $^E
+                    )
+                );
                 return;
             }
         }
         else {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                    q[file_error],
                    {File    => $self,
                     Message => sprintf(
@@ -302,11 +340,16 @@ package Net::BitTorrent::Session::File;
                     )
                    }
             );
+            $torrent{refaddr $self}->_set_error(
+                              sprintf(q[Cannot write %d bytes to '%s' (%s)],
+                                      length($data), $path{refaddr $self}, $^E
+                              )
+            );
             return;
         }
 
         #
-        $session{refaddr $self}->_client->_event(q[file_write],
+        $torrent{refaddr $self}->_client->_event(q[file_write],
                                    {File => $self, Length => $actual_length});
 
         #
@@ -320,42 +363,55 @@ package Net::BitTorrent::Session::File;
         if (not defined $length) {
 
     #carp
-    #    q[Net::BitTorrent::Session::File->_read( LENGTH ) requires a length];
+    #    q[Net::BitTorrent::Torrent::File->_read( LENGTH ) requires a length];
             return;
         }
         if ($length !~ m[^\d+$]) {
 
 #carp
-#    q[Net::BitTorrent::Session::File->_read( LENGTH ) requires an integer length];
+#    q[Net::BitTorrent::Torrent::File->_read( LENGTH ) requires an integer length];
             return;
         }
 
         #
         my $data = q[];
         if (not $handle{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                            q[file_error],
                            {File    => $self,
                             Message => q[Cannot read from file: File not open]
                            }
             );
+            $torrent{refaddr $self}->_set_error(
+                              sprintf(q[Cannot read from '%s': File not open],
+                                      $path{refaddr $self})
+            );
             return;
         }
         elsif ($mode{refaddr $self} ne q[r]) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                   q[file_error],
                   {File    => $self,
                    Message => q[Cannot read from file: File not open for read]
                   }
             );
+            $torrent{refaddr $self}->_set_error(
+                     sprintf(q[Cannot read from '%s': File not open for read],
+                             $path{refaddr $self})
+            );
             return;
         }
         elsif ($self->_systell + $length > $size{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                                  q[file_error],
                                  {File    => $self,
                                   Message => q[Cannot read beyond end of file]
                                  }
+            );
+            $torrent{refaddr $self}->_set_error(
+                 sprintf(
+                     q[Cannot read from '%s': Cannot read beyond end of file],
+                     $path{refaddr $self})
             );
             return;
         }
@@ -364,32 +420,42 @@ package Net::BitTorrent::Session::File;
                 if -s $handle{refaddr $self} != $size{refaddr $self};
             my $real_length = sysread($handle{refaddr $self}, $data, $length);
             if ($real_length != $length) {
-                $session{refaddr $self}->_client->_event(
+                $torrent{refaddr $self}->_client->_event(
                      q[file_error],
                      {File    => $self,
                       Message => sprintf(q[Failed to read %d bytes from file],
                                          $length)
                      }
                 );
+                $torrent{refaddr $self}->_set_error(
+                                    sprintf(q[Cannot read %d bytes from '%s'],
+                                            $length, $path{refaddr $self}
+                                    )
+                );
                 return;
             }
         }
-        $session{refaddr $self}->_client->_event(q[file_read],
+        $torrent{refaddr $self}->_client->_event(q[file_read],
                                                  {File   => $self,
                                                   Length => length($data)
                                                  }
-        ) if defined $session{refaddr $self}->_client;
+        ) if defined $torrent{refaddr $self}->_client;
         return $data;
     }
 
     sub _systell {
         my ($self) = @_;
         if (not $handle{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                  q[file_error],
                  {File    => $self,
                   Message => q[Cannot get filehandle position: File not open],
                  }
+            );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    q[Cannot get filehandle position for '%s': File not open],
+                    $path{refaddr $self})
             );
             return;
         }
@@ -400,22 +466,32 @@ package Net::BitTorrent::Session::File;
         my ($self, $position, $wence) = @_;
         $wence = defined $wence ? $wence : SEEK_SET;    # default
         if (not defined $handle{refaddr $self}) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                   q[file_error],
                   {File    => $self,
                    Message => q[Cannot set filehandle position: File not open]
                   }
+            );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    q[Cannot set filehandle position for '%s': File not open],
+                    $path{refaddr $self})
             );
             return;
         }
         elsif (not defined $position) {
 
             # XXX - is this a param error or a file error?
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                                 q[file_error],
                                 {File    => $self,
                                  Message => q[Cannot seek: Undefined position]
                                 }
+            );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    q[Cannot get filehandle position for '%s': Undefined position],
+                    $path{refaddr $self})
             );
             return;
         }
@@ -426,7 +502,7 @@ package Net::BitTorrent::Session::File;
              )
              or (($position > 0) and ($wence == SEEK_END))
             )
-        {   $session{refaddr $self}->_client->_event(
+        {   $torrent{refaddr $self}->_client->_event(
                 q[file_error],
                 {File => $self,
                  Message =>
@@ -434,10 +510,16 @@ package Net::BitTorrent::Session::File;
                              $position)
                 }
             );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    q[Cannot set filehandle position for '%s': Beyond start of file (0 > %d)],
+                    $path{refaddr $self}, $position
+                )
+            );
             return;
         }
         elsif ((abs($position) > $size{refaddr $self})) {
-            $session{refaddr $self}->_client->_event(
+            $torrent{refaddr $self}->_client->_event(
                    q[file_error],
                    {File    => $self,
                     Message => sprintf(
@@ -447,6 +529,15 @@ package Net::BitTorrent::Session::File;
                                    $size{refaddr $self}
                     )
                    }
+            );
+            $torrent{refaddr $self}->_set_error(
+                sprintf(
+                    q[Cannot set filehandle position for '%s': Beyond %s of file (%d > %d)],
+                    $path{refaddr $self},
+                    ($position > 0 ? q[start] : q[end]),
+                    $position,
+                    $size{refaddr $self}
+                )
             );
             return;
         }
@@ -525,22 +616,26 @@ package Net::BitTorrent::Session::File;
             delete $handle{refaddr $self};
 
             #
-            $session{refaddr $self}
+            $torrent{refaddr $self}
                 ->_client->_event(q[file_close], {File => $self})
-                if defined $session{refaddr $self}->_client();
+                if defined $torrent{refaddr $self}->_client();
 
             #
             return $return;
         }
 
         #
-        $session{refaddr $self}->_client->_event(
+        $torrent{refaddr $self}->_client->_event(
                             q[file_error],
                             {File    => $self,
                              Message => sprintf(q[Cannot close file: %s], $^E)
                             }
-        ) if defined $session{refaddr $self}->_client();
+        ) if defined $torrent{refaddr $self}->_client();
 
+        # $torrent{refaddr $self}->_set_error(
+        #sprintf(q[Cannot close filehandle for '%s': %s],
+        #$path{refaddr $self},$^E
+        #);
         #
         return;
     }
@@ -577,7 +672,7 @@ package Net::BitTorrent::Session::File;
     sub _as_string {
         my ($self, $advanced) = @_;
         my $dump = q[TODO];
-        return print STDERR qq[$dump\n] unless defined wantarray;
+        return print STDERR qq[$dump\n] unless wantarray;
         return $dump;
     }
 
@@ -595,7 +690,7 @@ package Net::BitTorrent::Session::File;
             }
 
             # do some silly stuff to avoid user mistakes
-            weaken $session{$_nID};
+            weaken $torrent{$_nID};
 
             #  update he weak refernce to the new, cloned object
             weaken($REGISTRY{$_nID} = $_obj);
@@ -620,11 +715,12 @@ package Net::BitTorrent::Session::File;
     }
     1;
 }
+
 =pod
 
 =head1 NAME
 
-Net::BitTorrent::Session::File - BitTorrent File I/O Class
+Net::BitTorrent::Torrent::File - BitTorrent File I/O Class
 
 =head1 Constructor
 
@@ -632,7 +728,7 @@ Net::BitTorrent::Session::File - BitTorrent File I/O Class
 
 =item C<new ( { [ARGS] } )>
 
-Creates a C<Net::BitTorrent::Session::File> object.  This constructor
+Creates a C<Net::BitTorrent::Torrent::File> object.  This constructor
 should not be used directly.
 
 =back
@@ -644,7 +740,7 @@ should not be used directly.
 =item C<index ( )>
 
 Returns the zero based index of this file according to the related
-L<Net::BitTorrent::Session|Net::BitTorrent::Session> object's file
+L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent> object's file
 list.
 
 =item C<mode ( )>
@@ -686,9 +782,9 @@ on disk if a piece we want overlaps onto this file.  Just give me some
 time to work on an intermediate .piece file and this problem will go
 away.
 
-=item C<session ( )>
+=item C<torrent ( )>
 
-Returns the L<Net::BitTorrent::Session|Net::BitTorrent::Session>
+Returns the L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent>
 object related to this file.
 
 =item C<size ( )>
@@ -752,7 +848,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: File.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: File.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut
-

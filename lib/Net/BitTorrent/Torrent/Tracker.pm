@@ -1,5 +1,5 @@
-#!C:\perl\bin\perl.exe 
-package Net::BitTorrent::Session::Tracker;
+#!C:\perl\bin\perl.exe
+package Net::BitTorrent::Torrent::Tracker;
 {
     use strict;      # core as of perl 5
     use warnings;    # core as of perl 5.006
@@ -11,24 +11,24 @@ package Net::BitTorrent::Session::Tracker;
 
     #
     use lib q[./../../../];
-    use Net::BitTorrent::Session::Tracker::HTTP;
-    use Net::BitTorrent::Session::Tracker::UDP;
+    use Net::BitTorrent::Torrent::Tracker::HTTP;
+    use Net::BitTorrent::Torrent::Tracker::UDP;
 
     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: Tracker.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 29 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Tracker.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (@CONTENTS) = \my (
-                 %session,  %_urls,                          # params to new()
+                 %torrent,  %_urls,                          # params to new()
                  %complete, %incomplete);
     my %REGISTRY;
 
     #
     sub new {
 
-        # Creates a new N::B::Session object
+        # Creates a new N::B::Torrent object
         # Accepts parameters as key/value pairs in a hash reference
         # Required parameters:
         #  - Client  (Net::BitTorrent object)
@@ -49,43 +49,43 @@ package Net::BitTorrent::Session::Tracker;
 
         # Param validation... Ugh...
         if (not defined $args) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires ]
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires ]
                 . q[parameters a set of parameters];
             return;
         }
         if (ref($args) ne q[HASH]) {
-            carp q[Net::BitTorrentS::Session::Tracker->new({}) requires ]
+            carp q[Net::BitTorrentS::Torrent::Tracker->new({}) requires ]
                 . q[parameters to be passed as a hashref];
             return;
         }
         if (not defined $args->{q[URLs]}) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires a ]
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires a ]
                 . q['URLs' parameter];
             return;
         }
         if (ref $args->{q[URLs]} ne q[ARRAY]) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires a ]
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires a ]
                 . q[list of URLs];
             return;
         }
         if (not scalar(@{$args->{q[URLs]}})) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) doesn't (yet) ]
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) doesn't (yet) ]
                 . q[know what to do with an empty list of URLs];
             return;
         }
-        if (not defined $args->{q[Session]}) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires a ]
-                . q['Session' parameter];
+        if (not defined $args->{q[Torrent]}) {
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires a ]
+                . q['Torrent' parameter];
             return;
         }
-        if (not blessed $args->{q[Session]}) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires a ]
-                . q[blessed 'Session' object];
+        if (not blessed $args->{q[Torrent]}) {
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires a ]
+                . q[blessed 'Torrent' object];
             return;
         }
-        if (not $args->{q[Session]}->isa(q[Net::BitTorrent::Session])) {
-            carp q[Net::BitTorrent::Session::Tracker->new({}) requires a ]
-                . q[blessed Net::BitTorrent::Session object in the 'Session' ]
+        if (not $args->{q[Torrent]}->isa(q[Net::BitTorrent::Torrent])) {
+            carp q[Net::BitTorrent::Torrent::Tracker->new({}) requires a ]
+                . q[blessed Net::BitTorrent::Torrent object in the 'Torrent' ]
                 . q[parameter];
             return;
         }
@@ -97,8 +97,8 @@ package Net::BitTorrent::Session::Tracker;
         $self = bless(\$args->{q[URLs]}->[0], $class);
 
         #
-        $session{refaddr $self} = $args->{q[Session]};
-        weaken $session{refaddr $self};
+        $torrent{refaddr $self} = $args->{q[Torrent]};
+        weaken $torrent{refaddr $self};
 
         #
         $complete{refaddr $self}   = 0;
@@ -107,21 +107,21 @@ package Net::BitTorrent::Session::Tracker;
         #
         $_urls{refaddr $self} = [
                           map ($_ =~ m[^http://]i
-                               ? Net::BitTorrent::Session::Tracker::HTTP->new(
+                               ? Net::BitTorrent::Torrent::Tracker::HTTP->new(
                                                     {URL => $_, Tier => $self}
                                    )
-                               : Net::BitTorrent::Session::Tracker::UDP->new(
+                               : Net::BitTorrent::Torrent::Tracker::UDP->new(
                                                     {URL => $_, Tier => $self}
                                ),
                                @{$args->{q[URLs]}})
         ];
 
         #
-        $session{refaddr $self}->_client->_schedule({Time   => time,
+        $torrent{refaddr $self}->_client->_schedule({Time   => time,
                                                      Code   => \&_announce,
                                                      Object => $self
                                                     }
-        );
+        ) if defined $torrent{refaddr $self}->_client;
         weaken($REGISTRY{refaddr $self} = $self);
 
         #
@@ -133,8 +133,8 @@ package Net::BitTorrent::Session::Tracker;
     sub complete   { return $complete{refaddr +shift} }
 
     # Accessors | Private
-    sub _client  { return $session{refaddr +shift}->_client; }
-    sub _session { return $session{refaddr +shift}; }
+    sub _client  { return $torrent{refaddr +shift}->_client; }
+    sub _torrent { return $torrent{refaddr +shift}; }
     sub _urls    { return $_urls{refaddr +shift}; }
 
     # Methods | Private
@@ -148,7 +148,6 @@ package Net::BitTorrent::Session::Tracker;
         return $incomplete{refaddr $self} = $value;
     }
 
-
     sub _shuffle {    # push first (bad) to the end of the list
         my ($self) = @_;
         return (
@@ -157,14 +156,19 @@ package Net::BitTorrent::Session::Tracker;
 
     sub _announce {
         my ($self) = @_;
+        return if not defined $self;
+        return if not defined $_urls{refaddr $self};
+        return if not scalar @{$_urls{refaddr $self}};
         return $_urls{refaddr $self}->[0]->_announce(q[started]);
     }
- sub _as_string {
+
+    sub _as_string {
         my ($self, $advanced) = @_;
         my $dump = q[TODO];
-        return print STDERR qq[$dump\n] unless defined wantarray;
+        return print STDERR qq[$dump\n] unless wantarray;
         return $dump;
     }
+
     #
     sub CLONE {
         for my $_oID (keys %REGISTRY) {
@@ -180,7 +184,7 @@ package Net::BitTorrent::Session::Tracker;
             }
 
             # do some silly stuff to avoid user mistakes
-            weaken $session{$_nID};
+            weaken $torrent{$_nID};
 
             #  update he weak refernce to the new, cloned object
             weaken($REGISTRY{$_nID} = $_obj);
@@ -210,7 +214,7 @@ package Net::BitTorrent::Session::Tracker;
 
 =head1 NAME
 
-Net::BitTorrent::Session::Tracker - Single BitTorrent Tracker Tier
+Net::BitTorrent::Torrent::Tracker - Single BitTorrent Tracker Tier
 
 =head1 Description
 
@@ -260,6 +264,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Tracker.pm 29 2008-10-11 15:19:36Z sanko@cpan.org $
+=for svn $Id: Tracker.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
 
 =cut

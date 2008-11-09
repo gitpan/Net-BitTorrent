@@ -20,7 +20,7 @@ Net::BitTorrent::Todo - TODO list for Perl module Net::BitTorrent
 
 =item * Complete test suite
 
-Create a series of bad .torrent files to test N::B::Session with:
+Create a series of bad .torrent files to test N::B::Torrent with:
 
 =over 2
 
@@ -40,9 +40,9 @@ Create a series of bad .torrent files to test N::B::Session with:
 
 =item * Improve detection of bad .torrent metadata.
 
-=item * Per-session transfer limits.
+=item * Per-torrent transfer limits.
 
-=item * Start, stop, pause individual sessions.
+=item * Start, stop, pause individual torrents.
 
 =item * Taint safe.
 
@@ -138,6 +138,6 @@ Partial support currently
 
 =back
 
-=for svn $Id: TODO.pod 28 2008-09-26 22:47:04Z sanko@cpan.org $
+=for svn $Id: TODO.pod 31 2008-11-01 17:22:17Z sanko@cpan.org $
 
 =cut
