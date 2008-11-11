@@ -44,6 +44,8 @@ FAIL
 my $class = $is_developer    #&& 0
     ? Module::Build->subclass(class => q[Net::BitTorrent::Build],
                               code  => <<'SUBCLASS' ) : q[Module::Build];
+    # TODO: add pod
+
     sub ACTION_profile {
         my ($self) = @_;
 
@@ -92,11 +94,16 @@ my $class = $is_developer    #&& 0
             return;
         }
         require Perl::Tidy;
-        my @files =
-            map { File::Spec->rel2abs(q[./] . $_) }
-                sort(values %{$self->find_pm_files},
-                    keys %{$self->script_files});
-        Perl::Tidy::perltidy(argv => <<'END' . join q[ ], @files);
+        for my $files (
+            [keys(%{$self->script_files})],   # scripts first
+            [values(%{$self->find_pm_files})],# modules
+            [@{$self->find_test_files}]       # test suite last
+        ) { $files = [sort map { File::Spec->rel2abs(q[./] . $_) } @{$files}];
+            # One at a time...
+            for my $file (@$files) {
+            printf qq[Running perltidy on '%s' ... \n], File::Spec->abs2rel($file);
+            $self->add_to_cleanup($file . q[.tidy]);
+            Perl::Tidy::perltidy(argv => <<'END' . $file);}
 --brace-tightness=2
 --block-brace-tightness=1
 --block-brace-vertical-tightness=2
@@ -127,7 +134,7 @@ my $class = $is_developer    #&& 0
 --backup-file-extension=tidy
 
 END
-        $self->add_to_cleanup(map{File::Spec->abs2rel($_.q[.tidy])}@files);
+        }
         $self->depends_on(q[code]);
         return 1;
     }
@@ -252,6 +259,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Build.PL 32 2008-11-09 21:12:33Z sanko@cpan.org $
+=for svn $Id: Build.PL 33 2008-11-10 23:27:24Z sanko@cpan.org $
 
 =cut

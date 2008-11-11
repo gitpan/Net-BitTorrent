@@ -29,7 +29,7 @@ my ($flux_capacitor, %peers) = (0, ());
 
 #
 BEGIN {
-     plan tests => 4;
+    plan tests => 4;
 
     # Ours
     use_ok(q[File::Temp],   qw[tempdir]);
@@ -76,4 +76,4 @@ SKIP: {
     #
 }
 
-# $Id: Node.t 31 2008-11-01 17:22:17Z sanko@cpan.org $
+# $Id: Node.t 33 2008-11-10 23:27:24Z sanko@cpan.org $

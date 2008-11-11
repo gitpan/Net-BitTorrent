@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: 008_miniswarm_dht.t 32 2008-11-09 21:12:33Z sanko@cpan.org $
+# $Id: 008_miniswarm_dht.t 33 2008-11-10 23:27:24Z sanko@cpan.org $
 # Miniature swarm of 1 seed, 1 dht tracker, and 5 new peers
 #
 use strict;
@@ -109,7 +109,8 @@ SKIP: {
                 $chr),
             $test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}
         ) if not $torrent->is_complete;
-        ok(scalar($torrent->is_complete), sprintf(q[seed_%s is seeding], $chr));
+        ok(scalar($torrent->is_complete),
+            sprintf(q[seed_%s is seeding], $chr));
         skip(sprintf(q[Failed to load torrent for seed_%s], $chr),
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}

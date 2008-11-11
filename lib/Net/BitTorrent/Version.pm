@@ -6,8 +6,8 @@ package Net::BitTorrent::Version;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: Version.pm 31 2008-11-01 17:22:17Z sanko@cpan.org $];
-    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 7; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Version.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
+    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 9; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent/$VERSION ($^O)];    # ext protocol
 
     sub gen_peerid {
@@ -15,7 +15,7 @@ package Net::BitTorrent::Version;
             q[a20],
             (sprintf(
                  q[NB%03d%1s-%8s%5s],
-                 $VERSION_BASE,      # formerly: (q[$Rev: 31 $] =~ m[(\d+)]g),
+                 $VERSION_BASE,      # formerly: (q[$Rev: 33 $] =~ m[(\d+)]g),
                  ($UNSTABLE_RELEASE ? q[U] : q[S]),
                  (join q[],
                   map {
@@ -57,12 +57,12 @@ and the Peer ID generator.
 
 =head1 Methods
 
-=head2 C<gen_node_id>
+=head2 C<gen_node_id ( )>
 
 Returns a random 20-byte string that can be used to identify ourself in a
 DHT swarm.
 
-=head2 C<gen_peerid>
+=head2 C<gen_peerid ( )>
 
 Generates a unique Peer ID based on Net::BitTorrent's
 L<Specification|/"Peer ID Specification">.
@@ -188,6 +188,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Version.pm 31 2008-11-01 17:22:17Z sanko@cpan.org $
+=for svn $Id: Version.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $
 
 =cut

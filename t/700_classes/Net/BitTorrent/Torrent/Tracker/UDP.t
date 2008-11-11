@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 use Module::Build;
-    use Test::More;
+use Test::More;
 
 #
 use lib q[../../../../../../lib];
@@ -78,4 +78,4 @@ SKIP: {
     #
 }
 
-# $Id: UDP.t 31 2008-11-01 17:22:17Z sanko@cpan.org $
+# $Id: UDP.t 33 2008-11-10 23:27:24Z sanko@cpan.org $

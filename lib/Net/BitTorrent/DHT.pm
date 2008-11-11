@@ -15,8 +15,8 @@ package Net::BitTorrent::DHT;
 
     #
     use version qw[qv];    # core as of 5.009
-    our $SVN = q[$Id: DHT.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 33 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     # Debugging
     #use Data::Dump qw[pp];
@@ -468,8 +468,7 @@ END
         sub _as_string {
             my ($self, $advanced) = @_;
             my $dump = q[TODO];
-            return print STDERR qq[$dump\n] unless wantarray;
-            return $dump;
+            return defined wantarray ? $dump : print STDERR qq[$dump\n];
         }
 
         sub CLONE {
@@ -585,6 +584,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
+=for svn $Id: DHT.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $
 
 =cut

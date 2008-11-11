@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.027_007
+version: 0.027_009
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -34,40 +34,40 @@ recommends:
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
-    version: 0.032_004
+    version: 0.033_004
   Net::BitTorrent::DHT:
     file: lib/Net/BitTorrent/DHT.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::DHT::Node:
     file: lib/Net/BitTorrent/DHT/Node.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Peer:
     file: lib/Net/BitTorrent/Peer.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Protocol:
     file: lib/Net/BitTorrent/Protocol.pm
     version: 0.032
   Net::BitTorrent::Torrent:
     file: lib/Net/BitTorrent/Torrent.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Torrent::File:
     file: lib/Net/BitTorrent/Torrent/File.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Torrent::Tracker:
     file: lib/Net/BitTorrent/Torrent/Tracker.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Torrent::Tracker::HTTP:
     file: lib/Net/BitTorrent/Torrent/Tracker/HTTP.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Torrent::Tracker::UDP:
     file: lib/Net/BitTorrent/Torrent/Tracker/UDP.pm
-    version: 0.032
+    version: 0.033
   Net::BitTorrent::Util:
     file: lib/Net/BitTorrent/Util.pm
     version: 0.032
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.027_007
+    version: 0.027_009
 generated_by: 'Sanko Robinson <sanko@cpan.org>'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

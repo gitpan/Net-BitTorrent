@@ -48,12 +48,9 @@ SKIP: {
 #~     ) if not $release_testing;
 #
 #
-
     skip(q[Socket-based tests have been disabled.],
          ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
     ) if not $okay_udp;
-
-
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
     warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
@@ -85,4 +82,4 @@ SKIP: {
     #
 }
 
-# $Id: DHT.t 31 2008-11-01 17:22:17Z sanko@cpan.org $
+# $Id: DHT.t 33 2008-11-10 23:27:24Z sanko@cpan.org $

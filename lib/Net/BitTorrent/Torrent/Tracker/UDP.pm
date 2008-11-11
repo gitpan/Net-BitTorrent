@@ -9,8 +9,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use Scalar::Util qw[blessed weaken refaddr];    # core since perl 5.007003
                                                     #
     use version qw[qv];                             # core as of 5.009
-    our $SVN = q[$Id: UDP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 33 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
 
     #
     my (@CONTENTS) = \my (
@@ -73,8 +73,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     sub _as_string {
         my ($self, $advanced) = @_;
         my $dump = q[TODO];
-        return print STDERR qq[$dump\n] unless wantarray;
-        return $dump;
+        return defined wantarray ? $dump : print STDERR qq[$dump\n];
     }
 
     sub CLONE {
@@ -92,7 +91,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
 
             # do some silly stuff to avoid user mistakes
             #weaken($_client{$_nID} = $_client{$_oID});
-            weaken tier {$_nID};
+            weaken $tier{$_nID};
 
             #  update he weak refernce to the new, cloned object
             weaken($REGISTRY{$_nID} = $_obj);
@@ -171,6 +170,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
+=for svn $Id: UDP.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $
 
 =cut

@@ -33,7 +33,6 @@ GetOptions(q[help|?]             => \$help,
            q[dht!]               => \$dht,
            q[verbose|v]          => \$verbose
 ) or pod2usage(2);
-
 if (not scalar @dot_torrents and scalar @ARGV) {
     push @dot_torrents, shift @ARGV while (defined $ARGV[0] and -f $ARGV[0]);
 }
@@ -535,6 +534,6 @@ Print the manual page and exit.
 This is a B<very> basic demonstration of a full C<Net::BitTorrent>-based
 client.
 
-=for svn $Id: bittorrent.pl 32 2008-11-09 21:12:33Z sanko@cpan.org $
+=for svn $Id: bittorrent.pl 33 2008-11-10 23:27:24Z sanko@cpan.org $
 
 =cut
