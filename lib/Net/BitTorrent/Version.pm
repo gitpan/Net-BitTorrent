@@ -7,7 +7,7 @@ package Net::BitTorrent::Version;
     #
     use version qw[qv];    # core as of 5.009
     our $SVN = q[$Id: Version.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
-    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 9; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 10; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent/$VERSION ($^O)];    # ext protocol
 
     sub gen_peerid {

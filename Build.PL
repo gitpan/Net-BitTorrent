@@ -16,8 +16,17 @@ my $is_developer = ((-d q[.svn]) ? 1 : 0) or ($ENV{RELEASE_TESTING} ? 1 : 0);
 my $okay_tcp     = okay_tcp();
 my $okay_udp     = okay_udp();
 my @tests;
-find \&find_cb, sort qw[t/000_miniswarm/ t/700_classes/];
+find \&find_cb, qw[t/000_miniswarm/ t/700_classes/];
 @tests = reverse sort @tests;    # Test suite runs in reverse
+
+
+
+
+
+
+
+
+
 
 #
 print $okay_tcp || $okay_udp ? <<'FTW': <<'FAIL';
@@ -138,7 +147,6 @@ END
         $self->depends_on(q[code]);
         return 1;
     }
-
 SUBCLASS
 
 #
