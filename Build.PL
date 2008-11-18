@@ -1,9 +1,10 @@
 #!/usr/bin/perl -w
 use strict;
 use warnings;
+
+#use 5.008_001;
 use File::Find;
 use Module::Build 0.30;
-use 5.008_001;
 use Config;    # Figure out if this perl supports threads
 
 # ...
@@ -19,21 +20,16 @@ my @tests;
 find \&find_cb, qw[t/000_miniswarm/ t/700_classes/];
 @tests = reverse sort @tests;    # Test suite runs in reverse
 
-
-
-
-
-
-
-
-
-
 #
-print $okay_tcp || $okay_udp ? <<'FTW': <<'FAIL';
+printf $okay_tcp || $okay_udp
+    ? <<'FTW': <<'FAIL', map { $_ ? 'En' : 'Dis' } ($okay_tcp, $okay_udp);
  ****************************************************************************
    During the test phase, we will be opening ports, contacting a tiny local
    tracker, and trading data to simulate actual swarms.  By design, the
    tests transfer only to the local system.
+
+     - TCP tests are %sabled.
+     - UDP tests are %sabled.
 
    NOTE: These tests may fail due to restrictive firewalling, solar flare
    activity, or other connectivity problems.
@@ -50,69 +46,60 @@ FTW
 FAIL
 
 # in expectation of future developments (combined profiling in NYTProf)
-my $class = $is_developer    #&& 0
+my $class = $is_developer    # && 0
     ? Module::Build->subclass(class => q[Net::BitTorrent::Build],
                               code  => <<'SUBCLASS' ) : q[Module::Build];
-    # TODO: add pod
-
-    sub ACTION_profile {
-        my ($self) = @_;
-
-        print qq[...?\n];
-
-        unless (Module::Build::ModuleInfo->find_module_by_name('Devel::NYTProf')) {
-            warn(qq[Cannot run testcover action unless Devel::NYTProf is installed.\n]);
-            return;
-        }
-
-        #unless (Module::Build::ModuleInfo->find_module_by_name('Devel::Cover')) {
-        #    warn("Cannot run testcover action unless Devel::Cover is installed.\n");
-        #    return;
-        #}
-
-        $self->add_to_cleanup('nytprof.out', 'nytprof');
-        $self->depends_on('code');
-
-        # See whether any of the *.pm files have changed since last time
-        # testcover was run.  If so, start over.
-        #if (-e 'cover_db') {
-        #    my $pm_files = $self->rscan_dir
-        #        (File::Spec->catdir($self->blib, 'lib'), file_qr('\.pm$') );
-        #    my $cover_files = $self->rscan_dir('cover_db', sub {-f $_ and not /\.html$/});
-        #    $self->do_system(qw(cover -delete))
-        #        unless $self->up_to_date($pm_files,         $cover_files)
-        #            && $self->up_to_date($self->test_files, $cover_files);
-        #}
-
-        local $Test::Harness::switches    =
-        local $Test::Harness::Switches    =
-        local $ENV{HARNESS_PERL_SWITCHES} = q[-d:NYTProf];
-
-        $self->notes(profile   => 1);
-
-        $self->depends_on(q[test]);
-        $self->do_system(q[nytprofhtml --open]);
-
-        $self->notes(profile   => 0); # clean up
+# TODO: add pod
+sub ACTION_profile {
+    my ($self) = @_;
+    unless (Module::Build::ModuleInfo->find_module_by_name('Devel::NYTProf'))
+    {   warn(
+            qq[Cannot run testcover action unless Devel::NYTProf is installed.\n]
+        );
+        return;
     }
+    $self->add_to_cleanup('nytprof.out', 'nytprof');
+    $self->depends_on('code');
 
-    sub ACTION_tidy {
-        my $self = shift;
-        unless (Module::Build::ModuleInfo->find_module_by_name('Perl::Tidy')) {
-            warn(qq[Cannot run tidy action unless Perl::Tidy is installed.\n]);
-            return;
-        }
-        require Perl::Tidy;
-        for my $files (
-            [keys(%{$self->script_files})],   # scripts first
-            [values(%{$self->find_pm_files})],# modules
-            [@{$self->find_test_files}]       # test suite last
-        ) { $files = [sort map { File::Spec->rel2abs(q[./] . $_) } @{$files}];
-            # One at a time...
-            for my $file (@$files) {
-            printf qq[Running perltidy on '%s' ... \n], File::Spec->abs2rel($file);
+    # See whether any of the *.pm files have changed since last time
+    # profile was run.  If so, start over.
+    if (-e 'nytprof.out') {
+        my $pm_files =
+            $self->rscan_dir(File::Spec->catdir($self->blib, 'lib'),
+                             file_qr('\.pm$'));
+        my $cover_files
+            = $self->rscan_dir('cover_db', sub { -f $_ and not /\.html$/ });
+        $self->do_system(qw(cover -delete))
+            unless $self->up_to_date($pm_files, $cover_files)
+                && $self->up_to_date($self->test_files, $cover_files);
+    }
+    local $Test::Harness::switches = local $Test::Harness::Switches
+        = local $ENV{HARNESS_PERL_SWITCHES} = q[-d:NYTProf];
+    $self->notes(profile => 1);
+    $self->depends_on(q[test]);
+    $self->do_system(q[nytprofhtml --open]);
+    $self->notes(profile => 0);    # clean up
+}
+
+sub ACTION_tidy {
+    my ($self) = @_;
+    unless (Module::Build::ModuleInfo->find_module_by_name('Perl::Tidy')) {
+        warn(qq[Cannot run tidy action unless Perl::Tidy is installed.\n]);
+        return;
+    }
+    require Perl::Tidy;
+    for my $files ([keys(%{$self->script_files})],       # scripts first
+                   [values(%{$self->find_pm_files})],    # modules
+                   [@{$self->find_test_files}]           # test suite last
+        )
+    {   $files = [sort map { File::Spec->rel2abs(q[./] . $_) } @{$files}];
+
+        # One at a time...
+        for my $file (@$files) {
+            printf qq[Running perltidy on '%s' ...\n],
+                File::Spec->abs2rel($file);
             $self->add_to_cleanup($file . q[.tidy]);
-            Perl::Tidy::perltidy(argv => <<'END' . $file);}
+            Perl::Tidy::perltidy(argv => <<'END' . $file); } }
 --brace-tightness=2
 --block-brace-tightness=1
 --block-brace-vertical-tightness=2
@@ -143,10 +130,62 @@ my $class = $is_developer    #&& 0
 --backup-file-extension=tidy
 
 END
-        }
-        $self->depends_on(q[code]);
-        return 1;
+    $self->depends_on(q[code]);
+    return 1;
+}
+
+sub ACTION_wastetime {
+    my ($self) = @_;
+    unless (Module::Build::ModuleInfo->find_module_by_name('File::Copy')) {
+        warn(qq[Cannot run mindist action unless File::Copy is installed.\n]);
+        return;
     }
+    require File::Copy;
+    mkdir q[./archive] if !-d q[./archive];
+    my $dist_dir = q[];
+    for my $i (1 .. 800) {
+        $self->SUPER::ACTION_distdir();
+        $dist_dir = $self->dist_dir;
+        $self->do_system(qq[tar -cf $dist_dir.tar $dist_dir]);
+        $self->do_system(qq[gzip -v -9 -f -n $dist_dir.tar]);
+
+       #File::Copy::copy($dist_dir . q[.tar.gz],
+       #     q[X:/archive/] . $dist_dir . q[.tar.gz] . sprintf(q[.%03d], $i));
+        rename $dist_dir . q[.tar.gz], q[./archive/] . $dist_dir . q[.tar.gz]
+            if !-f q[./archive/] . $dist_dir . q[.tar.gz]
+                or -s $dist_dir . q[.tar.gz]
+                < -s q[./archive/] . $dist_dir . q[.tar.gz];
+        unlink $dist_dir . q[.tar.gz];
+        $self->delete_filetree($dist_dir);
+    }
+    return
+        File::Copy::copy(q[./archive/] . $dist_dir . q[.tar.gz],
+                         $dist_dir . q[.tar.gz]);
+}
+
+sub ACTION_spellcheck {
+    my ($self) = @_;
+    for my $files (
+        [keys(%{$self->script_files})],       # scripts first
+        [values(%{$self->find_pm_files})],    # modules
+        [@{$self->find_test_files}],          # test suite and docs
+        [values(%{shift->_find_file_by_type(q[pod], q[.])})]
+        )
+    {   $files = [sort map { File::Spec->rel2abs(q[./] . $_) } @{$files}];
+
+        # One at a time...
+        for my $file (@$files) {
+            $file = File::Spec->abs2rel($file);
+            system(
+                 sprintf(q[title aspell - '%s'], File::Spec->abs2rel($file)));
+            $self->do_system(sprintf q[podspell %s > %s.spell], $file, $file);
+            $self->add_to_cleanup($file . q[.spell]);
+            system(q[aspell check ] . $file . q[.spell]);
+            $self->add_to_cleanup($file . q[.bak]);
+        }
+    }
+    $self->depends_on(q[code]);
+}
 SUBCLASS
 
 #
@@ -156,26 +195,33 @@ my $mb = $class->new(
     dist_author       => q[Sanko Robinson <sanko@cpan.org>],
     dist_abstract     => q[BitTorrent peer-to-peer protocol],
     dist_version_from => q[lib/Net/BitTorrent/Version.pm],
-    requires          => {
-                 q[Cwd]           => 0,           # dev on 3.2701
-                 q[Digest::SHA]   => 5.45,        # dev on 5.47|CORE in 5.10
-                 q[Errno]         => 0,           # dev on 1.10
-                 q[Exporter]      => 0,           # dev on 5.63
-                 q[Fcntl]         => 0,           # dev on 1.06
-                 q[File::Path]    => 0,           # dev on 2.04
-                 q[File::Spec]    => 0,           # dev on 3.2701
-                 q[Module::Build] => 0.30,        # dev on 0.30
-                 q[perl]          => q[5.8.1],    # dev on 5.11.0
-                 q[Scalar::Util]  => 1.19,        # dev on 1.19
-                 q[Socket]        => 1.77,        # dev on 1.81
-                 q[Test::More]    => 0.80,        # dev on 0.80
-                 q[Time::HiRes]   => 0,           # dev on 1.9715
-                 q[version]       => 0.74         # dev on 0.76|CORE in 5.10
+    requires => {    # All required modules are CORE
+        q[Cwd]           => 0,           # dev on 3.2701
+        q[Digest::SHA]   => 5.45,        # dev on 5.47|CORE in 5.10
+        q[Errno]         => 0,           # dev on 1.10
+        q[Exporter]      => 0,           # dev on 5.63
+        q[Fcntl]         => 0,           # dev on 1.06
+        q[File::Path]    => 0,           # dev on 2.04
+        q[File::Spec]    => 0,           # dev on 3.2701
+        q[Module::Build] => 0.30,        # dev on 0.30
+        q[perl]          => q[5.8.1],    # dev on 5.11.0
+        q[Scalar::Util]  => 1.19,        # dev on 1.19
+        q[Socket]        => 1.77,        # dev on 1.81
+        q[Test::More]    => 0.80,        # dev on 0.80
+        q[Time::HiRes]   => 0,           # dev on 1.9715
+        q[version]       => 0.74,        # dev on 0.76|CORE in 5.10
+        (    # UDP trackers require 64-bit integers... stupid, I know.
+           (!eval { my $eval = pack(q[Q], time); 1; })
+           ? (q[Math::BigInt] => 0)    # dev on 1.89
+           : ()
+        )
     },
-    build_requires => {q[Module::Build] => 0.30,        # dev on 0.30
-                       q[Test::More]    => 0.80,        # dev on 0.80
+    build_requires => {q[Module::Build] => 0.30,      # dev on 0.30
+                       q[Test::More]    => 0.80,      # dev on 0.80
     },
-    recommends => {q[Data::Dump] => 0},    # debug output
+    recommends => {    # Non-CORE modules that are nice to have around
+                    q[Data::Dump] => 0    # dev on 1.12
+    },
     auto_features => {
         win32_utf8_support => {
             description => q[Support for Wide-char filenames on Windows],
@@ -184,11 +230,11 @@ my $mb = $class->new(
                          q[perl]           => q[5.8.7],    # dev on 5.11.0
                          q[utf8]           => 0,           # dev on 1.07
                          q[Win32]          => 0,           # dev on 0.38
-                         q[Win32API::File] => 0.10,        # dev on 0.1001_01
-            },
+                         q[Win32API::File] => 0.10         # dev on 0.1001_01
+            }
         }
     },
-    script_files => qw[.\scripts\bittorrent.pl],
+    script_files => qw[scripts/bittorrent.pl],
     test_files   => \@tests,
     meta_merge   => {
          resources => {

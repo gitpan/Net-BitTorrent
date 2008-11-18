@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Module::Build;
 use Socket;
-use Fcntl qw[:flock];    # core as of perl 5
+use Fcntl qw[:flock];
 use Test::More;
 use File::Temp qw[];
 use IO::Socket qw[SOMAXCONN];
@@ -80,8 +80,7 @@ SKIP: {
     my $test_builder = Test::More->builder;
     $client{q[DHT]} = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
     ok($client{q[DHT]}->isa(q[Net::BitTorrent]), q[DHT (bystander)]);
-    $client{q[DHT]}->_use_dht(1);
-    ok($client{q[DHT]}->_dht, q[DHT (bystander) has enabled dht]);
+    ok($client{q[DHT]}->_use_dht, q[DHT (bystander) has enabled dht]);
     for my $chr (1 .. $Seeds) {
         $chr = sprintf $sprintf, $chr;
         $client{q[seed_] . $chr}
@@ -90,8 +89,7 @@ SKIP: {
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
         ) if not $client{q[seed_] . $chr};
-        $client{q[seed_] . $chr}->_use_dht(1);
-        ok($client{q[seed_] . $chr}->_dht,
+        ok($client{q[seed_] . $chr}->_use_dht,
             sprintf q[seed_%s has enabled dht], $chr);
         my $torrent = $client{q[seed_] . $chr}->add_torrent(
                                      {Path    => $miniswarm_dot_torrent,
@@ -116,7 +114,7 @@ SKIP: {
                  - $test_builder->{q[Curr_Test]}
         ) if not $torrent->is_complete;
         $client{q[seed_] . $chr}->_dht->_add_node(
-               sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_dht->_port));
+                 sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_udp_port));
         $client{q[seed_] . $chr}->do_one_loop(0.1);    # let them announce
     }
     for my $chr (1 .. $Peers_DHT) {
@@ -126,8 +124,7 @@ SKIP: {
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
         ) if not $client{$chr};
-        $client{$chr}->_use_dht(1);
-        ok($client{$chr}->_dht, sprintf q[peer_%s has enabled dht], $chr);
+        ok($client{$chr}->_use_dht, sprintf q[peer_%s has enabled dht], $chr);
         $client{$chr}->on_event(
             q[piece_hash_pass],
             sub {
@@ -159,7 +156,7 @@ SKIP: {
                  - $test_builder->{q[Curr_Test]}
         ) if not $torrent;
         $client{$chr}->_dht->_add_node(
-               sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_dht->_port));
+                 sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_udp_port));
     }
     while ($test_builder->{q[Curr_Test]} < $test_builder->{q[Expected_Tests]})
     {   grep { $_->do_one_loop(0.1); } values %client;
@@ -170,3 +167,31 @@ SKIP: {
         ) if (int(time - $^T) > $Timeout);
     }
 }
+
+=head1 Author
+
+Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
+
+CPAN ID: SANKO
+
+=head1 License and Legal
+
+Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of The Artistic License 2.0.  See the F<LICENSE>
+file included with this distribution or
+http://www.perlfoundation.org/artistic_license_2_0.  For
+clarification, see http://www.perlfoundation.org/artistic_2_0_notes.
+
+When separated from the distribution, all POD documentation is covered
+by the Creative Commons Attribution-Share Alike 3.0 License.  See
+http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
+clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
+
+Neither this module nor the L<Author|/Author> is affiliated with
+BitTorrent, Inc.
+
+=for svn $Id$
+
+=cut

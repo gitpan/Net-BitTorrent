@@ -5,9 +5,9 @@ package Net::BitTorrent::Version;
     use warnings;
 
     #
-    use version qw[qv];    # core as of 5.009
+    use version qw[qv];
     our $SVN = q[$Id: Version.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
-    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 10; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 11; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent/$VERSION ($^O)];    # ext protocol
 
     sub gen_peerid {
@@ -23,13 +23,13 @@ package Net::BitTorrent::Version;
                       ->[rand(66)]
                       } 1 .. 8
                  ),
-                 q[*****]
+                 q[Azumi]
              )
             )
         );
     }
 
-    sub gen_node_id {
+    sub gen_node_id {    # DHT
         return
             pack(q[a20],
                  (join(q[],
@@ -49,9 +49,9 @@ Net::BitTorrent::Version - Net::BitTorrent's project-wide version numbers
 
 =head1 DESCRIPTION
 
-Because of the problems coordinationg revision numbers in a distributed
+Because of the problems coordinating revision numbers in a distributed
 version control system and across a directory full of Perl modules, this
-module provides a central location for the project's overal release
+module provides a central location for the project's overall release
 number, the version string provided in Extended Protocol handshakes,
 and the Peer ID generator.
 
@@ -162,7 +162,7 @@ http://slashdot.org/comments.pl?sid=997033&cid=25390887
 This document and the specification behind it are subject to change.
 All modifications will be documented in the Changes file included with
 this distribution.  All versions of this file can be found in the
-project's svn repository.
+project's SVN repository.
 
 =head1 Author
 

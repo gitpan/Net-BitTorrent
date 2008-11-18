@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.027_010
+version: 0.027_011
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -19,6 +19,7 @@ requires:
   Fcntl: 0
   File::Path: 0
   File::Spec: 0
+  Math::BigInt: 0
   Module::Build: 0.3
   Scalar::Util: 1.19
   Socket: 1.77
@@ -67,7 +68,7 @@ provides:
     version: 0.032
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.027_010
+    version: 0.027_011
 generated_by: 'Sanko Robinson <sanko@cpan.org>'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
