@@ -10,8 +10,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: UDP.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 33 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_url, %_tier, %_tid, %_cid, %_outstanding_requests,
                         %_packed_host, %_event);
@@ -63,6 +63,11 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     # Methods | Private
     sub _announce {
         my ($self, $event) = @_;
+        if (!$_tier{refaddr $self}->_client->_udp) {
+            carp sprintf q[UDP port is not open];
+            $_tier{refaddr $self}->_shuffle();
+            return;
+        }
         if (defined $event) {
             if ($event !~ m[^(?:st(?:art|opp)|complet)ed$]) {
                 carp sprintf q[Invalid event for announce: %s], $event;
@@ -117,7 +122,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
 
     sub _send {
         my ($self, $tid) = @_;
-        if (not $_tier{refaddr $self}->_client->_udp) {
+        if (!$_tier{refaddr $self}->_client->_udp) {
             $_tier{refaddr $self}->_client->_socket_open();
         }
         return if not $_tier{refaddr $self}->_client->_udp;
@@ -258,7 +263,7 @@ END
                     (int($i / 2**32) % 2**32, int($i % 2**32));
                 }
             };
-            $return = pack('NN', $int1, $int2);
+            $return = pack(q[NN], $int1, $int2);
         }
         return $return;
     }
@@ -357,6 +362,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $
+=for svn $Id: UDP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
 
 =cut

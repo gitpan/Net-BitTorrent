@@ -19,17 +19,10 @@ my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
 $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
-plan tests => 74;
+plan tests => 72;
 my ($tempdir) = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
 warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
 my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
-
-if (!$client) {
-    warn(sprintf q[Socket error: [%d] %s], $!, $!);
-    skip(($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]}),
-         q[Failed to create client]
-    );
-}
 my $torrent;
 
 END {
@@ -37,21 +30,24 @@ END {
     for my $file (@{$torrent->files}) { $file->_close() }
 }
 SKIP: {
+    if (!$client) {
+        warn(sprintf q[Socket error: [%d] %s], $!, $!);
+        skip((      $test_builder->{q[Expected_Tests]}
+                  - $test_builder->{q[Curr_Test]}
+             ),
+             q[Failed to create client]
+        );
+    }
     skip(
         q[Due to system configuration, socket-based tests have been disabled.  ...which makes N::B pretty useless],
         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
     ) unless $okay_tcp;
     warn(q[TODO: Install event handlers]);
-    warn(q[Testing (private) _build_reserved()]);
-    is($client->_build_reserved(), qq[\0\0\0\0\0\20\0\0],
-        q[_build_reserved() currently only indicates that we support the ExtProtocol]
-    );
-    is($client->_socket_open(),  undef, q[_socket_open() returns undef]);
-    is($client->_socket_open(0), undef, q[_socket_open(0) returns undef]);
-    is($client->_socket_open(undef, 0),
-        undef, q[_socket_open(undef, 0) returns undef]);
-    is($client->_socket_open(undef, undef),
-        undef, q[_socket_open(undef, undef) returns undef]);
+    is(length($client->_build_reserved()), 8, q[_build_reserved()]);
+    ok($client->_socket_open(),  q[_socket_open()]);
+    ok($client->_socket_open(0), q[_socket_open(0)]);
+    ok($client->_socket_open(undef, 0),     q[_socket_open(undef, 0)]);
+    ok($client->_socket_open(undef, undef), q[_socket_open(undef, undef)]);
     is($client->_socket_open(inet_aton(q[127.0.0.1]), q[test]),
         undef,
         q[_socket_open(inet_aton(q[127.0.0.1]), q[test]) returns undef]);
@@ -106,10 +102,8 @@ SKIP: {
               },
               q[_sockets() returns the dht object and the client itself]
     );
-    ok($bt_top->do_one_loop(),
-        q[   do_one_loop() accepts an optional timeout parameter...]);
     ok($bt_top->do_one_loop(1),
-        q[   Timeout, if defined, must be an integer...]);
+        q[   do_one_loop() accepts an optional timeout parameter...]);
     ok($bt_top->do_one_loop(1.25), q[   ...or a float...]);
     is($bt_top->do_one_loop(q[test]), undef, q[   ...but not random junk.]);
     is($bt_top->do_one_loop(-3),      undef, q[   ...or negative numbers.]);
@@ -190,7 +184,6 @@ SKIP: {
     is($client->remove_torrent(q[Junk!]),
         undef, q[Attempt to remove not-a-torrent]);
     is_deeply($client->torrents, {}, q[   Check if torrent was removed]);
-    ok($client->do_one_loop, q[do_one_loop]);
     like($client->_peers_per_torrent, qr[^\d+$],
          q[_peers_per_torrent() is a number]);
     is($client->_schedule(),   undef, q[_schedule() is undef]);
@@ -215,7 +208,7 @@ SKIP: {
         }
     );
     ok($client->_cancel($event), q[_cancel([...])]);
-    ok($client->do_one_loop,     q[do_one_loop]);
+    ok($client->do_one_loop(1),  q[do_one_loop]);
     ok($client->_as_string(),    q[_as_string()]);
     ok($client->_as_string(1),   q[_as_string(1)]);
 SKIP: {
@@ -234,31 +227,18 @@ SKIP: {
         ok($client->_use_dht,        q[DHT is active (round house?)]);
     }
 }
+__END__
+Copyright (C) 2008 by Sanko Robinson <sanko@cpan.org>
 
-=head1 Author
-
-Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
-
-CPAN ID: SANKO
-
-=head1 License and Legal
-
-Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
-
-This program is free software; you can redistribute it and/or modify
-it under the terms of The Artistic License 2.0.  See the F<LICENSE>
-file included with this distribution or
+This program is free software; you can redistribute it and/or modify it
+under the terms of The Artistic License 2.0.  See the LICENSE file
+included with this distribution or
 http://www.perlfoundation.org/artistic_license_2_0.  For
 clarification, see http://www.perlfoundation.org/artistic_2_0_notes.
 
-When separated from the distribution, all POD documentation is covered
-by the Creative Commons Attribution-Share Alike 3.0 License.  See
+When separated from the distribution, all POD documentation is covered by
+the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-Neither this module nor the L<Author|/Author> is affiliated with
-BitTorrent, Inc.
-
-=for svn $Id$
-
-=cut
+$Id$

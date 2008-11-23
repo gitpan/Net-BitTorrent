@@ -1,3 +1,25 @@
+Version 0.030 | Distant Future
+
+ API changes:
+  - See the Notes section
+
+ Internal changes:
+  - See the Notes section
+  - UDP trackers are now supported
+  - DHT actually works
+  - Fast Ext. is back
+
+ Compatibility Information:
+  - See the Notes section
+  - Net::BitTorrent::Session::* is now Net::BitTorrent::Torrent::* thanks to
+      one very squeaky wheel.
+
+ Notes:
+  - Since the previous stable release, Net::BitTorrent has been rewritten from
+      scratch, so yeah, 90% of everything internal has changed, a good portion
+      (read: all) of the API was redesigned as well.  I've been pushing dev
+      builds for more than three months so... yeah.
+
 Version 0.027_001 | Fall 2008
 
  Internal changes:
@@ -200,6 +222,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://code.google.com/p/net-bittorrent/source/list
 
-$Rev: 28 $ from public svn
-$Date: 2008-09-26 18:47:04 -0400 (Fri, 26 Sep 2008) $
+$Rev: 34 $ from public svn
+$Date: 2008-11-19 22:38:52 -0500 (Wed, 19 Nov 2008) $
 $URL: https://net-bittorrent.googlecode.com/svn/trunk/Changes $

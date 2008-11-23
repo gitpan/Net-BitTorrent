@@ -7,8 +7,8 @@ package Net::BitTorrent::Protocol;
     use lib q[../../../lib];
     use Net::BitTorrent::Util qw[:bencode];
     use version qw[qv];
-    our $SVN = q[$Id: Protocol.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 32 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Protocol.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -302,14 +302,16 @@ END
     sub _parse_handshake {
         my ($packet) = @_;
         if (!$packet || (length($packet) < 68)) {
-            carp q[Not enough data for handshake packet];
+
+            #carp q[Not enough data for handshake packet];
             return;
         }
         my ($protocol_name, $reserved, $infohash, $peerid)
             = unpack(q[c/a a8 a20 a20], $packet);
         if ($protocol_name ne q[BitTorrent protocol]) {
-            carp sprintf(q[Improper handshake; Bad protocol name (%s)],
-                         $protocol_name);
+
+            #carp sprintf(q[Improper handshake; Bad protocol name (%s)],
+            #             $protocol_name);
             return;
         }
         return [$reserved, $infohash, $peerid];
@@ -323,7 +325,8 @@ END
     sub _parse_have {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 1)) {
-            carp q[Incorrect packet length for HAVE];
+
+            #carp q[Incorrect packet length for HAVE];
             return;
         }
         return unpack(q[N], $packet);
@@ -332,7 +335,8 @@ END
     sub _parse_bitfield {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 1)) {
-            carp q[Incorrect packet length for BITFIELD];
+
+            #carp q[Incorrect packet length for BITFIELD];
             return;
         }
         return (pack q[b*], unpack q[B*], $packet);
@@ -341,10 +345,11 @@ END
     sub _parse_request {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 9)) {
-            carp
-                sprintf(
-                     q[Incorrect packet length for REQUEST (%d requires >=9)],
-                     length($packet || q[]));
+
+           #carp
+           #    sprintf(
+           #         q[Incorrect packet length for REQUEST (%d requires >=9)],
+           #         length($packet || q[]));
             return;
         }
         return ([unpack(q[N3], $packet)]);
@@ -353,10 +358,11 @@ END
     sub _parse_piece {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 9)) {
-            carp
-                sprintf(
-                       q[Incorrect packet length for PIECE (%d requires >=9)],
-                       length($packet || q[]));
+
+           #carp
+           #    sprintf(
+           #           q[Incorrect packet length for PIECE (%d requires >=9)],
+           #           length($packet || q[]));
             return;
         }
         return ([unpack(q[N2a*], $packet)]);
@@ -365,10 +371,11 @@ END
     sub _parse_cancel {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 9)) {
-            carp
-                sprintf(
-                      q[Incorrect packet length for CANCEL (%d requires >=9)],
-                      length($packet || q[]));
+
+           #carp
+           #    sprintf(
+           #          q[Incorrect packet length for CANCEL (%d requires >=9)],
+           #          length($packet || q[]));
             return;
         }
         return ([unpack(q[N3], $packet)]);
@@ -377,7 +384,8 @@ END
     sub _parse_port {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 1)) {
-            carp q[Incorrect packet length for PORT];
+
+            #carp q[Incorrect packet length for PORT];
             return;
         }
         return (unpack q[N], $packet);
@@ -386,7 +394,8 @@ END
     sub _parse_suggest {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 1)) {
-            carp q[Incorrect packet length for SUGGEST];
+
+            #carp q[Incorrect packet length for SUGGEST];
             return;
         }
         return unpack(q[N], $packet);
@@ -397,10 +406,11 @@ END
     sub _parse_reject {
         my ($packet) = @_;
         if ((!$packet) || (length($packet) < 9)) {
-            carp
-                sprintf(
-                      q[Incorrect packet length for REJECT (%d requires >=9)],
-                      length($packet || q[]));
+
+           #carp
+           #    sprintf(
+           #          q[Incorrect packet length for REJECT (%d requires >=9)],
+           #          length($packet || q[]));
             return;
         }
         return ([unpack(q[N3], $packet)]);
@@ -408,8 +418,9 @@ END
 
     sub _parse_allowed_fast {
         my ($packet) = @_;
-        if ((!$packet) | (length($packet) < 1)) {
-            carp q[Incorrect packet length for FASTSET];
+        if ((!$packet) || (length($packet) < 1)) {
+
+            #carp q[Incorrect packet length for FASTSET];
             return;
         }
         return unpack(q[N], $packet);
@@ -461,6 +472,9 @@ use the C<:all> tag.
 =item C<:types>
 
 Packet types
+
+For more on what these packets actually mean, see the BitTorrent Spec.
+This is a list of the currently supported packet types:
 
 =over
 
@@ -794,6 +808,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm 32 2008-11-09 21:12:33Z sanko@cpan.org $
+=for svn $Id: Protocol.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
 
 =cut

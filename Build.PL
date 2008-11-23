@@ -1,16 +1,10 @@
 #!/usr/bin/perl -w
 use strict;
 use warnings;
-
-#use 5.008_001;
 use File::Find;
 use Module::Build 0.30;
-use Config;    # Figure out if this perl supports threads
-
-# ...
+use Config;
 $|++;
-
-# http://cpantest.grango.org/wiki/CPANAuthorNotes
 my $automated_testing = $ENV{q[AUTOMATED_TESTING]}
     || $ENV{q[PERL_MM_USE_DEFAULT]};
 my $is_developer = ((-d q[.svn]) ? 1 : 0) or ($ENV{RELEASE_TESTING} ? 1 : 0);
@@ -18,9 +12,7 @@ my $okay_tcp     = okay_tcp();
 my $okay_udp     = okay_udp();
 my @tests;
 find \&find_cb, qw[t/000_miniswarm/ t/700_classes/];
-@tests = reverse sort @tests;    # Test suite runs in reverse
-
-#
+@tests = reverse sort @tests;
 printf $okay_tcp || $okay_udp
     ? <<'FTW': <<'FAIL', map { $_ ? 'En' : 'Dis' } ($okay_tcp, $okay_udp);
  ****************************************************************************
@@ -44,9 +36,7 @@ FTW
    Net::BitTorrent test suite and makes life (in general) difficult.
  ****************************************************************************
 FAIL
-
-# in expectation of future developments (combined profiling in NYTProf)
-my $class = $is_developer    # && 0
+my $class = $is_developer
     ? Module::Build->subclass(class => q[Net::BitTorrent::Build],
                               code  => <<'SUBCLASS' ) : q[Module::Build];
 # TODO: add pod
@@ -146,9 +136,9 @@ sub ACTION_wastetime {
     for my $i (1 .. 800) {
         $self->SUPER::ACTION_distdir();
         $dist_dir = $self->dist_dir;
+        printf qq[dist #%03d...\n], $i;
         $self->do_system(qq[tar -cf $dist_dir.tar $dist_dir]);
         $self->do_system(qq[gzip -v -9 -f -n $dist_dir.tar]);
-
        #File::Copy::copy($dist_dir . q[.tar.gz],
        #     q[X:/archive/] . $dist_dir . q[.tar.gz] . sprintf(q[.%03d], $i));
         rename $dist_dir . q[.tar.gz], q[./archive/] . $dist_dir . q[.tar.gz]
@@ -172,8 +162,6 @@ sub ACTION_spellcheck {
         [values(%{shift->_find_file_by_type(q[pod], q[.])})]
         )
     {   $files = [sort map { File::Spec->rel2abs(q[./] . $_) } @{$files}];
-
-        # One at a time...
         for my $file (@$files) {
             $file = File::Spec->abs2rel($file);
             system(
@@ -187,52 +175,50 @@ sub ACTION_spellcheck {
     $self->depends_on(q[code]);
 }
 SUBCLASS
-
-#
 my $mb = $class->new(
     module_name       => q[Net::BitTorrent],
-    license           => q[artistic_2],                      # M::B 0.2808_01+
+    license           => q[artistic_2],
     dist_author       => q[Sanko Robinson <sanko@cpan.org>],
     dist_abstract     => q[BitTorrent peer-to-peer protocol],
     dist_version_from => q[lib/Net/BitTorrent/Version.pm],
-    requires => {    # All required modules are CORE
-        q[Cwd]           => 0,           # dev on 3.2701
-        q[Digest::SHA]   => 5.45,        # dev on 5.47|CORE in 5.10
-        q[Errno]         => 0,           # dev on 1.10
-        q[Exporter]      => 0,           # dev on 5.63
-        q[Fcntl]         => 0,           # dev on 1.06
-        q[File::Path]    => 0,           # dev on 2.04
-        q[File::Spec]    => 0,           # dev on 3.2701
-        q[Module::Build] => 0.30,        # dev on 0.30
-        q[perl]          => q[5.8.1],    # dev on 5.11.0
-        q[Scalar::Util]  => 1.19,        # dev on 1.19
-        q[Socket]        => 1.77,        # dev on 1.81
-        q[Test::More]    => 0.80,        # dev on 0.80
-        q[Time::HiRes]   => 0,           # dev on 1.9715
-        q[version]       => 0.74,        # dev on 0.76|CORE in 5.10
-        (    # UDP trackers require 64-bit integers... stupid, I know.
-           (!eval { my $eval = pack(q[Q], time); 1; })
-           ? (q[Math::BigInt] => 0)    # dev on 1.89
-           : ()
+    requires          => {
+        q[Cwd]           => 0,
+        q[Digest::SHA]   => 5.45,
+        q[Errno]         => 0,
+        q[Exporter]      => 0,
+        q[Fcntl]         => 0,
+        q[File::Path]    => 0,
+        q[File::Spec]    => 0,
+        q[Module::Build] => 0.30,
+        q[perl]          => q[5.8.1],
+        q[Scalar::Util]  => 1.19,
+        q[Socket]        => 1.77,
+        q[Test::More]    => 0.80,
+        q[Time::HiRes]   => 0,
+        q[version]       => 0.74,
+        ((!eval {
+              my $eval = pack(q[Q], time);
+              1;
+          }
+         )
+         ? (q[Math::BigInt] => 0)
+         : ()
         )
     },
-    build_requires => {q[Module::Build] => 0.30,      # dev on 0.30
-                       q[Test::More]    => 0.80,      # dev on 0.80
+    build_requires => {q[Module::Build] => 0.30,
+                       q[Test::More]    => 0.80
     },
-    recommends => {    # Non-CORE modules that are nice to have around
-                    q[Data::Dump] => 0    # dev on 1.12
-    },
-    auto_features => {
-        win32_utf8_support => {
-            description => q[Support for Wide-char filenames on Windows],
-            requires    => {
-                         q[Encode]         => 0,           # dev on 2.26
-                         q[perl]           => q[5.8.7],    # dev on 5.11.0
-                         q[utf8]           => 0,           # dev on 1.07
-                         q[Win32]          => 0,           # dev on 0.38
-                         q[Win32API::File] => 0.10         # dev on 0.1001_01
-            }
-        }
+    recommends    => {q[Data::Dump] => 0},
+    auto_features => {win32_utf8_support => {
+                          description => q[Unicode filename support on Win32],
+                          requires    => {
+                                       q[Encode]         => 0,
+                                       q[perl]           => q[5.8.7],
+                                       q[utf8]           => 0,
+                                       q[Win32]          => 0,
+                                       q[Win32API::File] => 0.10
+                          }
+                      }
     },
     script_files => qw[scripts/bittorrent.pl],
     test_files   => \@tests,
@@ -251,8 +237,6 @@ my $mb = $class->new(
          generated_by => q[Sanko Robinson <sanko@cpan.org>]
     },
 );
-
-# Set some random state data for the .t files to get later
 $mb->notes(okay_tcp          => $okay_tcp);
 $mb->notes(okay_udp          => $okay_udp);
 $mb->notes(automated_testing => $automated_testing ? 1 : 0);
@@ -261,12 +245,9 @@ $mb->notes(test_suite        => \@tests);
 $mb->notes(gmtime            => gmtime);
 $mb->notes(verbose => scalar grep {m[^v$]} keys %{$mb->args()});
 $mb->notes(threads => $Config::Config{q[useithreads]} ? 1 : 0);
-
-# okay, let's go
 $mb->create_build_script;
 exit 0;
 
-# Taken from LWP
 sub okay_tcp {
     return 0 if not -f q[t/900_data/910_scripts/TCP-talk-to-ourself.pl];
     system(qq["$^X" t/900_data/910_scripts/TCP-talk-to-ourself.pl]);
@@ -279,25 +260,14 @@ sub okay_udp {
     return $? ? 0 : 1;
 }
 
-# Find only .t files
 sub find_cb {
     return if -d $_ or -l $_;
     return unless -T $_;
     return unless $_ =~ m[.+\.t$];
     return push @tests, $File::Find::name;
 }
-
-=pod
-
-=head1 Author
-
-Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
-
-CPAN ID: SANKO
-
-=head1 License and Legal
-
-Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+__END__
+Copyright (C) 2008 by Sanko Robinson <sanko@cpan.orgE>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of The Artistic License 2.0.  See the F<LICENSE>
@@ -310,9 +280,6 @@ by the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-Neither this module nor the L<Author|/Author> is affiliated with
-BitTorrent, Inc.
+Neither this module nor the Author is affiliated with BitTorrent, Inc.
 
-=for svn $Id: Build.PL 33 2008-11-10 23:27:24Z sanko@cpan.org $
-
-=cut
+$Id: Build.PL 34 2008-11-20 03:38:52Z sanko@cpan.org $

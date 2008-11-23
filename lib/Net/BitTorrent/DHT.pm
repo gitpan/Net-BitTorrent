@@ -12,8 +12,8 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::DHT::Node;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $SVN = q[$Id: DHT.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 33 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my @CONTENTS =
         \my (%_client, %tid, %outstanding_queries, %node_id, %routing_table,
              %nodes, %extra);
@@ -421,6 +421,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 33 2008-11-10 23:27:24Z sanko@cpan.org $
+=for svn $Id: DHT.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
 
 =cut
