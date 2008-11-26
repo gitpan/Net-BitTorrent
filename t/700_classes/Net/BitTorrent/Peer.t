@@ -788,8 +788,6 @@ SKIP: {
         ok($client->do_one_loop(1), q[    do_one_loop(1)]);
         ok(($with_peer > scalar keys %{$client->_connections}),
             q[Peer removed from list of connections]);
-        is(sysread($newsock_C, my ($in), 1024),
-            undef, q[Fail to read data because socket was closed.]);
         warn sprintf q[%d|%d], 197, $test_builder->{q[Curr_Test]};
     }
     {
@@ -924,4 +922,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Peer.t 35 2008-11-22 23:47:51Z sanko@cpan.org $
+$Id: Peer.t 39 2008-11-26 15:49:02Z sanko@cpan.org $

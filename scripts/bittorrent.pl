@@ -10,7 +10,7 @@ use Net::BitTorrent::Protocol qw[:types];
 use Net::BitTorrent;
 $|++;
 my ($VERSION, $dir, $check, $int, $man, $help, $port, $ver, @torrents)
-    = (sprintf(q[%.3f], (qw$Rev: 35 $)[1] / 1000), q[./], 1, 1, 0);
+    = (sprintf(q[%.3f], (qw$Rev: 39 $)[1] / 1000), q[./], 1, 1, 0);
 GetOptions(q[help|?]       => \$help,
            q[man]          => \$man,
            q[torrent|t=s@] => \@torrents,
@@ -189,6 +189,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: bittorrent.pl 35 2008-11-22 23:47:51Z sanko@cpan.org $
+=for svn $Id: bittorrent.pl 39 2008-11-26 15:49:02Z sanko@cpan.org $
 
 =cut

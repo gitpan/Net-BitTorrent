@@ -24,8 +24,8 @@ package Net::BitTorrent::Torrent;
     use Net::BitTorrent::Torrent::File;
     use Net::BitTorrent::Torrent::Tracker;
     use version qw[qv];
-    our $SVN = q[$Id: Torrent.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 35 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Torrent.pm 39 2008-11-26 15:49:02Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 39 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_client,        %path,          %basedir,
                         %size,           %files,         %trackers,
@@ -476,8 +476,11 @@ package Net::BitTorrent::Torrent;
         if ($self->is_complete)        { return; }
         if (not $nodes{refaddr $self}) { return; }
         my @nodes = uncompact($nodes{refaddr $self});
-        for (1 .. (30 - scalar $self->_peers)) {
-            last if not @nodes;
+        for (1 .. ($_client{refaddr $self}->_peers_per_torrent
+                       - scalar $self->_peers
+             )
+            )
+        {   last if not @nodes;
             my $node = shift @nodes;
             my $ok   = $_client{refaddr $self}
                 ->_event(q[ip_filter], {Address => $node});
@@ -493,7 +496,7 @@ package Net::BitTorrent::Torrent;
                     $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
                         and not defined $_->{q[Object]}->peerid
                     } values %{$_client{refaddr $self}->_connections}
-                ) >= 8;
+                ) >= $_client{refaddr $self}->_half_open;
         }
         return 1;
     }
@@ -1359,6 +1362,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Torrent.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $
+=for svn $Id: Torrent.pm 39 2008-11-26 15:49:02Z sanko@cpan.org $
 
 =cut

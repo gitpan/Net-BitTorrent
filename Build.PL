@@ -280,4 +280,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Build.PL 35 2008-11-22 23:47:51Z sanko@cpan.org $
+$Id: Build.PL 39 2008-11-26 15:49:02Z sanko@cpan.org $
