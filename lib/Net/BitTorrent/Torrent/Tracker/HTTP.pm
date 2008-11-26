@@ -11,8 +11,8 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[:bencode uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: HTTP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 35 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%_url, %_tier, %resolve, %_event, %_socket, %_data_out);
     my %REGISTRY;
@@ -83,7 +83,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
         }
         my $_inet_aton = inet_aton($host);
         if (!$_inet_aton) {
-            $_tier{refaddr $self}->_client->_event(
+            $_tier{refaddr $self}->_torrent->_event(
                          q[tracker_failure],
                          {Tracker => $self,
                           Reason => sprintf(q[Cannot resolve host: %s], $host)
@@ -93,7 +93,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
         }
         my $pack_sockaddr_in = pack_sockaddr_in($port, $_inet_aton);
         if (!$pack_sockaddr_in) {
-            $_tier{refaddr $self}->_client->_event(
+            $_tier{refaddr $self}->_torrent->_event(
                          q[tracker_failure],
                          {Tracker => $self,
                           Reason => sprintf(q[Cannot resolve host: %s], $host)
@@ -102,13 +102,13 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             return;
         }
         connect($_socket{refaddr $self}, $pack_sockaddr_in);
-        $_tier{refaddr $self}->_client->_event(q[tracker_connect],
-                                               {Tracker => $self,
-                                                (defined $event
-                                                 ? (Event => $event)
-                                                 : ()
-                                                )
-                                               }
+        $_tier{refaddr $self}->_torrent->_event(q[tracker_connect],
+                                                {Tracker => $self,
+                                                 (defined $event
+                                                  ? (Event => $event)
+                                                  : ()
+                                                 )
+                                                }
         );
         my $infohash = $_tier{refaddr $self}->_torrent->infohash;
         $infohash =~ s|(..)|\%$1|g;
@@ -185,7 +185,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             $actual_write = syswrite($_socket{refaddr $self},
                                      $_data_out{refaddr $self}, $write);
             if (!$actual_write) {
-                $_tier{refaddr $self}->_client->_event(
+                $_tier{refaddr $self}->_torrent->_event(
                        q[tracker_failure],
                        {Tracker => $self,
                         Reason => sprintf(q[Cannot write to tracker: %s], $^E)
@@ -206,7 +206,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                 );
                 return;
             }
-            $_tier{refaddr $self}->_client->_event(q[tracker_write],
+            $_tier{refaddr $self}->_torrent->_event(q[tracker_write],
                                  {Tracker => $self, Length => $actual_write});
             substr($_data_out{refaddr $self}, 0, $actual_write, q[]);
             if (!length $_data_out{refaddr $self}) {
@@ -219,7 +219,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             $actual_read
                 = sysread($_socket{refaddr $self}, my ($data), $read, 0);
             if (not $actual_read) {
-                $_tier{refaddr $self}->_client->_event(
+                $_tier{refaddr $self}->_torrent->_event(
                       q[tracker_failure],
                       {Tracker => $self,
                        Reason => sprintf(q[Cannot read from tracker: %s], $^E)
@@ -241,13 +241,13 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                 return;
             }
             else {
-                $_tier{refaddr $self}->_client->_event(q[tracker_read],
+                $_tier{refaddr $self}->_torrent->_event(q[tracker_read],
                                   {Tracker => $self, Length => $actual_read});
                 $data =~ s[^.+(?:\015?\012){2}][]s;
                 $data = bdecode($data);
                 if ($data) {
                     if (defined $data->{q[failure reason]}) {
-                        $_tier{refaddr $self}->_client->_event(
+                        $_tier{refaddr $self}->_torrent->_event(
                                          q[tracker_failure],
                                          {Tracker => $self,
                                           Reason => $data->{q[failure reason]}
@@ -263,7 +263,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                         $_tier{refaddr $self}
                             ->_set_incomplete($data->{q[incomplete]});
                         $_tier{refaddr $self}
-                            ->_client->_event(q[tracker_success],
+                            ->_torrent->_event(q[tracker_success],
                                         {Tracker => $self, Payload => $data});
                         delete $_event{refaddr $self};
                     }
@@ -285,10 +285,10 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             shutdown($_socket{refaddr $self}, 2);
             close $_socket{refaddr $self};
             $_tier{refaddr $self}
-                ->_client->_event(q[tracker_disconnect], {Tracker => $self});
+                ->_torrent->_event(q[tracker_disconnect], {Tracker => $self});
         }
         else {
-            $_tier{refaddr $self}->_client->_event(
+            $_tier{refaddr $self}->_torrent->_event(
                                      q[tracker_failure],
                                      {Tracker => $self,
                                       Reason => q[Failed to read from tracker]
@@ -390,6 +390,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $
 
 =cut

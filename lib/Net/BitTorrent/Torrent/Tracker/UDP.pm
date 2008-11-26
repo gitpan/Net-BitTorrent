@@ -10,8 +10,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: UDP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 35 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_url, %_tier, %_tid, %_cid, %_outstanding_requests,
                         %_packed_host, %_event);
@@ -141,7 +141,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
             );
             return;
         }
-        $_tier{refaddr $self}->_client->_event(
+        $_tier{refaddr $self}->_torrent->_event(
                                          q[tracker_connect],
                                          {Tracker => $self,
                                           ($_event{refaddr $self}
@@ -150,7 +150,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
                                           )
                                          }
         );
-        $_tier{refaddr $self}->_client->_event(
+        $_tier{refaddr $self}->_torrent->_event(
                    q[tracker_write],
                    {Tracker => $self,
                     Length  => length(
@@ -164,7 +164,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     sub _on_data {
         my ($self, $paddr, $data) = @_;
         my ($action, $tid, $packet) = unpack q[NNa*], $data;
-        $_tier{refaddr $self}->_client->_event(q[tracker_read],
+        $_tier{refaddr $self}->_torrent->_event(q[tracker_read],
                                  {Tracker => $self, Length => length($data)});
         return if not $_outstanding_requests{refaddr $self}{$tid};
         my $_request = $_outstanding_requests{refaddr $self}{$tid};
@@ -186,7 +186,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
                     ->_torrent->_append_compact_nodes($peers);
                 $_tier{refaddr $self}->_set_complete($seeds);
                 $_tier{refaddr $self}->_set_incomplete($leeches);
-                $_tier{refaddr $self}->_client->_event(
+                $_tier{refaddr $self}->_torrent->_event(
                                             q[tracker_success],
                                             {Tracker => $self,
                                              Payload => {
@@ -216,10 +216,10 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
         elsif ($action == 2) {
         }
         elsif ($action == 3) {
-            $_tier{refaddr $self}->_client->_event(q[tracker_failure],
-                                                   {Tracker => $self,
-                                                    Reason  => $packet
-                                                   }
+            $_tier{refaddr $self}->_torrent->_event(q[tracker_failure],
+                                                    {Tracker => $self,
+                                                     Reason  => $packet
+                                                    }
             );
             $_tier{refaddr $self}->_shuffle();
             return;
@@ -362,6 +362,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: UDP.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $
 
 =cut

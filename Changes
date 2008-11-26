@@ -1,18 +1,28 @@
-Version 0.030 | Distant Future
+Version 0.40 |
 
  API changes:
   - See the Notes section
+  - Torrents can now be paused, stopped, and started (alpha code)
+  - Torrents can now be created without a parent client for informational use
+
+ Compatibility Information:
+  - See the Notes section
+  - Net::BitTorrent::Session::* is now Net::BitTorrent::Torrent::* thanks to
+      one very squeaky wheel.
+  - PeerID spec has changed (stability marker is now 'U'nstable/'S'table
+      instead of the less obvious and misleading 'S'VN/'C'PAN)
 
  Internal changes:
   - See the Notes section
   - UDP trackers are now supported
   - DHT actually works
   - Fast Ext. is back
+  - PeerID, DHT node ID, and ExtProtocol name, and project version are all
+      generated in Net::BitTorrent::Version
 
- Compatibility Information:
-  - See the Notes section
-  - Net::BitTorrent::Session::* is now Net::BitTorrent::Torrent::* thanks to
-      one very squeaky wheel.
+ Issues resolved:
+  - No longer floods the system with CLOSE_WAIT sockets which eventually block
+      the allocation of new sockets (probably just a Win32 problem)
 
  Notes:
   - Since the previous stable release, Net::BitTorrent has been rewritten from
@@ -222,6 +232,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://code.google.com/p/net-bittorrent/source/list
 
-$Rev: 34 $ from public svn
-$Date: 2008-11-19 22:38:52 -0500 (Wed, 19 Nov 2008) $
+$Rev: 35 $ from public svn
+$Date: 2008-11-22 18:47:51 -0500 (Sat, 22 Nov 2008) $
 $URL: https://net-bittorrent.googlecode.com/svn/trunk/Changes $

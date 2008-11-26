@@ -4,8 +4,8 @@ package Net::BitTorrent::Version;
     use strict;
     use warnings;
     use version qw[qv];
-    our $SVN = q[$Id: Version.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
-    our $VERSION_BASE = 27; our $UNSTABLE_RELEASE = 15; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Version.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $];
+    our $VERSION_BASE = 39; our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent $VERSION];
 
     sub gen_peerid {
@@ -134,7 +134,7 @@ See the PAUSE FAQ section entitled "Developer Releases"
 This would be the stable CPAN release C<v0.393>/SVN r393.  The C<--SVN>
 signature does not imply an unstable build.
 
-=item C<NB003X-9E-ayR6-I<lt>3BT>
+=item C<NB003X-9E-ayR6-IE<lt>3BT>
 
 Improper Peer ID; the sixth char is neither 'C<S>' nor 'C<U>'.
 
@@ -186,6 +186,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Version.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: Version.pm 35 2008-11-22 23:47:51Z sanko@cpan.org $
 
 =cut

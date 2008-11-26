@@ -3,7 +3,6 @@ use strict;
 use warnings;
 use Getopt::Long;
 use Pod::Usage;
-use List::Util qw[sum];
 use Carp qw[croak carp];
 use Time::HiRes qw[sleep];
 use lib q[../lib];
@@ -11,7 +10,7 @@ use Net::BitTorrent::Protocol qw[:types];
 use Net::BitTorrent;
 $|++;
 my ($VERSION, $dir, $check, $int, $man, $help, $port, $ver, @torrents)
-    = (sprintf(q[%.3f], (qw$Rev: 34 $)[1] / 1000), q[./], 1, 1, 0);
+    = (sprintf(q[%.3f], (qw$Rev: 35 $)[1] / 1000), q[./], 1, 1, 0);
 GetOptions(q[help|?]       => \$help,
            q[man]          => \$man,
            q[torrent|t=s@] => \@torrents,
@@ -74,12 +73,12 @@ $bt->do_one_loop(0.25) && sleep(0.50) while 1;
 sub piece_status {
     my ($msg, $args) = @_;
     my $torrent = $args->{q[Torrent]};
-    return printf qq[hash%s: %04d|%s|%4d/%4d|%3.2f%%\r],
+    return printf qq[hash%s: %04d|%s|%4d/%4d|% 3.2f%%\r],
         $msg, $args->{q[Index]}, $torrent->_as_string(),
-        sum(split q[], unpack(q[b*], $torrent->bitfield)),
-        $torrent->_piece_count,
-        (((  (sum split q[], unpack q[b*], $torrent->bitfield)
-           / ($torrent->_piece_count)
+        (scalar grep {$_} split q[], unpack(q[b*], $torrent->bitfield)),
+        $torrent->piece_count,
+        (((  (scalar grep {$_} split q[], unpack q[b*], $torrent->bitfield)
+           / ($torrent->piece_count)
           )
          ) * 100
         );
@@ -157,8 +156,7 @@ Print the manual page and exit.
 
 =item B<--version>
 
-Print a standard version message that includes the program name, its
-version and the version of Perl.
+Guess.
 
 =back
 
@@ -191,6 +189,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: bittorrent.pl 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: bittorrent.pl 35 2008-11-22 23:47:51Z sanko@cpan.org $
 
 =cut
