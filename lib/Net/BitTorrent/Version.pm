@@ -5,7 +5,7 @@ package Net::BitTorrent::Version;
     use warnings;
     use version qw[qv];
     our $SVN = q[$Id: Version.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $VERSION_BASE = 40; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 41; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent $VERSION];
 
     sub gen_peerid {
