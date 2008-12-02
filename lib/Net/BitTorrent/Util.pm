@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe
+#!/usr/bin/perl -w
 package Net::BitTorrent::Util;
 {
     use strict;
@@ -6,8 +6,8 @@ package Net::BitTorrent::Util;
     use Carp qw[carp];
     use List::Util qw[min max shuffle sum];
     use version qw[qv];
-    our $SVN = q[$Id: Util.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Util.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -145,14 +145,13 @@ Everything is imported into your namespace.
 =item C<:bencode>
 
 You get the two Bencode-related functions: L<bencode|/"bencode ( ARGS )">
-and L<bedecode|/"bdecode ( STRING )">.  For more on Bencoding, see the
+and L<bdecode|/"bdecode ( STRING )">.  For more on Bencoding, see the
 BitTorrent Protocol documentation.
 
 =item C<:compact>
 
-L<compact|/"compact ( LIST )">, L<uncompact|/"uncompact ( STRING )">
-
-These are tracker response-related functions.
+Imports the tracker response-related functions
+L<compact|/"compact ( LIST )"> and L<uncompact|/"uncompact ( STRING )">.
 
 =back
 
@@ -239,6 +238,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: Util.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
 
 =cut

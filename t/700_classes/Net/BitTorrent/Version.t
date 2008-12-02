@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe -w
+#!/usr/bin/perl -w
 use strict;
 use warnings;
 use Test::More;
@@ -66,4 +66,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Version.t 35 2008-11-22 23:47:51Z sanko@cpan.org $
+$Id: Version.t 40 2008-12-02 04:25:26Z sanko@cpan.org $

@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe -w
+#!/usr/bin/perl -w
 use strict;
 use warnings;
 use Module::Build;
@@ -22,14 +22,10 @@ $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 plan tests => 16;
 SKIP: {
     my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
-    my $dht = Net::BitTorrent::DHT->new({Client => $client});
-    if (!$client || !$dht) {
-        skip(q[Failed to create client and/or dht object],
-             (      $test_builder->{q[Expected_Tests]}
-                  - $test_builder->{q[Curr_Test]}
-             )
-        );
-    }
+    skip(q[Failed to create client/DHT node],
+         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+    ) if !$client || !$client->_dht;
+    my $dht = $client->_dht;
     is(Net::BitTorrent::DHT::Node->new(),
         undef, q[new( { ... }) requires params]);
     isa_ok(Net::BitTorrent::DHT::Node->new(
@@ -93,4 +89,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Node.t 35 2008-11-22 23:47:51Z sanko@cpan.org $
+$Id: Node.t 40 2008-12-02 04:25:26Z sanko@cpan.org $

@@ -1,4 +1,4 @@
-Version 0.40 |
+Version 0.40 | 2008-12-01 23:25:26 -0500 (Mon, 01 Dec 2008)
 
  API changes:
   - See the Notes section
@@ -28,9 +28,9 @@ Version 0.40 |
 
  Notes:
   - Since the previous stable release, Net::BitTorrent has been rewritten from
-      scratch, so yeah, 90% of everything internal has changed, a good portion
-      (read: all) of the API was redesigned as well.  I've been pushing dev
-      builds for more than three months so... yeah.
+      scratch, so yeah, 90% of everything internal has changed, the API was
+      redesigned as well.  I've been pushing dev builds for more than three
+      months so... yeah.
 
 Version 0.027_001 | Fall 2008
 
@@ -234,6 +234,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://code.google.com/p/net-bittorrent/source/list
 
-$Rev: 39 $ from public svn
-$Date: 2008-11-26 10:49:02 -0500 (Wed, 26 Nov 2008) $
+$Rev: 40 $ from public svn
+$Date: 2008-12-01 23:25:26 -0500 (Mon, 01 Dec 2008) $
 $URL: https://net-bittorrent.googlecode.com/svn/trunk/Changes $

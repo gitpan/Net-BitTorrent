@@ -1,4 +1,4 @@
-#!C:\perl\bin\perl.exe
+#!/usr/bin/perl -w
 package Net::BitTorrent::DHT;
 {
     use strict;
@@ -12,8 +12,8 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::DHT::Node;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $SVN = q[$Id: DHT.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 34 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my @CONTENTS =
         \my (%_client, %tid, %outstanding_queries, %node_id, %routing_table,
              %nodes, %extra);
@@ -385,7 +385,7 @@ DHT swarm.
 
 =item *
 
-Currently, the routing table is flat.
+The routing table is flat.
 
 =back
 
@@ -421,6 +421,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 34 2008-11-20 03:38:52Z sanko@cpan.org $
+=for svn $Id: DHT.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
 
 =cut
