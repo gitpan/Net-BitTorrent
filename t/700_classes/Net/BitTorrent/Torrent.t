@@ -343,10 +343,10 @@ SKIP: {
         );
         is($torrent->bitfield, $_new_bitfield,
             sprintf q[Bitfield has not changed. (%s)], $_key);
-        ok($torrent->_as_string(), sprintf q[_as_string( ) | simple (%s)],
+        ok($torrent->as_string(), sprintf q[as_string( ) | simple (%s)],
             $_key);
-        ok($torrent->_as_string(1),
-            sprintf q[_as_string(1) | advanced (%s)], $_key);
+        ok($torrent->as_string(1),
+            sprintf q[as_string(1) | advanced (%s)], $_key);
         warn q[Test multithreaded stuff...];
     SKIP: {
             skip q[Multi-threaded tests have been skipped], 5 if !$threads;
@@ -445,4 +445,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Torrent.t 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: Torrent.t 42 2008-12-05 04:54:43Z sanko@cpan.org $

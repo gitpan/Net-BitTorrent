@@ -12,8 +12,8 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::DHT::Node;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $SVN = q[$Id: DHT.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: DHT.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my @CONTENTS =
         \my (%_client, %tid, %outstanding_queries, %node_id, %routing_table,
              %nodes, %extra);
@@ -163,8 +163,7 @@ package Net::BitTorrent::DHT;
         }
         if (   $args->{q[Node]}->node_id
             && $args->{q[Node]}->node_id eq $node_id{refaddr $self})
-        {   carp q[Cannot send packet to ourself!];
-            return;
+        {   return;
         }
         if (send($_client{refaddr $self}->_udp(),
                  $args->{q[Packet]},
@@ -314,7 +313,7 @@ END
         return;
     }
 
-    sub _as_string {
+    sub as_string {
         my ($self, $advanced) = @_;
         my $dump = !$advanced ? $node_id{refaddr $self} : sprintf <<'END',
 Net::BitTorrent::DHT
@@ -377,6 +376,12 @@ used directly.
 Get the Node ID used to identify this L<client|/Net::BitTorrent> in the
 DHT swarm.
 
+=item C<as_string ( [ VERBOSE ] )>
+
+Returns a 'ready to print' dump of the  object's data structure.  If
+called in void context, the structure is printed to C<STDERR>.
+C<VERBOSE> is a boolean value.
+
 =back
 
 =head1 Bugs
@@ -421,6 +426,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: DHT.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut

@@ -9,8 +9,8 @@ package Net::BitTorrent::DHT::Node;
     use lib q[../../../../lib/];
     use Net::BitTorrent::Util qw[:bencode :compact];
     use version qw[qv];
-    our $SVN = q[$Id: Node.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Node.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%dht,        %packed_host,   %node_id,
                %added,      %infohashes,    %_token,
@@ -352,7 +352,7 @@ package Net::BitTorrent::DHT::Node;
         my @nodes;
 
         if (defined $torrent) {
-            @nodes = map {m[.{6}]g} $torrent->_compact_nodes;
+            @nodes = map {m[.{6}]g} $torrent->_compact_nodes || q[];
         }
         for my $_node (values %{$dht{refaddr $self}->_routing_table}) {
             push @nodes,
@@ -494,7 +494,7 @@ package Net::BitTorrent::DHT::Node;
         return 1;
     }
 
-    sub _as_string {
+    sub as_string {
         my ($self, $advanced) = @_;
         my $dump
             = !$advanced
@@ -566,6 +566,12 @@ Get the Node ID used to identify this
 L<node|Net::BitTorrent::DHT::Node> in the DHT swarm and our routing
 table.
 
+=item C<as_string ( [ VERBOSE ] )>
+
+Returns a 'ready to print' dump of the  object's data structure.  If
+called in void context, the structure is printed to C<STDERR>.
+C<VERBOSE> is a boolean value.
+
 =back
 
 =head1 Author
@@ -592,6 +598,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Node.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: Node.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut

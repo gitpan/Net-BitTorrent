@@ -18,8 +18,8 @@ package Net::BitTorrent;
     use Net::BitTorrent::DHT;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $SVN = q[$Id: BitTorrent.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: BitTorrent.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%_tcp,                  %_udp,
                %_schedule,             %_tid,
@@ -590,7 +590,7 @@ package Net::BitTorrent;
         return join q[], map {chr} @reserved;
     }
 
-    sub _as_string {
+    sub as_string {
         my ($self, $advanced) = @_;
         my $dump = !$advanced ? $_peerid{refaddr $self} : sprintf <<'END',
 Net::BitTorrent
@@ -1202,6 +1202,12 @@ metadata.
 
 =back
 
+=item C<as_string ( [ VERBOSE ] )>
+
+Returns a 'ready to print' dump of the  object's data structure.  If
+called in void context, the structure is printed to C<STDERR>.
+C<VERBOSE> is a boolean value.
+
 =back
 
 =head1 Bugs
@@ -1330,6 +1336,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut

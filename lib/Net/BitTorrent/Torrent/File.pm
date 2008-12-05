@@ -7,8 +7,8 @@ package Net::BitTorrent::Torrent::File;
     use Scalar::Util qw[blessed weaken refaddr];
     use Fcntl qw[/O_/ /SEEK/ :flock];
     use version qw[qv];
-    our $SVN = q[$Id: File.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: File.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \
         my (%path, %torrent, %size, %index, %priority, %mode, %handle,
@@ -520,7 +520,7 @@ END
         return 1;
     }
 
-    sub _as_string {
+    sub as_string {
         my ($self, $advanced) = @_;
         my $dump = !$advanced ? $path{refaddr $self} : sprintf <<'END',
 Net::BitTorrent::Torrent::File
@@ -643,6 +643,12 @@ object related to this file.
 
 Returns the size of the file represented by this object.
 
+=item C<as_string ( [ VERBOSE ] )>
+
+Returns a 'ready to print' dump of the  object's data structure.  If
+called in void context, the structure is printed to C<STDERR>.
+C<VERBOSE> is a boolean value.
+
 =back
 
 =head1 Author
@@ -669,6 +675,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: File.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: File.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut

@@ -71,8 +71,8 @@ SKIP: {
     ok($node->_add_infohash(q[A] x 40), q[Add good infohash]);
     ok(!$node->_add_infohash(q[Z] x 3), q[Cannot add bad infohash]);
     is_deeply($node->_infohashes, [q[a] x 40], q[No infohashes by default]);
-    ok($node->_as_string(),  q[_as_string( ) | simple]);
-    ok($node->_as_string(1), q[_as_string(1) | advanced]);
+    ok($node->as_string(),  q[as_string( ) | simple]);
+    ok($node->as_string(1), q[as_string(1) | advanced]);
     warn(q[TODO: Install event handlers]);
 }
 __END__
@@ -89,4 +89,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Node.t 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: Node.t 42 2008-12-05 04:54:43Z sanko@cpan.org $

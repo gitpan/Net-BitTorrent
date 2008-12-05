@@ -93,7 +93,7 @@ SKIP: {
     ok($_ip_address->_announce(q[stopped]), q[_announce('stopped') == okay]);
     ok($_ip_address->_announce(q[completed]),
         q[_announce('completed') == okay]);
-    ok($_ip_address->_as_string, q[_as_string]);
+    ok($_ip_address->as_string, q[as_string]);
     warn q[TODO: Install event handlers];
 }
 __END__
@@ -110,4 +110,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: HTTP.t 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: HTTP.t 42 2008-12-05 04:54:43Z sanko@cpan.org $

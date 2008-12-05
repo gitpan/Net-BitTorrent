@@ -4,8 +4,8 @@ package Net::BitTorrent::Version;
     use strict;
     use warnings;
     use version qw[qv];
-    our $SVN = q[$Id: Version.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $VERSION_BASE = 41; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Version.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $VERSION_BASE = 42; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     our $PRODUCT_TOKEN = qq[Net::BitTorrent $VERSION];
 
     sub gen_peerid {
@@ -21,7 +21,7 @@ package Net::BitTorrent::Version;
                       ->[rand(66)]
                       } 1 .. 8
                  ),
-                 q[Azumi]
+                 q[Riana]
              )
             )
         );
@@ -177,6 +177,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Version.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: Version.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut

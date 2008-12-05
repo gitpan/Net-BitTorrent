@@ -9,8 +9,8 @@ package Net::BitTorrent::Peer;
     use Socket qw[/F_INET/ SOMAXCONN SOCK_STREAM /inet_/ /pack_sockaddr_in/];
     use Fcntl qw[F_SETFL O_NONBLOCK];
     use version qw[qv];
-    our $SVN = q[$Id: Peer.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 5; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 40 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Peer.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 5; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     use lib q[../../../lib];
     use Net::BitTorrent::Protocol qw[:build parse_packet :types];
     use Net::BitTorrent::Util qw[:bencode];
@@ -650,14 +650,16 @@ END
                                         }
         );
         my $piece = $_torrent{refaddr $self}->_piece_by_index($index);
+        my $okay  = 0;
+        for my $_retry (1 .. 3) {
 
-        #use Data::Dump qw[pp];
-        #warn pp $piece;
-        if (not $_torrent{refaddr $self}->_write_data($index, $offset, \$data)
-            )
-        {   $_client{refaddr $self}->_del_socket($_socket{refaddr $self});
-            return;
+            if ($_torrent{refaddr $self}->_write_data($index, $offset, \$data)
+                )
+            {   $okay++;
+                last;
+            }
         }
+        return if !$okay;
         $piece->{q[Blocks_Recieved]}->[$request->{q[_vec_offset]}] = 1;
         $piece->{q[Slow]}                                          = 0;
         $piece->{q[Touch]}                                         = time;
@@ -1361,7 +1363,7 @@ END
         return delete $_socket{refaddr $self};
     }
 
-    sub _as_string {
+    sub as_string {
         my ($self, $advanced) = @_;
         my $dump = sprintf(
             (!$advanced ? q[%s:%s (%s)] : <<'ADVANCED'),
@@ -1458,6 +1460,12 @@ Returns the Peer ID used to identify this peer.
 
 See also: theory.org (http://tinyurl.com/4a9cuv)
 
+=item C<as_string ( [ VERBOSE ] )>
+
+Returns a 'ready to print' dump of the  object's data structure.  If
+called in void context, the structure is printed to C<STDERR>.
+C<VERBOSE> is a boolean value.
+
 =back
 
 =head1 Author
@@ -1484,6 +1492,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 40 2008-12-02 04:25:26Z sanko@cpan.org $
+=for svn $Id: Peer.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
 
 =cut
