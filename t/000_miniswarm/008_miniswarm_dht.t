@@ -1,6 +1,6 @@
 # -*- perl -*-
-# $Id: 008_miniswarm_dht.t 39 2008-11-26 15:49:02Z sanko@cpan.org $
-# Miniature swarm of 1 seed, 1 dht tracker, and 5 new peers
+# $Id: 008_miniswarm_dht.t 44 2008-12-18 23:20:00Z sanko@cpan.org $
+# Miniature swarm of 1 seed, 3 DHT trackers, and 5 new peers
 #
 use strict;
 use warnings;
@@ -8,6 +8,7 @@ use Module::Build;
 use Test::More;
 use File::Temp qw[];
 use lib q[../../lib];
+use Net::BitTorrent::Protocol qw[:types];
 use Net::BitTorrent::Util qw[:compact :bencode];
 use Net::BitTorrent;
 $|++;
@@ -23,8 +24,8 @@ $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 my $BlockLength = 2**14;
 my $Seeds       = 1;
 my $Peers       = 5;
-my $Timeout     = 75;
-plan tests => int($Seeds + $Peers + 1) * 2;
+my $Timeout     = 120;
+plan tests => int($Seeds + $Peers + 3) * 2;
 my $sprintf = q[%0] . length($Peers > $Seeds ? $Peers : $Seeds) . q[d];
 my $_infohash = q[2b3aaf361bd40540bf7e3bfd140b954b90e4dfbc];
 my %client;
@@ -35,9 +36,36 @@ SKIP: {
     skip(q[UDP-based tests have been disabled.],
          ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
     ) unless $okay_udp;
-    $client{q[DHT]} = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
-    ok($client{q[DHT]}->isa(q[Net::BitTorrent]), q[DHT (bystander)]);
-    ok($client{q[DHT]}->_use_dht, q[DHT (bystander) has enabled dht]);
+    $client{q[DHT_gateway]}
+        = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
+    skip(sprintf(q[Failed to open UDP port]),
+         $test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+        if not $client{q[DHT_gateway]}->_udp_port;
+    ok($client{q[DHT_gateway]}->isa(q[Net::BitTorrent]),
+        q[DHT (bystander gateway)]);
+    ok($client{q[DHT_gateway]}->_use_dht,
+        q[DHT (bystander gateway) has enabled dht]);
+    $client{q[DHT_seeds]} = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
+    skip(sprintf(q[Failed to open UDP port]),
+         $test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+        if not $client{q[DHT_seeds]}->_udp_port;
+    ok($client{q[DHT_seeds]}->isa(q[Net::BitTorrent]),
+        q[DHT (bystander seeds)]);
+    ok($client{q[DHT_seeds]}->_use_dht,
+        q[DHT (bystander seeds) has enabled dht]);
+    $client{q[DHT_seeds]}->_dht->add_node(
+            {ip => q[127.0.0.1], port => $client{q[DHT_gateway]}->_udp_port});
+    $client{q[DHT_peers]} = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
+    skip(sprintf(q[Failed to open UDP port]),
+         $test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
+        if not $client{q[DHT_peers]}->_udp_port;
+    ok($client{q[DHT_peers]}->isa(q[Net::BitTorrent]),
+        q[DHT (bystander peers)]);
+    ok($client{q[DHT_peers]}->_use_dht,
+        q[DHT (bystander peers) has enabled dht]);
+    $client{q[DHT_peers]}->_dht->add_node(
+            {ip => q[127.0.0.1], port => $client{q[DHT_gateway]}->_udp_port});
+
     for my $chr (1 .. $Seeds) {
         $chr = sprintf $sprintf, $chr;
         $client{q[seed_] . $chr}
@@ -53,7 +81,7 @@ SKIP: {
                                       BaseDir => q[./t/900_data/930_miniswarm]
                                      }
         );
-        skip(sprintf(q[Failed to load torrent for seed_%s], $chr),
+        skip(sprintf(q[seed_%s Failed to load torrent for seed_%s], $chr),
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
         ) if not $torrent;
@@ -74,24 +102,25 @@ SKIP: {
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
         ) if not $torrent->is_complete;
-        $client{q[seed_] . $chr}->_dht->_add_node(
-                 sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_udp_port));
+        $client{q[seed_] . $chr}->_dht->add_node(
+              {ip => q[127.0.0.1], port => $client{q[DHT_seeds]}->_udp_port});
         $client{q[seed_] . $chr}->do_one_loop(0.1);
     }
     for my $chr (1 .. $Peers) {
         $chr = sprintf $sprintf, $chr;
-        $client{$chr} = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
-        skip(sprintf(q[Failed to open UDP port], $chr),
+        $client{q[peer_] . $chr}
+            = new Net::BitTorrent({LocalAddr => q[127.0.0.1]});
+        skip(sprintf(q[peer_%s Failed to open UDP port], $chr),
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
-        ) if not $client{$chr}->_udp_port;
+        ) if not $client{q[peer_] . $chr}->_udp_port;
         skip(sprintf(q[Failed to create dht_%s], $chr),
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
-        ) if not $client{$chr};
-        ok($client{$chr}->_use_dht, sprintf q[peer_%s has enabled dht], $chr);
-        my $torrent =
-            $client{$chr}->add_torrent(
+        ) if not $client{q[peer_] . $chr};
+        ok($client{q[peer_] . $chr}->_use_dht,
+            sprintf q[peer_%s has enabled dht], $chr);
+        my $torrent = $client{q[peer_] . $chr}->add_torrent(
                                      {Path => $miniswarm_dot_torrent,
                                       BaseDir =>
                                           File::Temp::tempdir(
@@ -101,7 +130,7 @@ SKIP: {
                                           ),
                                       BlockLength => $BlockLength
                                      }
-            );
+        );
         skip(sprintf(q[Failed to load torrent for dht_%s], $chr),
              $test_builder->{q[Expected_Tests]}
                  - $test_builder->{q[Curr_Test]}
@@ -119,8 +148,8 @@ SKIP: {
                 return;
             }
         );
-        $client{$chr}->_dht->_add_node(
-                 sprintf(q[%s:%d], q[127.0.0.1], $client{q[DHT]}->_udp_port));
+        $client{q[peer_] . $chr}->_dht->add_node(
+              {ip => q[127.0.0.1], port => $client{q[DHT_peers]}->_udp_port});
     }
     while ($test_builder->{q[Curr_Test]} < $test_builder->{q[Expected_Tests]})
     {   grep { $_->do_one_loop(0.1); } values %client;
@@ -154,4 +183,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: 008_miniswarm_dht.t 39 2008-11-26 15:49:02Z sanko@cpan.org $
+$Id: 008_miniswarm_dht.t 44 2008-12-18 23:20:00Z sanko@cpan.org $

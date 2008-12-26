@@ -593,6 +593,7 @@ SKIP: {
     shift @original_data;
     is($data, join(q[], @original_data), q[   ...was shifted from data.]);
     is_deeply(\@original_data, [], q[Looks like we're done.]);
+    warn q[TODO: DHT packets!];
 }
 __END__
 Copyright (C) 2008 by Sanko Robinson <sanko@cpan.org>
@@ -608,4 +609,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Protocol.t 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: Protocol.t 43 2008-12-11 14:49:56Z sanko@cpan.org $

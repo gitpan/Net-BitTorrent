@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 use warnings;
+BEGIN { exit 0 if $] < 5.008001 }
 require 5.8.1;
 $|++;
 unless (eval q[use Module::Build::Compat 0.02; 1;]) {
@@ -41,4 +42,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Makefile.PL 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: Makefile.PL 43 2008-12-11 14:49:56Z sanko@cpan.org $

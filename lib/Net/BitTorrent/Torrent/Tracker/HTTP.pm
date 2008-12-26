@@ -11,8 +11,8 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[:bencode uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: HTTP.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%_url, %_tier, %resolve, %_event, %_socket, %_data_out);
     my %REGISTRY;
@@ -113,32 +113,32 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
         my $infohash = $_tier{refaddr $self}->_torrent->infohash;
         $infohash =~ s|(..)|\%$1|g;
         my %query_hash = (
-               q[info_hash]  => $infohash,
-               q[peer_id]    => $_tier{refaddr $self}->_client->peerid(),
-               q[port]       => $_tier{refaddr $self}->_client->_tcp_port(),
-               q[uploaded]   => $_tier{refaddr $self}->_torrent->uploaded(),
-               q[downloaded] => $_tier{refaddr $self}->_torrent->downloaded(),
-               q[left]       => (
-                   $_tier{refaddr $self}
-                       ->_torrent->raw_data->{q[info]}{q[piece length]} * sum(
-                       split(q[],
-                             unpack(
-                                   q[b*],
-                                   ($_tier{refaddr $self}->_torrent->_wanted()
-                                        || q[]
-                                   )
-                             )
-                       )
-                       )
-               ),
-               q[key]        => $^T,
-               q[numwant]    => 200,
-               q[compact]    => 1,
-               q[no_peer_id] => 1,
-               ($_event{refaddr $self}
-                ? (q[event] => $_event{refaddr $self})
-                : ()
-               )
+            q[info_hash]  => $infohash,
+            q[peer_id]    => $_tier{refaddr $self}->_client->peerid(),
+            q[port]       => $_tier{refaddr $self}->_client->_tcp_port() || 0,
+            q[uploaded]   => $_tier{refaddr $self}->_torrent->uploaded(),
+            q[downloaded] => $_tier{refaddr $self}->_torrent->downloaded(),
+            q[left]       => (
+                $_tier{refaddr $self}->_torrent->raw_data(1)
+                    ->{q[info]}{q[piece length]} * sum(
+                    split(
+                        q[],
+                        unpack(
+                            q[b*],
+                            ($_tier{refaddr $self}->_torrent->_wanted() || q[]
+                            )
+                        )
+                    )
+                    )
+            ),
+            q[key]        => $^T,
+            q[numwant]    => 200,
+            q[compact]    => 1,
+            q[no_peer_id] => 1,
+            ($_event{refaddr $self}
+             ? (q[event] => $_event{refaddr $self})
+             : ()
+            )
         );
         my $url 
             = $path 
@@ -256,8 +256,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                     }
                     else {
                         $_tier{refaddr $self}
-                            ->_torrent->_append_compact_nodes(
-                                                           $data->{q[peers]});
+                            ->_torrent->_append_nodes($data->{q[peers]});
                         $_tier{refaddr $self}
                             ->_set_complete($data->{q[complete]});
                         $_tier{refaddr $self}
@@ -402,6 +401,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
 
 =cut

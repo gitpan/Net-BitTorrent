@@ -18,7 +18,7 @@ my $test_builder = Test::More->builder;
 my $build        = Module::Build->current;
 my %torrents     = ();
 _locate_torrents();
-plan tests => int(6 + (80 * scalar keys %torrents));
+plan tests => int(6 + (81 * scalar keys %torrents));
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
@@ -62,8 +62,14 @@ SKIP: {
         }
         is($torrent->path, rel2abs($dot_torrent),
             q[Absolute paths returned from path()]);
-        is_deeply($torrent->raw_data, _raw_data($_key),
-                  sprintf q[Raw data for %s torrent looks good.], $_key);
+        is_deeply($torrent->raw_data(1), _raw_data($_key),
+                  sprintf q[Totally raw data for %s torrent looks good.],
+                  $_key);
+        is_deeply(scalar(bdecode($torrent->raw_data)),
+                  _raw_data($_key),
+                  sprintf q[bencoded raw data for %s torrent looks good.],
+                  $_key
+        );
         is( $torrent->infohash,
             _infohash($_key),
             sprintf q[Infohash checks out as %s (%s)],
@@ -99,8 +105,8 @@ SKIP: {
         );
         is($torrent->_client, $client, sprintf q[Client is correct (%s)],
             $_key);
-        is($torrent->_compact_nodes, q[],
-            sprintf q[Empty list of compact nodes (%s)], $_key);
+        is($torrent->_nodes, q[], sprintf q[Empty list of compact nodes (%s)],
+            $_key);
         is($torrent->comment,
             _raw_data($_key)->{q[comment]},
             sprintf q[comment is correct (%s)], $_key);
@@ -445,4 +451,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Torrent.t 42 2008-12-05 04:54:43Z sanko@cpan.org $
+$Id: Torrent.t 45 2008-12-26 22:17:16Z sanko@cpan.org $

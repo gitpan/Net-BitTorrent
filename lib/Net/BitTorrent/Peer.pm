@@ -9,8 +9,8 @@ package Net::BitTorrent::Peer;
     use Socket qw[/F_INET/ SOMAXCONN SOCK_STREAM /inet_/ /pack_sockaddr_in/];
     use Fcntl qw[F_SETFL O_NONBLOCK];
     use version qw[qv];
-    our $SVN = q[$Id: Peer.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 5; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Peer.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 6; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     use lib q[../../../lib];
     use Net::BitTorrent::Protocol qw[:build parse_packet :types];
     use Net::BitTorrent::Util qw[:bencode];
@@ -130,7 +130,7 @@ END
                 or return;
             $self = bless \$args->{q[Address]}, $class;
             $_socket{refaddr $self} = $socket;
-            if (not($^O eq q[MSWin32]
+            if (not($^O eq q[MSWin32]    # set non blocking
                     ? ioctl($_socket{refaddr $self}, 0x8004667e,
                             pack(q[I], 1))
                     : fcntl($_socket{refaddr $self}, F_SETFL, O_NONBLOCK)
@@ -660,7 +660,7 @@ END
             }
         }
         return if !$okay;
-        $piece->{q[Blocks_Recieved]}->[$request->{q[_vec_offset]}] = 1;
+        $piece->{q[Blocks_Received]}->[$request->{q[_vec_offset]}] = 1;
         $piece->{q[Slow]}                                          = 0;
         $piece->{q[Touch]}                                         = time;
         for my $peer ($_torrent{refaddr $self}->_peers) {
@@ -694,7 +694,7 @@ END
                 }
             }
         }
-        if (not grep { $_ == 0 } @{$piece->{q[Blocks_Recieved]}}) {
+        if (not grep { !$_ } @{$piece->{q[Blocks_Received]}}) {
             if ($_torrent{refaddr $self}->_check_piece_by_index($index)
                 and defined $_torrent{refaddr $self})
             {   for my $p ($_torrent{refaddr $self}->_peers) {
@@ -869,10 +869,11 @@ END
                 {   my (undef, $packed_ip)
                         = unpack_sockaddr_in(
                                         getpeername($_socket{refaddr $self}));
-                    my $node = sprintf(q[%s:%d],
-                                       inet_ntoa($packed_ip),
-                                       $packet->{q[p]});
-                    $_client{refaddr $self}->_dht->_add_node($node);
+                    $_client{refaddr $self}->_dht->add_node(
+                                              {ip   => inet_ntoa($packed_ip),
+                                               port => $packet->{q[p]}
+                                              }
+                    );
                 }
             }
             $packet->{q[ID]} = $id;
@@ -967,7 +968,7 @@ END
                 ->_piece_by_index($request->{q[Index]});
             delete $piece->{q[Blocks_Requested]}->[$request->{q[_vec_offset]}]
                 ->{refaddr $self};
-            if ($piece->{q[Touch]} <= time - 180) {
+            if (!$piece->{q[Touch]} || $piece->{q[Touch]} <= time - 180) {
                 $piece->{q[Slow]} = 1;
             }
             $_data_out{refaddr $self} .=
@@ -1007,11 +1008,11 @@ END
             = defined $_range
             ? [1 .. $_range]
             : [max(1, scalar(@{$requests_out{refaddr $self}})) .. max(
-                                25,
-                                int((2**21)
-                                    / $_torrent{refaddr $self}
-                                        ->raw_data->{q[info]}{q[piece length]}
-                                )
+                                   25,
+                                   int((2**21)
+                                       / $_torrent{refaddr $self}->raw_data(1)
+                                           ->{q[info]}{q[piece length]}
+                                   )
                )
             ];
     REQUEST:
@@ -1030,11 +1031,11 @@ END
                         $tmp_index++;
                         (        ($_ < 5)
                              and
-                             ($piece->{q[Blocks_Recieved]}->[$tmp_index] == 0)
+                             ($piece->{q[Blocks_Received]}->[$tmp_index] == 0)
                             )
                             ? ($tmp_index => $_)
                             : ()
-                    } @{$piece->{q[Blocks_Recieved]}};
+                    } @{$piece->{q[Blocks_Received]}};
                 INDEX:
                     for my $index (sort { $temp{$a} <=> $temp{$b} }
                                    sort { $a <=> $b } keys %temp)
@@ -1043,7 +1044,7 @@ END
                                 (defined $piece->{q[Blocks_Requested]}
                                      ->[$index]->{refaddr $self})
                                     and (
-                                    ($piece->{q[Blocks_Recieved]}->[$index])
+                                    ($piece->{q[Blocks_Received]}->[$index])
                                     or (($piece->{q[Index]} == $_->{q[Index]})
                                         and ($index == $_->{q[_vec_offset]}))
                                     )
@@ -1492,6 +1493,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
+=for svn $Id: Peer.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
 
 =cut

@@ -24,13 +24,13 @@ package Net::BitTorrent::Torrent;
     use Net::BitTorrent::Torrent::File;
     use Net::BitTorrent::Torrent::Tracker;
     use version qw[qv];
-    our $SVN = q[$Id: Torrent.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 9; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Torrent.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 10; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
-    my @CONTENTS = \my (%_client,       %path,     %basedir,
+    my @CONTENTS = \my (%_client,       %path,     %_basedir,
                         %size,          %files,    %trackers,
                         %infohash,      %uploaded, %downloaded,
-                        %nodes,         %bitfield, %working_pieces,
+                        %_nodes,        %bitfield, %_working_pieces,
                         %_block_length, %raw_data, %status,
                         %error,         %_event
     );
@@ -123,14 +123,16 @@ package Net::BitTorrent::Torrent;
         }
         $infohash{refaddr $self}
             = sha1_hex(bencode($raw_data{refaddr $self}{q[info]}));
-        $path{refaddr $self}           = $args->{q[Path]};
-        $basedir{refaddr $self}        = $args->{q[BaseDir]};
-        $working_pieces{refaddr $self} = {};
+        $path{refaddr $self}            = $args->{q[Path]};
+        $_basedir{refaddr $self}        = $args->{q[BaseDir]};
+        $_working_pieces{refaddr $self} = {};
         $_block_length{refaddr $self} = (defined $args->{q[BlockLength]}
                                          ? $args->{q[BlockLength]}
                                          : (2**14)
         );
-        $nodes{refaddr $self} = q[];
+        $downloaded{refaddr $self} = 0;
+        $uploaded{refaddr $self}   = 0;
+        $_nodes{refaddr $self}     = q[];
         ${$bitfield{refaddr $self}}
             = pack(q[b*], qq[\0] x $self->piece_count);
 
@@ -151,7 +153,7 @@ package Net::BitTorrent::Torrent;
         if (defined $raw_data{refaddr $self}{q[info]}{q[files]}) {
             for my $file (@{$raw_data{refaddr $self}{q[info]}{q[files]}}) {
                 push @_files,
-                    [catfile($basedir{refaddr $self},
+                    [catfile($_basedir{refaddr $self},
                              $raw_data{refaddr $self}{q[info]}{q[name]},
                              @{$file->{q[path]}}
                      ),
@@ -161,7 +163,7 @@ package Net::BitTorrent::Torrent;
         }
         else {
             push @_files,
-                [catfile($basedir{refaddr $self},
+                [catfile($_basedir{refaddr $self},
                          $raw_data{refaddr $self}{q[info]}{q[name]}
                  ),
                  $raw_data{refaddr $self}{q[info]}{q[length]}
@@ -208,6 +210,92 @@ package Net::BitTorrent::Torrent;
                  )
             );
         }
+        if ($_client{refaddr $self}) {
+            $_client{refaddr $self}->_schedule(
+                                     {Time   => time + 25,
+                                      Code   => sub { shift->_dht_announce },
+                                      Object => $self
+                                     }
+            );
+            $_client{refaddr $self}->_schedule(
+                                       {Time   => time + 15,
+                                        Code   => sub { shift->_dht_scrape },
+                                        Object => $self
+                                       }
+            );
+        }
+
+        # Resume system
+        if (   $raw_data{refaddr $self}{q[net-bittorrent]}
+            && $raw_data{refaddr $self}{q[net-bittorrent]}{q[.version]}
+            && $raw_data{refaddr $self}{q[net-bittorrent]}{q[.version]}
+            <= 1    # apiver
+            )
+        {   $_nodes{refaddr $self}
+                = $raw_data{refaddr $self}{q[net-bittorrent]}{q[nodes]};
+            my $_okay = 1;
+            for my $_index (0 .. $#{$files{refaddr $self}}) {
+                if ((!-f $files{refaddr $self}->[$_index]->path
+                     && $raw_data{refaddr $self}{q[net-bittorrent]}{q[files]}
+                     [$_index]{q[mtime]}
+                    )
+                    || ((stat($files{refaddr $self}->[$_index]->path))[9]||0
+                        != $raw_data{refaddr $self}{q[net-bittorrent]}
+                        {q[files]}[$_index]{q[mtime]})
+                    )
+                {   ${$status{refaddr $self}} |= START_AFTER_CHECK;
+                    $self->_set_error(q[Bad resume data. Please hashcheck.]);
+                    $_okay = 0;
+                }
+                $files{refaddr $self}->[$_index]->set_priority(
+                         $raw_data{refaddr $self}{q[net-bittorrent]}{q[files]}
+                             [$_index]{q[priority]});
+            }
+            if ($_okay) {
+                ${$bitfield{refaddr $self}}
+                    = $raw_data{refaddr $self}{q[net-bittorrent]}
+                    {q[bitfield]};
+
+                # Accept resume data is the same as hashchecking
+                my $start_after_check = (
+                         ((${$status{refaddr $self}} & QUEUED)
+                              && ${$status{refaddr $self}} & START_AFTER_CHECK
+                         )
+                             || ${$status{refaddr $self}} & STARTED
+                );
+                ${$status{refaddr $self}} ^= START_AFTER_CHECK
+                    if ${$status{refaddr $self}} & START_AFTER_CHECK;
+                ${$status{refaddr $self}} ^= CHECKED
+                    if !(${$status{refaddr $self}} & CHECKED);
+                if ($start_after_check) { $self->start(); }
+
+                # Reload Blocks
+                for my $_piece (
+                    @{$raw_data{refaddr $self}{q[net-bittorrent]}{q[working]}}
+                    )
+                {   $_working_pieces{refaddr $self}{$_piece->{q[Index]}} = {
+                        Index    => $_piece->{q[Index]},
+                        Priority => $_piece->{q[Priority]},
+                        Blocks_Requested =>
+                            [map { {} } 1 .. $_piece->{q[Block_Count]}],
+                        Blocks_Received => [
+                            map {
+                                vec($_piece->{q[Blocks_Received]}, $_, 1)
+                                } 1 .. $_piece->{q[Block_Count]}
+                        ],
+                        Block_Length      => $_piece->{q[Block_Length]},
+                        Block_Length_Last => $_piece->{q[Block_Length_Last]},
+                        Block_Count       => $_piece->{q[Block_Count]},
+                        Length            => $_piece->{q[Length]},
+                        Endgame           => $_piece->{q[Endgame]},
+                        Slow  => 1,     # $_piece->{q[Slow]},
+                        mtime => time
+                    };
+                }
+            }
+        }
+
+        # Threads stuff
         weaken($REGISTRY{refaddr $self} = $self);
         if ($threads::shared::threads_shared) {
             threads::shared::share($bitfield{refaddr $self});
@@ -227,8 +315,8 @@ package Net::BitTorrent::Torrent;
     sub files      { return $files{refaddr +shift}; }
     sub size       { return $size{refaddr +shift}; }
     sub status     { return ${$status{refaddr +shift}}; }
-    sub downloaded { return $downloaded{refaddr +shift} || 0; }
-    sub uploaded   { return $uploaded{refaddr +shift} || 0; }
+    sub downloaded { return $downloaded{refaddr +shift}; }
+    sub uploaded   { return $uploaded{refaddr +shift}; }
     sub error      { return ${$error{refaddr +shift}}; }
     sub comment    { return $raw_data{refaddr +shift}{q[comment]}; }
     sub created_by { return $raw_data{refaddr +shift}{q[created by]}; }
@@ -241,7 +329,13 @@ package Net::BitTorrent::Torrent;
     sub private {
         return $raw_data{refaddr +shift}{q[info]}{q[private]} ? 1 : 0;
     }
-    sub raw_data { return $raw_data{refaddr +shift} }
+
+    sub raw_data {
+        my ($self, $raw) = @_;
+        return $raw
+            ? $raw_data{refaddr $self}
+            : bencode $raw_data{refaddr $self};
+    }
 
     sub is_complete {
         my ($self) = @_;
@@ -285,10 +379,18 @@ package Net::BitTorrent::Torrent;
         return 1;
     }
 
+    sub _set_block_length {
+        my ($self, $value) = @_;
+        return if $value !~ m[^\d+$];
+        return $_block_length{refaddr $self} = $value;
+    }
+
     # Accessors | Private
-    sub _client        { return $_client{refaddr +shift}; }
-    sub _block_length  { return $_block_length{refaddr +shift} }
-    sub _compact_nodes { return $nodes{refaddr +shift}; }
+    sub _client         { return $_client{refaddr +shift}; }
+    sub _block_length   { return $_block_length{refaddr +shift} }
+    sub _nodes          { return $_nodes{refaddr +shift}; }
+    sub _working_pieces { return $_working_pieces{refaddr +shift}; }
+    sub _basedir        { return $_basedir{refaddr +shift}; }
 
     sub _wanted {
         my ($self) = @_;
@@ -333,6 +435,8 @@ package Net::BitTorrent::Torrent;
     sub hashcheck {
         my ($self) = @_;
         return if ${$status{refaddr $self}} & PAUSED;
+        ${$bitfield{refaddr $self}}    # empty it first
+            = pack(q[b*], qq[\0] x $self->piece_count);
         my $start_after_check = (
                          ((${$status{refaddr $self}} & QUEUED)
                               && ${$status{refaddr $self}} & START_AFTER_CHECK
@@ -441,14 +545,14 @@ package Net::BitTorrent::Torrent;
         $downloaded{refaddr $self} += (($amount =~ m[^\d+$]) ? $amount : 0);
     }
 
-    sub _append_compact_nodes {
+    sub _append_nodes {
         my ($self, $nodes) = @_;
         if (!${$status{refaddr $self}} & QUEUED) { return; }
         return if not defined $_client{refaddr $self};
-        if (not $nodes) { return; }
-        $nodes{refaddr $self} ||= q[];
-        return $nodes{refaddr $self}
-            = compact(uncompact($nodes{refaddr $self} . $nodes));
+        return if !$nodes;
+        $_nodes{refaddr $self} ||= q[];
+        return $_nodes{refaddr $self}
+            = compact(uncompact($_nodes{refaddr $self} . $nodes));
     }
 
     sub _new_peer {
@@ -471,9 +575,9 @@ package Net::BitTorrent::Torrent;
             )
         {   return;
         }
-        if ($self->is_complete)        { return; }
-        if (not $nodes{refaddr $self}) { return; }
-        my @nodes = uncompact($nodes{refaddr $self});
+        if ($self->is_complete)         { return; }
+        if (not $_nodes{refaddr $self}) { return; }
+        my @nodes = uncompact($_nodes{refaddr $self});
         for (1 .. ($_client{refaddr $self}->_peers_per_torrent
                        - scalar $self->_peers
              )
@@ -535,8 +639,8 @@ package Net::BitTorrent::Torrent;
                 q[Net::BitTorrent::Torrent->_piece_by_index() requires an index];
             return;
         }
-        return $working_pieces{refaddr $self}{$index}
-            ? $working_pieces{refaddr $self}{$index}
+        return $_working_pieces{refaddr $self}{$index}
+            ? $_working_pieces{refaddr $self}{$index}
             : ();
     }
 
@@ -567,83 +671,87 @@ package Net::BitTorrent::Torrent;
         return if unpack(q[b*], $relevence) !~ m[1];
         my $endgame = (    # XXX - static ratio
             (sum(split(q[], unpack(q[b*], $_wanted)))
-                 <= (length(unpack(q[b*], $_wanted)) * 0.01)
-            )
-            ? 1
-            : 0
+                 <= (length(unpack(q[b*], $_wanted)) * .1)
+            ) ? 1 : 0
         );
+
+        #warn sprintf q[Endgame | %d <= %d (%d) ? %d],
+        #    sum(split(q[], unpack(q[b*], $_wanted))),
+        #    (length(unpack(q[b*], $_wanted)) * .1),
+        #    length(unpack(q[b*], $_wanted)),
+        #    $endgame;
         my $unrequested_blocks = 0;
-        for my $index (keys %{$working_pieces{refaddr $self}}) {
+        for my $index (keys %{$_working_pieces{refaddr $self}}) {
             $unrequested_blocks += scalar grep {
-                !keys %{$working_pieces{refaddr $self}{$index}
+                !keys %{$_working_pieces{refaddr $self}{$index}
                         {q[Blocks_Requested]}[$_]}
-                } 0 .. $working_pieces{refaddr $self}{$index}{q[Block_Count]}
+                } 0 .. $_working_pieces{refaddr $self}{$index}{q[Block_Count]}
                 - 1;
         }
         if (scalar(grep { $_->{q[Slow]} == 1 }
-                       values %{$working_pieces{refaddr $self}}
+                       values %{$_working_pieces{refaddr $self}}
             ) >= 3
             )
         {   my @indexes
-                = grep { $working_pieces{refaddr $self}{$_}{q[Slow]} == 1 }
-                keys %{$working_pieces{refaddr $self}};
+                = grep { $_working_pieces{refaddr $self}{$_}{q[Slow]} == 1 }
+                keys %{$_working_pieces{refaddr $self}};
             for my $index (@indexes) {
                 if (vec($relevence, $index, 1) == 1) {
                     if (($endgame
-                         ? index($working_pieces{refaddr $self}{$index}
-                                     {q[Blocks_Recieved]},
+                         ? index($_working_pieces{refaddr $self}{$index}
+                                     {q[Blocks_Received]},
                                  0,
                                  0
                          )
                          : scalar grep { scalar keys %$_ }
-                         @{  $working_pieces{refaddr $self}{$index}
+                         @{  $_working_pieces{refaddr $self}{$index}
                                  {q[Blocks_Requested]}
                          }
                         ) != -1
                         )
-                    {   $piece = $working_pieces{refaddr $self}{$index};
+                    {   $piece = $_working_pieces{refaddr $self}{$index};
                         last;
                     }
                 }
             }
         }
         elsif (
-            scalar(values %{$working_pieces{refaddr $self}}) >= (
+            scalar(values %{$_working_pieces{refaddr $self}}) >= (
                 (   $unrequested_blocks > (
                         int($raw_data{refaddr $self}{q[info]}{q[piece length]}
                                 / $_block_length{refaddr $self}
                             ) / 4
                         ) ? 0 : 1
-                ) + scalar keys %{$working_pieces{refaddr $self}}
+                ) + scalar keys %{$_working_pieces{refaddr $self}}
             )
             )
         {   my @indexes = sort {
                 (scalar grep { scalar keys %$_ }
                      @{
-                     $working_pieces{refaddr $self}{$a}{q[Blocks_Requested]}
+                     $_working_pieces{refaddr $self}{$a}{q[Blocks_Requested]}
                      }
                     ) <=> (scalar grep { scalar keys %$_ }
                                @{
-                               $working_pieces{refaddr $self}{$b}
+                               $_working_pieces{refaddr $self}{$b}
                                    {q[Blocks_Requested]}
                                }
                     )
-            } keys %{$working_pieces{refaddr $self}};
+            } keys %{$_working_pieces{refaddr $self}};
             for my $index (@indexes) {
                 if (vec($relevence, $index, 1) == 1) {
                     if (($endgame
-                         ? index($working_pieces{refaddr $self}{$index}
-                                     {q[Blocks_Recieved]},
+                         ? index($_working_pieces{refaddr $self}{$index}
+                                     {q[Blocks_Received]},
                                  0,
                                  0
                          )
                          : scalar grep { scalar keys %$_ }
-                         @{  $working_pieces{refaddr $self}{$index}
+                         @{  $_working_pieces{refaddr $self}{$index}
                                  {q[Blocks_Requested]}
                          }
                         ) != -1
                         )
-                    {   $piece = $working_pieces{refaddr $self}{$index};
+                    {   $piece = $_working_pieces{refaddr $self}{$index};
                         last;
                     }
                 }
@@ -690,26 +798,26 @@ package Net::BitTorrent::Torrent;
             $piece = {Index             => $index,
                       Priority          => $weights{$index},
                       Blocks_Requested  => [map { {} } 1 .. $block_count],
-                      Blocks_Recieved   => [map {0} 1 .. $block_count],
+                      Blocks_Received   => [map {0} 1 .. $block_count],
                       Block_Length      => $block_length,
                       Block_Length_Last => $block_length_last,
                       Block_Count       => $block_count,
                       Length            => $_piece_length,
                       Endgame           => $endgame,
                       Slow              => 1,
-                      Touch             => 0
+                      mtime             => 0
             };
         }
         if ($piece) {
             if (not
-                defined $working_pieces{refaddr $self}{$piece->{q[Index]}})
-            {   $working_pieces{refaddr $self}{$piece->{q[Index]}} = $piece;
-                $working_pieces{refaddr $self}{$piece->{q[Index]}}{q[Endgame]}
-                    = $endgame;
+                defined $_working_pieces{refaddr $self}{$piece->{q[Index]}})
+            {   $_working_pieces{refaddr $self}{$piece->{q[Index]}} = $piece;
+                $_working_pieces{refaddr $self}{$piece->{q[Index]}}
+                    {q[Endgame]} = $endgame;
             }
         }
         return $piece
-            ? $working_pieces{refaddr $self}{$piece->{q[Index]}}
+            ? $_working_pieces{refaddr $self}{$piece->{q[Index]}}
             : ();
     }
 
@@ -811,7 +919,7 @@ package Net::BitTorrent::Torrent;
                 . q[requires an index.];
             return;
         }
-        delete $working_pieces{refaddr $self}{$index};
+        delete $_working_pieces{refaddr $self}{$index};
         my $data =
             $self->_read_data(
                   $index, 0,
@@ -843,6 +951,45 @@ package Net::BitTorrent::Torrent;
                           {Torrent => $self, Index => $index});
         }
         return 1;
+    }
+
+    # Methods | Private | DHT
+    sub _dht_announce {
+        my ($self) = @_;
+        return if !${$status{refaddr $self}} & STARTED;
+        return if $self->private;
+        $_client{refaddr $self}->_schedule(
+                                     {Time   => time + 120,
+                                      Code   => sub { shift->_dht_announce },
+                                      Object => $self
+                                     }
+        );
+        if ($_client{refaddr $self}->_use_dht) {
+            $_client{refaddr $self}->_dht->_announce($self);
+            $_client{refaddr $self}->_schedule(
+                {   Time => time + 20,
+                    Code => sub {
+                        my ($s) = @_;
+                        $_client{refaddr $s}->_dht->_scrape($s)
+                            if $_client{refaddr $s}->_use_dht;
+                    },
+                    Object => $self
+                }
+            );
+        }
+    }
+
+    sub _dht_scrape {
+        my ($self) = @_;
+        return if $self->private;
+        $_client{refaddr $self}->_schedule(
+                                       {Time   => time + 60,
+                                        Code   => sub { shift->_dht_scrape },
+                                        Object => $self
+                                       }
+        );
+        $_client{refaddr $self}->_dht->_scrape($self)
+            if $_client{refaddr $self}->_use_dht;
     }
 
     # Methods | Public | Callback system
@@ -881,7 +1028,45 @@ package Net::BitTorrent::Torrent;
         ];
     }
 
-    # Private | Utility
+    # Methods | Public | Alpha
+    sub resume_data {
+        my ($self, $raw) = @_;
+
+        # Make sure file handles are closed so we don't mess up 'mtime' times
+        for my $_file (@{$files{refaddr $self}}) { $_file->_close }
+        my %resume = %{$raw_data{refaddr $self}};
+        $resume{q[net-bittorrent]} = {
+            q[.t]       => time,
+            q[.version] => 1,
+            bitfield    => ${$bitfield{refaddr $self}},
+            files       => [
+                map {
+                    {priority => $_->priority,
+                     mtime    => (-f $_->path ? (stat($_->path))[9] : 0)
+                    }
+                    } @{$files{refaddr $self}}
+            ],
+            peers   => $_nodes{refaddr $self},
+            working => [
+                map {
+                    {Block_Count => $_->{q[Block_Count]},
+                     Endgame     => $_->{q[Endgame]},
+                     Blocks_Received =>
+                         pack(q[b*], join q[], @{$_->{q[Blocks_Received]}}),
+                     Index             => $_->{q[Index]},
+                     Slow              => $_->{q[Slow]},
+                     Block_Length      => $_->{q[Block_Length]},
+                     Block_Length_Last => $_->{q[Block_Length_Last]},
+                     Length            => $_->{q[Length]},
+                     Priority          => $_->{q[Priority]}
+                    }
+                    } values %{$_working_pieces{refaddr $self}}
+            ]
+        };
+        return $raw ? \%resume : bencode \%resume;
+    }
+
+    # Methods | Public | Utility
     sub as_string {
         my ($self, $advanced) = @_;
         my $wanted = $self->_wanted;
@@ -891,10 +1076,10 @@ Path: %s
 Name: %s
 Storage: %s
 Infohash: %s
-Size: %d bytes
+Size: %s bytes
 Status: %d
 Progress: %3.2f%% complete (%d bytes up / %d bytes down)
-%s
+[%s]
 ----------
 Pieces: %d x %d bytes
 Working: %s
@@ -908,63 +1093,62 @@ DHT Status: %s
 END
             $self->path(),
             $raw_data{refaddr $self}{q[info]}{q[name]},
-            $basedir{refaddr $self}, $self->infohash(), $self->size(),
-            $self->status(),    # TODO: plain English
-            ((((scalar grep {$_} split q[],
-                unpack q[b*],
-                ${$bitfield{refaddr $self}}
-               ) / ($self->piece_count)
-              )
-             ) * 100
+            $_basedir{refaddr $self}, $self->infohash(),
+            $size{refaddr $self},
+            ${$status{refaddr $self}},    # TODO: plain English
+            100 - (grep {$_} split //,
+                   unpack(q[b*], $wanted) / $self->piece_count * 100
             ),
             $uploaded{refaddr $self}, $downloaded{refaddr $self}, (
-            sprintf q[[%s]],
+            sprintf q[%s],
             join q[],
             map {
-                      vec(${$bitfield{refaddr $self}}, $_, 1) ? q[|]
-                    : $working_pieces{refaddr $self}{$_} ? q[*]
-                    : vec($wanted, $_, 1) ? q[ ]
-                    : q[x]
+                vec(${$bitfield{refaddr $self}}, $_, 1)
+                    ? q[|]                # have
+                    : $_working_pieces{refaddr $self}{$_} ? q[*]    # working
+                    : vec($wanted, $_, 1) ? q[ ]                    # missing
+                    : q[x]    # don't want
                 } 0 .. $self->piece_count - 1
             ),
             $self->piece_count(),
             $raw_data{refaddr $self}{q[info]}{q[piece length]},
-            (scalar keys %{$working_pieces{refaddr $self}} || q[N/A]), (
+            (scalar keys %{$_working_pieces{refaddr $self}} || q[N/A]), (
             join qq[\n],
             map {
                 my $index = $_;
                 sprintf q[%4d [%s] % 3.2f%%], $index, join(
                     q[],
                     map {
-                        $working_pieces{refaddr $self}{$index}
-                            {q[Blocks_Recieved]}[$_] ? q[|]
+                        $_working_pieces{refaddr $self}{$index}
+                            {q[Blocks_Received]}[$_] ? q[|]
                             : scalar
-                            keys %{$working_pieces{refaddr $self}{$index}
+                            keys %{$_working_pieces{refaddr $self}{$index}
                                 {q[Blocks_Requested]}[$_]} == 1 ? q[*]
                             : scalar
-                            keys %{$working_pieces{refaddr $self}{$index}
+                            keys %{$_working_pieces{refaddr $self}{$index}
                                 {q[Blocks_Requested]}[$_]} ? q[!]
                             : q[ ]
-                        } 0 .. $working_pieces{refaddr $self}{$index}
+                        } 0 .. $_working_pieces{refaddr $self}{$index}
                         {q[Block_Count]} - 1
                     ),
                     (scalar(grep {$_}
                                 @{
-                                $working_pieces{refaddr $self}{$index}
-                                    {q[Blocks_Recieved]}
+                                $_working_pieces{refaddr $self}{$index}
+                                    {q[Blocks_Received]}
                                 }
                          )
-                         / $working_pieces{refaddr $self}{$index}
+                         / $_working_pieces{refaddr $self}{$index}
                          {q[Block_Count]}
                     ) * 100;
-                } sort { $a <=> $b } keys %{$working_pieces{refaddr $self}}
+                } sort { $a <=> $b }
+                keys %{$_working_pieces{refaddr $self}}
             ),
-            (join qq[\r\n],
-             map { qq[\r\n] . $_->as_string(0) } @{$files{refaddr $self}}
-            ),
+
+            #(map { qq[\n] . $_->as_string(0) } @{$files{refaddr $self}}),
+            scalar(@{$files{refaddr $self}}),
             (scalar @{$trackers{refaddr $self}}
              ?
-                 map { qq[\r\n] . $_->as_string($advanced) }
+                 map { qq[\n] . $_->as_string($advanced) }
                  @{$trackers{refaddr $self}}
              : q[]
             ),
@@ -1196,9 +1380,26 @@ L<CLIENT|Net::BitTorrent> object's queue.
 See also:
 L<remove_torrent ( )|Net::BitTorrent/"remove_torrent ( TORRENT )">
 
-=item C<raw_data ( )>
+=item C<raw_data ( [ RAW ] )>
 
-Returns the bdecoded metadata. found in the .torrent file.
+Returns the bencoded metadata found in the .torrent file. This method
+returns the original metadata in either bencoded form or as a raw hash
+(if you have other plans for the data) depending on the boolean value of
+the optional C<RAW> parameter.
+
+=item C<resume_data ( [ RAW ] )>
+
+One end of Net::BitTorrent's resume system.  This method returns the
+data as specified in
+L<Net::BitTorrent::Notes|Net::BitTorrent::Notes/"Resume API"> in either
+bencoded form or as a raw hash (if you have other plans for the data)
+depending on the boolean value of the optinal C<RAW> parameter.
+
+See also:
+L<Resume API|Net::BitTorrent::Notes/"Resume API">
+and
+L<How do I quick Resume a .torrent Session Between Client Sessions?|Net::BitTorrent::Notes/"Quick Resume a .torrent Session Between Client Sessions">
+in L<Net::BitTorrent::Notes|Net::BitTorrent::Notes>
 
 =item C<size ( )>
 
@@ -1326,7 +1527,7 @@ States are bitwise C<AND> values of...
    2 = CHECKING (Currently hashchecking (possibly in another thread))
    4 = START_AFTER_CHECK*
    8 = CHECKED  (Files of this torrent have been checked)
-  16 = ERROR*   (Activity is halted and may require user intervention)
+  16 = ERROR    (Activity is halted and may require user intervention)
   32 = PAUSED   (Sockets are kept open but no piece data is sent or requested)
   64 = LOADED   (Torrent has been parsed without error)
  128 = QUEUED   (Has an associated Net::BitTorrent parent)
@@ -1449,6 +1650,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Torrent.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
+=for svn $Id: Torrent.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
 
 =cut

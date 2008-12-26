@@ -10,13 +10,11 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: UDP.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 42 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
-    my @CONTENTS
-        = \
-        my (%_url, %_tier, %_tid, %_cid, %_outstanding_requests,
-            %_packed_host, %_event);
+    my @CONTENTS = \my (%_url, %_tier, %_tid, %_cid, %_outstanding_requests,
+                        %_packed_host, %_event);
 
     sub new {
         my ($class, $args) = @_;
@@ -94,17 +92,17 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
                 $self->_client->peerid(),
                 ___pack64($_tier{refaddr $self}->_torrent->downloaded()),
                 ___pack64(
-                   $_tier{refaddr $self}
-                       ->_torrent->raw_data->{q[info]}{q[piece length]} * sum(
-                       split(q[],
-                             unpack(
+                     $_tier{refaddr $self}->_torrent->raw_data(1)
+                         ->{q[info]}{q[piece length]} * sum(
+                         split(q[],
+                               unpack(
                                    q[b*],
                                    ($_tier{refaddr $self}->_torrent->_wanted()
                                         || q[]
                                    )
-                             )
-                       )
-                       )
+                               )
+                         )
+                         )
                 ),
                 ___pack64($_tier{refaddr $self}->_torrent->uploaded()),
                 (  $_event{refaddr $self} eq q[completed] ? 1
@@ -112,7 +110,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
                  : $_event{refaddr $self} eq q[stopped]   ? 3
                  : 0
                 ),
-                0, $^T, 200, $self->_client->_tcp_port;
+                0, $^T, 200, $self->_client->_tcp_port
+                || 0;
             $_outstanding_requests{refaddr $self}{$tid} = {Timestamp => time,
                                                            Attempt   => 1,
                                                            Packet => $packet,
@@ -205,8 +204,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
             if (length($data) >= 20) {
                 my ($min_interval, $leeches, $seeds, $peers)
                     = unpack(q[N N N a*], $packet);
-                $_tier{refaddr $self}
-                    ->_torrent->_append_compact_nodes($peers);
+                $_tier{refaddr $self}->_torrent->_append_nodes($peers);
                 $_tier{refaddr $self}->_set_complete($seeds);
                 $_tier{refaddr $self}->_set_incomplete($leeches);
                 $_tier{refaddr $self}->_torrent->_event(
@@ -402,6 +400,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 42 2008-12-05 04:54:43Z sanko@cpan.org $
+=for svn $Id: UDP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
 
 =cut
