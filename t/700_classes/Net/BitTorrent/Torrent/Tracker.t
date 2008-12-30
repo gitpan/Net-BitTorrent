@@ -114,12 +114,12 @@ SKIP: {
               q[Get related N::B::Torrent object]);
     is($tracker->_client->isa(q[Net::BitTorrent]),
         1, q[Get related Net::BitTorrent object]);
-    is_deeply($tracker->_urls,
+    is_deeply($tracker->urls,
               [bless(do { \(my $o = "http://example.com/announce") },
                      "Net::BitTorrent::Torrent::Tracker::HTTP"
                )
               ],
-              q[_urls]
+              q[urls]
     );
     warn(q[TODO: create a fake tracker and connect to it]);
 }
@@ -137,4 +137,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Tracker.t 40 2008-12-02 04:25:26Z sanko@cpan.org $
+$Id: Tracker.t 46 2008-12-30 23:25:17Z sanko@cpan.org $

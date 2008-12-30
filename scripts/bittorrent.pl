@@ -1,18 +1,17 @@
-#!/usr/bin/perl
+#!perl -w -I../lib
 use strict;
 use warnings;
 use Getopt::Long;
 use Pod::Usage;
 use Carp qw[croak carp];
 use Time::HiRes qw[sleep];
-use lib q[../lib];
 use Net::BitTorrent::Protocol qw[:types];
 use Net::BitTorrent::Util qw[:bencode];
 use Net::BitTorrent::Torrent qw[:status];
 use Net::BitTorrent;
 $|++;
 my ($dir, $chk, $int, $VERSION, $port, $ver, @tor, %opts)
-    = (q[./], 1, 1, sprintf q[%.3f], (qw$Rev: 45 $)[1] / 1000);
+    = (q[./], 1, 1, sprintf q[%.3f], (qw$Rev: 46 $)[1] / 1000);
 GetOptions(
     q[check!]      => \$chk,
     q[directory:s] => \$dir,
@@ -172,6 +171,10 @@ Guess.
 
 =back
 
+=head1 See Also
+
+For more examples, see the files under the C</tatoeba/> directory.
+
 =head1 Author
 
 Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
@@ -196,6 +199,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: bittorrent.pl 45 2008-12-26 22:17:16Z sanko@cpan.org $
+=for svn $Id: bittorrent.pl 46 2008-12-30 23:25:17Z sanko@cpan.org $
 
 =cut

@@ -10,8 +10,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: UDP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: UDP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 46 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_url, %_tier, %_tid, %_cid, %_outstanding_requests,
                         %_packed_host, %_event);
@@ -55,10 +55,12 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
         return $self;
     }
 
+    # Accessors | Public
+    sub url { my ($self) = @_; return $_url{refaddr $self}; }
+
     # Accessors | Private
     sub _packed_host { return $_packed_host{refaddr +shift} }
     sub _tier        { return $_tier{refaddr +shift}; }
-    sub _url         { return $_url{refaddr +shift}; }
     sub _client      { return $_tier{refaddr +shift}->_client }
 
     # Methods | Private
@@ -342,6 +344,10 @@ constructor should not be used directly.
 
 =over
 
+=item C<url ( )>
+
+Returns the related UDP 'URL' according to the original metadata.
+
 =item C<as_string ( [ VERBOSE ] )>
 
 Returns a 'ready to print' dump of the  object's data structure.  If
@@ -400,6 +406,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
+=for svn $Id: UDP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $
 
 =cut

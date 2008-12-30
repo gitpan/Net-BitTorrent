@@ -11,8 +11,8 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[:bencode uncompact];
     use version qw[qv];
-    our $SVN = q[$Id: HTTP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 45 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 46 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%_url, %_tier, %resolve, %_event, %_socket, %_data_out);
     my %REGISTRY;
@@ -41,10 +41,12 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
         return $self;
     }
 
+    # Accessors | Public
+    sub url { my ($self) = @_; return $_url{refaddr $self}; }
+
     # Accesors | Private
     sub _socket { return $_socket{refaddr +shift}; }
     sub _tier   { return $_tier{refaddr +shift}; }
-    sub _url    { return $_url{refaddr +shift}; }
 
     # Methods | Private
     sub _announce {
@@ -113,10 +115,10 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
         my $infohash = $_tier{refaddr $self}->_torrent->infohash;
         $infohash =~ s|(..)|\%$1|g;
         my %query_hash = (
-            q[info_hash]  => $infohash,
-            q[peer_id]    => $_tier{refaddr $self}->_client->peerid(),
-            q[port]       => $_tier{refaddr $self}->_client->_tcp_port() || 0,
-            q[uploaded]   => $_tier{refaddr $self}->_torrent->uploaded(),
+            q[info_hash] => $infohash,
+            q[peer_id]   => $_tier{refaddr $self}->_client->peerid(),
+            q[port]     => ($_tier{refaddr $self}->_client->_tcp_port() || 0),
+            q[uploaded] => $_tier{refaddr $self}->_torrent->uploaded(),
             q[downloaded] => $_tier{refaddr $self}->_torrent->downloaded(),
             q[left]       => (
                 $_tier{refaddr $self}->_torrent->raw_data(1)
@@ -359,6 +361,10 @@ constructor should not be used directly.
 
 =over
 
+=item C<url ( )>
+
+Returns the related HTTP URL according to the original metadata.
+
 =item C<as_string ( [ VERBOSE ] )>
 
 Returns a 'ready to print' dump of the  object's data structure.  If
@@ -401,6 +407,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 45 2008-12-26 22:17:16Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $
 
 =cut

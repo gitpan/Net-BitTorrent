@@ -19,7 +19,7 @@ my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
 $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 my ($flux_capacitor, %peers) = (0, ());
-plan tests => 15;
+plan tests => 17;
 SKIP: {
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
@@ -82,6 +82,8 @@ SKIP: {
     isa_ok($_host_address,
            q[Net::BitTorrent::Torrent::Tracker::UDP],
            q[{URL=>q[udp://localhost/announce/], Tier => [...]}]);
+    is($_ip_address->url,   q[udp://127.0.0.1/announce/], q[url is correct]);
+    is($_host_address->url, q[udp://localhost/announce/], q[url is correct]);
     skip(
         q[UDP-based tests have been disabled due to system misconfiguration.],
         ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
@@ -110,4 +112,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: UDP.t 42 2008-12-05 04:54:43Z sanko@cpan.org $
+$Id: UDP.t 46 2008-12-30 23:25:17Z sanko@cpan.org $
