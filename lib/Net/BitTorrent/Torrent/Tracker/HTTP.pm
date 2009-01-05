@@ -9,12 +9,15 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
     use Socket qw[PF_INET SOMAXCONN SOCK_STREAM inet_aton pack_sockaddr_in];
     use Fcntl qw[F_SETFL O_NONBLOCK];
     use lib q[../../../../../lib];
-    use Net::BitTorrent::Util qw[:bencode uncompact];
+    use Net::BitTorrent::Util qw[:bencode :compact];
     use version qw[qv];
-    our $SVN = q[$Id: HTTP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 46 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: HTTP.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 49 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
-        = \my (%_url, %_tier, %resolve, %_event, %_socket, %_data_out);
+        = \my (%_url,   %_tier,     %resolve,
+               %_event, %_socket,   %_data_out,
+               %_peers, %_complete, %_incomplete
+        );
     my %REGISTRY;
 
     sub new {
@@ -34,8 +37,11 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             return;
         }
         my $self = bless \$args->{q[URL]}, $class;
-        $_url{refaddr $self}  = $args->{q[URL]};
-        $_tier{refaddr $self} = $args->{q[Tier]};
+        $_url{refaddr $self}        = $args->{q[URL]};
+        $_tier{refaddr $self}       = $args->{q[Tier]};
+        $_peers{refaddr $self}      = q[];
+        $_complete{refaddr $self}   = 0;
+        $_incomplete{refaddr $self} = 0;
         weaken $_tier{refaddr $self};
         weaken($REGISTRY{refaddr $self} = $self);
         return $self;
@@ -47,10 +53,14 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
     # Accesors | Private
     sub _socket { return $_socket{refaddr +shift}; }
     sub _tier   { return $_tier{refaddr +shift}; }
+    sub _peers  { return $_peers{refaddr +shift}; }
+    sub _client { return $_tier{refaddr +shift}->_client }
 
     # Methods | Private
     sub _announce {
         my ($self, $event) = @_;
+
+        #warn sprintf q[_announce(%s)], $event? qq['$event']:q[];
         if (defined $event) {
             if ($event !~ m[^(?:st(?:art|opp)|complet)ed$]) {
                 carp sprintf q[Invalid event for announce: %s], $event;
@@ -78,9 +88,15 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                 : fcntl($_socket{refaddr $self}, F_SETFL, O_NONBLOCK)
             )
             )
-        {   carp
-                q[There was a problem making an outgoing socket non-blocking: ]
-                . $^E;
+        {   $_tier{refaddr $self}->_torrent->_event(
+                q[tracker_failure],
+                {Tracker => $self,
+                 Reason  => sprintf(
+                     q[There was a problem making an outgoing socket non-blocking: [%d] %s],
+                     $^E, $^E
+                 )
+                }
+            );
             return;
         }
         my $_inet_aton = inet_aton($host);
@@ -165,6 +181,8 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
 
     sub _rw {
         my ($self, $read, $write, $error) = @_;
+
+#Carp::cluck sprintf q[%s->_rw(%d, %d, %d)], __PACKAGE__, $read, $write, $error;
         my ($actual_read, $actual_write) = (0, 0);
         return if not defined $_tier{refaddr $self}->_client;
         if ($error) {
@@ -172,7 +190,7 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
             shutdown($_socket{refaddr $self}, 2);
             close $_socket{refaddr $self};
             $_tier{refaddr $self}->_client->_schedule(
-                {   Time => time + 300,
+                {   Time => time + 30,
                     Code => sub {
                         my ($s) = @_;
                         $_tier{refaddr $s}->_shuffle;
@@ -257,12 +275,9 @@ package Net::BitTorrent::Torrent::Tracker::HTTP;
                         );
                     }
                     else {
-                        $_tier{refaddr $self}
-                            ->_torrent->_append_nodes($data->{q[peers]});
-                        $_tier{refaddr $self}
-                            ->_set_complete($data->{q[complete]});
-                        $_tier{refaddr $self}
-                            ->_set_incomplete($data->{q[incomplete]});
+                        $_peers{refaddr $self}      = $data->{q[peers]};
+                        $_complete{refaddr $self}   = $data->{q[complete]};
+                        $_incomplete{refaddr $self} = $data->{q[incomplete]};
                         $_tier{refaddr $self}
                             ->_torrent->_event(q[tracker_success],
                                         {Tracker => $self, Payload => $data});
@@ -407,6 +422,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: HTTP.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $
+=for svn $Id: HTTP.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $
 
 =cut

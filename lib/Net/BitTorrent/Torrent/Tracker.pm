@@ -10,9 +10,9 @@ package Net::BitTorrent::Torrent::Tracker;
     use Net::BitTorrent::Torrent::Tracker::HTTP;
     use Net::BitTorrent::Torrent::Tracker::UDP;
     use version qw[qv];
-    our $SVN = q[$Id: Tracker.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 46 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
-    my (@CONTENTS) = \my (%torrent, %urls, %complete, %incomplete);
+    our $SVN = q[$Id: Tracker.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 49 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    my (@CONTENTS) = \my (%torrent, %urls);
     my %REGISTRY;
 
     sub new {
@@ -40,9 +40,7 @@ package Net::BitTorrent::Torrent::Tracker;
         $self = bless(\$args->{q[URLs]}->[0], $class);
         $torrent{refaddr $self} = $args->{q[Torrent]};
         weaken $torrent{refaddr $self};
-        $complete{refaddr $self}   = 0;
-        $incomplete{refaddr $self} = 0;
-        $urls{refaddr $self}       = [];
+        $urls{refaddr $self} = [];
         for my $_url (@{$args->{q[URLs]}}) {
             push @{$urls{refaddr $self}},
                 ($_url =~ m[^http://]i
@@ -50,37 +48,24 @@ package Net::BitTorrent::Torrent::Tracker;
                  : q[Net::BitTorrent::Torrent::Tracker::UDP]
                 )->new({URL => $_url, Tier => $self});
         }
-        $torrent{refaddr $self}->_client->_schedule(
-                             {Time   => time,
-                              Code   => sub { shift->_announce(q[started]) },
-                              Object => $self
-                             }
-        ) if $torrent{refaddr $self}->status & 128;
         weaken($REGISTRY{refaddr $self} = $self);
         @{$urls{refaddr $self}} = shuffle(@{$urls{refaddr $self}});
         return $self;
     }
 
     # Accessors | Public
-    sub incomplete { return $incomplete{refaddr +shift} }
-    sub complete   { return $complete{refaddr +shift} }
-    sub urls       { return $urls{refaddr +shift}; }
+    sub urls { return $urls{refaddr +shift}; }
 
     # Accessors | Private
     sub _client  { return $torrent{refaddr +shift}->_client; }
     sub _torrent { return $torrent{refaddr +shift}; }
 
+    sub _nodes {
+        my ($self) = @_;
+        return compact(map { $_->_nodes } @{$urls{refaddr $self}});
+    }
+
     # Methods | Private
-    sub _set_complete {
-        my ($self, $value) = @_;
-        return $complete{refaddr $self} = $value;
-    }
-
-    sub _set_incomplete {
-        my ($self, $value) = @_;
-        return $incomplete{refaddr $self} = $value;
-    }
-
     sub _shuffle {
         my ($self) = @_;
         return (
@@ -105,8 +90,6 @@ Incomplete: %d
 Number of URLs: %d
     %s
 END
-            $complete{refaddr $self},
-            $incomplete{refaddr $self},
             scalar(@{$urls{refaddr $self}}),
             join qq[\r\n    ], map { $_->url() } @{$urls{refaddr $self}};
         return defined wantarray ? $dump : print STDERR qq[$dump\n];
@@ -201,6 +184,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Tracker.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $
+=for svn $Id: Tracker.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $
 
 =cut

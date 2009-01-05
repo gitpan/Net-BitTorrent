@@ -20,8 +20,8 @@ package Net::BitTorrent;
     use Net::BitTorrent::DHT;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $SVN = q[$Id: BitTorrent.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 46 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: BitTorrent.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 2; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 49 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \my (%_tcp,                  %_udp,
                %_schedule,             %_tid,
@@ -41,20 +41,22 @@ package Net::BitTorrent;
         my ($host, @ports) = (q[0.0.0.0], (0));
 
         # Defaults
-        $_peers_per_torrent{refaddr $self}    = 100;
-        $_connections_per_host{refaddr $self} = 2;
-        $_half_open{refaddr $self}            = 8;
-        $_max_dl_rate{refaddr $self}          = 0;
-        $_k_dl{refaddr $self}                 = 0;
         $_max_ul_rate{refaddr $self}          = 0;
         $_k_ul{refaddr $self}                 = 0;
+        $_max_dl_rate{refaddr $self}          = 0;
+        $_k_dl{refaddr $self}                 = 0;
+        $_peers_per_torrent{refaddr $self}    = 100;
+        $_half_open{refaddr $self}            = 8;
+        $_connections_per_host{refaddr $self} = 2;
         $_torrents{refaddr $self}             = {};
         $_tid{refaddr $self}                  = qq[\0] x 5;
         $_use_dht{refaddr $self}              = 1;
-        $_dht{refaddr $self} = Net::BitTorrent::DHT->new({Client => $self});
-        $_peerid{refaddr $self}      = Net::BitTorrent::Version::gen_peerid();
-        $_connections{refaddr $self} = {};
 
+        # Internals
+        $_connections{refaddr $self} = {};
+        $_schedule{refaddr $self}    = {};
+        $_dht{refaddr $self} = Net::BitTorrent::DHT->new({Client => $self});
+        $_peerid{refaddr $self} = Net::BitTorrent::Version::gen_peerid();
         if (defined $args) {
             if (ref($args) ne q[HASH]) {
                 carp q[Net::BitTorrent->new({}) requires ]
@@ -87,12 +89,18 @@ package Net::BitTorrent;
     }
 
     # Accessors | Private
-    sub _tcp         { return $_tcp{refaddr +shift} }
-    sub _udp         { return $_udp{refaddr +shift} }
-    sub _connections { return $_connections{refaddr +shift} }
-    sub _max_ul_rate { return $_max_ul_rate{refaddr +shift} }
-    sub _max_dl_rate { return $_max_dl_rate{refaddr +shift} }
-    sub _dht         { return $_dht{refaddr +shift} }
+    sub _tcp               { return $_tcp{refaddr +shift} }
+    sub _udp               { return $_udp{refaddr +shift} }
+    sub _connections       { return $_connections{refaddr +shift} }
+    sub _max_ul_rate       { return $_max_ul_rate{refaddr +shift} }
+    sub _max_dl_rate       { return $_max_dl_rate{refaddr +shift} }
+    sub _peers_per_torrent { return $_peers_per_torrent{refaddr +shift} }
+    sub _half_open         { return $_half_open{refaddr +shift} }
+
+    sub _connections_per_host {
+        return $_connections_per_host{refaddr +shift};
+    }
+    sub _dht { return $_dht{refaddr +shift} }
 
     sub _use_dht {
         my ($s) = @_;
@@ -130,17 +138,11 @@ package Net::BitTorrent;
             = unpack_sockaddr_in(getsockname($_udp{refaddr $self}));
         return inet_ntoa($packed_ip);
     }
-    sub _peers_per_torrent { return $_peers_per_torrent{refaddr +shift} }
-    sub _half_open         { return $_half_open{refaddr +shift} }
-
-    sub _connections_per_host {
-        return $_connections_per_host{refaddr +shift};
-    }
 
     # Setters | Private
     sub _set_max_ul_rate {    # BYTES per second
         my ($self, $value) = @_;
-        if (not defined $value or $value !~ m[^\d+$]) {
+        if (not defined $value or $value !~ m[^\d+$] or !$value) {
             carp
                 q[Net::BitTorrent->_set_max_ul_rate( VALUE ) requires an integer value];
             return;
@@ -156,6 +158,36 @@ package Net::BitTorrent;
             return;
         }
         return $_max_dl_rate{refaddr $self} = $value;
+    }
+
+    sub _set_peers_per_torrent {
+        my ($self, $value) = @_;
+        if (not defined $value or $value !~ m[^\d+$] or $value < 1) {
+            carp
+                q[Net::BitTorrent->_set_peers_per_torrent( VALUE ) requires an integer value];
+            return;
+        }
+        return $_peers_per_torrent{refaddr $self} = $value;
+    }
+
+    sub _set_half_open {
+        my ($self, $value) = @_;
+        if (not defined $value or $value !~ m[^\d+$] or $value < 1) {
+            carp
+                q[Net::BitTorrent->_set_half_open( VALUE ) requires an integer value];
+            return;
+        }
+        return $_half_open{refaddr $self} = $value;
+    }
+
+    sub _set_connections_per_host {
+        my ($self, $value) = @_;
+        if (not defined $value or $value !~ m[^\d+$] or $value < 1) {
+            carp
+                q[Net::BitTorrent->_set_connections_per_host( VALUE ) requires an integer value];
+            return;
+        }
+        return $_connections_per_host{refaddr $self} = $value;
     }
 
     sub _set_use_dht {
@@ -530,13 +562,11 @@ package Net::BitTorrent;
                 q[Net::BitTorrent->remove_torrent(TORRENT) requires a blessed Net::BitTorrent::Torrent object];
             return;
         }
-        for my $_peer ($torrent->_peers) {
+        for my $_peer ($torrent->peers) {
             $_peer->_disconnect(
                               q[Removing .torrent torrent from local client]);
         }
-        for my $_tracker (@{$torrent->trackers}) {
-            $_tracker->urls->[0]->_announce(q[stopped]);
-        }
+        $torrent->stop;    # XXX - Should this be here?
         return delete $_torrents{refaddr $self}{$torrent->infohash};
     }
 
@@ -684,8 +714,13 @@ END
             unpack(q[H*], $_dht{refaddr $self}->node_id),
             $self->_tcp_host, $self->_tcp_port, $self->_udp_host,
             $self->_udp_port,
-            (scalar keys %{$_torrents{refaddr $self}}),
-            join(qq[\r\n], keys %{$_torrents{refaddr $self}});
+            (scalar keys %{$_torrents{refaddr $self}}), join(
+            qq[\r\n],
+            map {
+                sprintf q[%40s (%d: %s)], $_->infohash, $_->status,
+                    $_->_status_as_string()
+                } values %{$_torrents{refaddr $self}}
+            );
         return defined wantarray ? $dump : print STDERR qq[$dump\n];
     }
 
@@ -721,6 +756,19 @@ END
 =head1 NAME
 
 Net::BitTorrent - BitTorrent peer-to-peer protocol class
+
+=head1 NOTICE
+
+=for html <span style="color: #F00; font-size: 1.5em;">
+
+THIS PROJECT IS ACTIVELY SEEKING DEVELOPERS. Ahem, I hate to shout but
+N::B could really use a second or third pair of eyes over the next few
+versions.  So, if you're interested and have cryptographic experience,
+or you're just familiar with Perl and want to chip in, see the notes
+on L<Joining the Project|Net::BitTorrent::Notes/"Joining the Project">
+and L<let me know|/"Author">.
+
+=for html </span>
 
 =head1 Synopsis
 
@@ -1258,7 +1306,8 @@ following keys:
 
 =item C<Torrent>
 
-The L<Net::BitTorrent::Torrent> object related to this event.
+The L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent> object related to
+this event.
 
 =item C<Index>
 
@@ -1419,6 +1468,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 46 2008-12-30 23:25:17Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $
 
 =cut

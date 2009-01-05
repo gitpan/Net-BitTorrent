@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 use File::Find;
-use Module::Build 0.30;
+use Module::Build;
 use Config;
 $|++;
 my $automated_testing = $ENV{q[AUTOMATED_TESTING]}
@@ -238,8 +238,7 @@ my $mb = $class->new(
                  q[http://code.google.com/p/net-bittorrent/issues/list],
              homepage => q[http://sankorobinson.com/net-bittorrent/],
              license => q[http://www.perlfoundation.org/artistic_license_2_0],
-             MailingList =>
-                 q[http://groups.google.com/group/net-bittorrent-discuss],
+             MailingList => q[http://groups.google.com/group/net-bittorrent],
              repository =>
                  q[http://code.google.com/p/net-bittorrent/source/browse/]
          },
@@ -276,6 +275,21 @@ sub find_cb {
     return unless $_ =~ m[.+\.t$];
     return push @tests, $File::Find::name;
 }
+
+BEGIN {    # Tired of getting FAIL-mail from outdated build environments
+    if ($] < 5.008001) {    # 5+ years old-- anything less is just silly
+        warn sprintf
+            q[Perl v5.8.1 required--this is only v%vd, stopped],
+            $^V;
+        exit 0;
+    }
+    if ($Module::Build::VERSION < 0.3) {
+        warn sprintf
+            q[Module::Build version 0.3 required--this is only version %s],
+            $Module::Build::VERSION;
+        exit 0;
+    }
+}
 __END__
 Copyright (C) 2008 by Sanko Robinson <sanko@cpan.org>
 
@@ -290,4 +304,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Build.PL 46 2008-12-30 23:25:17Z sanko@cpan.org $
+$Id: Build.PL 48 2009-01-02 17:39:49Z sanko@cpan.org $

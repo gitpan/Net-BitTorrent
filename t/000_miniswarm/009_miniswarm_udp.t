@@ -1,5 +1,5 @@
 # -*- perl -*-
-# $Id: 009_miniswarm_udp.t 39 2008-11-26 15:49:02Z sanko@cpan.org $
+# $Id: 009_miniswarm_udp.t 49 2009-01-05 22:38:02Z sanko@cpan.org $
 # Miniature swarm of 1 seed and 5 new peers
 #
 use strict;
@@ -24,7 +24,7 @@ $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 my $BlockLength = 2**14;
 my $Seeds       = 1;
 my $Peers       = 5;
-my $Timeout     = 60;
+my $Timeout     = 30;
 plan tests => int(($Seeds * 2) + ($Peers * 2));
 my $sprintf = q[%0] . length($Peers > $Seeds ? $Peers : $Seeds) . q[d];
 my $_infohash = q[2b3aaf361bd40540bf7e3bfd140b954b90e4dfbc];
@@ -281,4 +281,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: 009_miniswarm_udp.t 39 2008-11-26 15:49:02Z sanko@cpan.org $
+$Id: 009_miniswarm_udp.t 49 2009-01-05 22:38:02Z sanko@cpan.org $

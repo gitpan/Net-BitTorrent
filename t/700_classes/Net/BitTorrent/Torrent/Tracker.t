@@ -19,7 +19,7 @@ $SIG{__WARN__} = ($verbose ? sub { diag shift } : sub { });
 $|++;
 my $multi_dot_torrent  = q[./t/900_data/950_torrents/952_multi.torrent];
 my $single_dot_torrent = q[./t/900_data/950_torrents/951_single.torrent];
-plan tests => 18;
+plan tests => 14;
 SKIP: {
     my $client = Net::BitTorrent->new();
     my $torrent =
@@ -106,10 +106,6 @@ SKIP: {
                                  Torrent => $torrent
                                 }
         );
-    ok($tracker->_set_complete(30),   q[Set number of seeds]);
-    ok($tracker->_set_incomplete(50), q[Set number of peers]);
-    is($tracker->complete(),   30, q[Get number of seeds]);
-    is($tracker->incomplete(), 50, q[Get number of seeds]);
     is_deeply($tracker->_torrent, $torrent,
               q[Get related N::B::Torrent object]);
     is($tracker->_client->isa(q[Net::BitTorrent]),
@@ -137,4 +133,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Tracker.t 46 2008-12-30 23:25:17Z sanko@cpan.org $
+$Id: Tracker.t 49 2009-01-05 22:38:02Z sanko@cpan.org $

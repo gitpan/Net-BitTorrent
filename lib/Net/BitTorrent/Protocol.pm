@@ -7,8 +7,8 @@ package Net::BitTorrent::Protocol;
     use lib q[../../../lib];
     use Net::BitTorrent::Util qw[:bencode];
     use version qw[qv];
-    our $SVN = q[$Id: Protocol.pm 44 2008-12-18 23:20:00Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 44 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $SVN = q[$Id: Protocol.pm 48 2009-01-02 17:39:49Z sanko@cpan.org $];
+    our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 48 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -709,7 +709,7 @@ the BitTorrent spec:
 
 =over
 
-=item C<RESEREVED>
+=item C<RESERVED>
 
 ...is the 8 byte string used to represent a client's capabilities for
 extensions to the protocol.
@@ -979,6 +979,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm 44 2008-12-18 23:20:00Z sanko@cpan.org $
+=for svn $Id: Protocol.pm 48 2009-01-02 17:39:49Z sanko@cpan.org $
 
 =cut

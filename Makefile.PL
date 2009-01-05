@@ -4,7 +4,7 @@ use warnings;
 BEGIN { exit 0 if $] < 5.008001 }
 require 5.8.1;
 $|++;
-if (!eval q[use Module::Build::Compat 0.02; 1;]) {
+if (!eval q[use Module::Build::Compat 0.02; use Module::Build 0.30; 1]) {
     print qq[This module requires Module::Build to install itself.\n];
     require ExtUtils::MakeMaker;
     my $yn =
@@ -51,4 +51,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Makefile.PL 46 2008-12-30 23:25:17Z sanko@cpan.org $
+$Id: Makefile.PL 48 2009-01-02 17:39:49Z sanko@cpan.org $
