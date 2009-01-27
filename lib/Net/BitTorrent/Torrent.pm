@@ -24,8 +24,7 @@ package Net::BitTorrent::Torrent;
     use Net::BitTorrent::Torrent::File;
     use Net::BitTorrent::Torrent::Tracker;
     use version qw[qv];
-    our $SVN = q[$Id: Torrent.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $];
-    our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new((qw$Rev: 49 $)[1])->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 4; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_client,  %path,            %_basedir,
                         %size,     %files,           %trackers,
@@ -1745,6 +1744,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Torrent.pm 49 2009-01-05 22:38:02Z sanko@cpan.org $
+=for svn $Id: Torrent.pm 56a7b7c 2009-01-27 02:13:14Z sanko@cpan.org $
 
 =cut
