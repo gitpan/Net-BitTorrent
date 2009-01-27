@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.049_003
+version: 0.049_004
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -66,7 +66,7 @@ provides:
     version: 0.040_001
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.049_003
+    version: 0.049_004
 generated_by: 'Conversion, software version 7.0'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
