@@ -285,4 +285,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: BitTorrent.t 56a7b7c 2009-01-27 02:13:14Z sanko@cpan.org $
+$Id: BitTorrent.t a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $

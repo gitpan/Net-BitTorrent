@@ -63,6 +63,8 @@ L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent> is to be used.
 
 =head1 Lowdown
 
+This section only makes sense when you view the source.
+
 =over
 
 =item Line 7
@@ -143,6 +145,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 004-resume.pl fac4ae0 2009-01-27 17:00:38Z sanko@cpan.org $
+=for svn $Id: 004-resume.pl a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
 
 =cut

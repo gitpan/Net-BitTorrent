@@ -20,19 +20,24 @@ package Net::BitTorrent;
     use Net::BitTorrent::DHT;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 3; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
-    my (@CONTENTS)
-        = \my (%_tcp,                  %_udp,
-               %_schedule,             %_tid,
-               %_event,                %_torrents,
-               %_connections,          %_peerid,
-               %_max_ul_rate,          %_k_ul,
-               %_max_dl_rate,          %_k_dl,
-               %_dht,                  %_use_dht,
-               %__UDP_OBJECT_CACHE,    %_peers_per_torrent,
-               %_connections_per_host, %_half_open
-        );
+    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 4; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    my (@CONTENTS) = \my (
+        %_tcp,                  %_udp,
+        %_schedule,             %_tid,
+        %_event,                %_torrents,
+        %_connections,          %_peerid,
+        %_max_ul_rate,          %_k_ul,
+        %_max_dl_rate,          %_k_dl,
+        %_dht,                  %_use_dht,
+        %__UDP_OBJECT_CACHE,    %_peers_per_torrent,
+        %_connections_per_host, %_half_open,
+        #############################################################
+        %_encryption_mode
+    );
     my %REGISTRY;
+    sub _MSE_DISABLED {0x00}
+    sub _MSE_ENABLED  {0x01}
+    sub _MSE_FORCED   {0x02}
 
     sub new {
         my ($class, $args) = @_;
@@ -46,10 +51,11 @@ package Net::BitTorrent;
         $_k_dl{refaddr $self}                 = 0;
         $_peers_per_torrent{refaddr $self}    = 100;
         $_half_open{refaddr $self}            = 8;
-        $_connections_per_host{refaddr $self} = 2;
+        $_connections_per_host{refaddr $self} = 1;
         $_torrents{refaddr $self}             = {};
         $_tid{refaddr $self}                  = qq[\0] x 5;
         $_use_dht{refaddr $self}              = 1;
+        $_encryption_mode{refaddr $self}      = _MSE_DISABLED;
 
         # Internals
         $_connections{refaddr $self} = {};
@@ -138,7 +144,26 @@ package Net::BitTorrent;
         return inet_ntoa($packed_ip);
     }
 
+    sub _encryption_mode {
+        my ($self) = @_;
+        return $_encryption_mode{refaddr $self};
+    }
+
     # Setters | Private
+    sub _set_encryption_mode {
+        my ($self, $value) = @_;
+        if (not defined $value
+            or (    ($value != _MSE_DISABLED)
+                and ($value != _MSE_ENABLED)
+                and ($value != _MSE_FORCED))
+            )
+        {   carp
+                q[Net::BitTorrent->_set_encryption_mode( VALUE ) requires an integer value];
+            return;
+        }
+        return $_encryption_mode{refaddr $self} = $value;
+    }
+
     sub _set_max_ul_rate {    # BYTES per second
         my ($self, $value) = @_;
         if (not defined $value or $value !~ m[^\d+$] or !$value) {
@@ -1403,7 +1428,7 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008-2009 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of The Artistic License 2.0.  See the F<LICENSE>
@@ -1419,6 +1444,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm 56a7b7c 2009-01-27 02:13:14Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
 
 =cut

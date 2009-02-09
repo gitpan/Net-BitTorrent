@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.049_004
+version: 0.049_009
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -33,16 +33,17 @@ build_requires:
   Test::More: 0.8
 recommends:
   Data::Dump: 0
+  perl: 5.10.0
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
-    version: 0.049_003
+    version: 0.049_004
   Net::BitTorrent::DHT:
     file: lib/Net/BitTorrent/DHT.pm
     version: 0.049_002
   Net::BitTorrent::Peer:
     file: lib/Net/BitTorrent/Peer.pm
-    version: 0.049_004
+    version: 0.049_008
   Net::BitTorrent::Protocol:
     file: lib/Net/BitTorrent/Protocol.pm
     version: 0.048_002
@@ -66,7 +67,7 @@ provides:
     version: 0.040_001
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.049_004
+    version: 0.049_009
 generated_by: 'Conversion, software version 7.0'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
