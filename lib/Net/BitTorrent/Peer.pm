@@ -8,21 +8,45 @@ package Net::BitTorrent::Peer;
     use List::Util qw[sum max];
     use Socket qw[/F_INET/ SOMAXCONN SOCK_STREAM /inet_/ /pack_sockaddr_in/];
     use Fcntl qw[F_SETFL O_NONBLOCK];
-    use Math::BigInt try => q[GMP,Pari,FastCalc,Calc]; # Tested only with Calc
+    use Math::BigInt;
     use Digest::SHA qw[sha1];
     use version qw[qv];
-    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 8; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 99; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    use vars qw[@EXPORT_OK %EXPORT_TAGS];
+    use Exporter qw[];
+    *import = *import = *Exporter::import;
+    @EXPORT_OK = qw[
+        DISCONNECT_BY_REMOTE           DISCONNECT_LOOPBACK
+        DISCONNECT_NO_SUCH_TORRENT     DISCONNECT_HANDSHAKE_INFOHASH
+        DISCONNECT_MALFORMED_HANDSHAKE DISCONNECT_MALFORMED_PACKET
+        DISCONNECT_PREXISTING          DISCONNECT_TOO_MANY
+        DISCONNECT_HASHCHECKING        DISCONNECT_SEED
+        DISCONNECT_TIMEOUT_HANDSHAKE   DISCONNECT_USELESS_PEER
+        DISCONNECT_HANDSHAKE_SYNC_DH5  ];
+    %EXPORT_TAGS = (
+        all        => [@EXPORT_OK],
+        disconnect => [
+            qw[ DISCONNECT_BY_REMOTE           DISCONNECT_LOOPBACK
+                DISCONNECT_NO_SUCH_TORRENT     DISCONNECT_HANDSHAKE_INFOHASH
+                DISCONNECT_MALFORMED_HANDSHAKE DISCONNECT_MALFORMED_PACKET
+                DISCONNECT_PREXISTING          DISCONNECT_TOO_MANY
+                DISCONNECT_HASHCHECKING        DISCONNECT_SEED
+                DISCONNECT_TIMEOUT_HANDSHAKE   DISCONNECT_USELESS_PEER
+                DISCONNECT_HANDSHAKE_SYNC_DH5  ]
+        ],
+    );
     use lib q[../../../lib];
     use Net::BitTorrent::Protocol qw[:build parse_packet :types];
     use Net::BitTorrent::Util qw[:bencode];
     use Net::BitTorrent::Version;
     my (@CONTENTS) = \my (
-        %_client,           %_socket,          %_torrent,
-        %_data_out,         %_data_in,         %peerid,
-        %_bitfield,         %_am_choking,      %_am_interested,
-        %_peer_choking,     %_peer_interested, %_incoming,
-        %requests_out,      %requests_in,      %_last_contact,
-        %_incoming_fastset, %_reserved_bytes,  %_source,
+        %_client,           %_socket,         %torrent,
+        %_data_out,         %_data_in,        %peerid,
+        %bitfield,          %am_choking,      %am_interested,
+        %peer_choking,      %peer_interested, %incoming,
+        %requests_out,      %requests_in,     %_last_contact,
+        %_incoming_fastset, %reserved_bytes,  %source,
+        %host,              %port,
         #################### Alpha code:
         %_RC4_S, %_crypto_select, %_S,  %_i, %_j, %_state,
         %_Xa,    %_Ya,            %_Yb, %_Xb,
@@ -30,65 +54,79 @@ package Net::BitTorrent::Peer;
     );
     my %REGISTRY;
     my %_Disconnect_Strings = (
-        0   => q[Connection closed by remote peer],    # or unknown
-        -10 => q[...we've connected to ourself.],
-        NOT_SERVING_TORRENT() => q[We aren't serving this torrent]
-        ,    # comes with { Infohash => [...] }
-        -12 => q[Bad plaintext handshake (Incorrect Infohash)],
-        -13 => q[Bad plaintext handshake],
-        -16 => q[Already connected to this peer]
-        ,    # comes with { PeerID => [...] }
-        -17 => q[Enough peers already!],
-        -18 => q[Hash checking],
-        -22 => q[...bad packet.],
-        -25 => q[Disconnect seed],
-        -26 => q[Handed a piece we never asked for]
+        DISCONNECT_BY_REMOTE() =>
+            q[Connection closed by remote peer],    # or unknown
+        DISCONNECT_LOOPBACK()        => q[...we've connected to ourself.],
+        DISCONNECT_NO_SUCH_TORRENT() => q[We aren't serving this torrent]
+        ,                                   # comes with { Infohash => [...] }
+        DISCONNECT_HANDSHAKE_INFOHASH() =>
+            q[Bad plaintext handshake (Incorrect Infohash)],
+        DISCONNECT_MALFORMED_HANDSHAKE() => q[Bad plaintext handshake],
+        DISCONNECT_MALFORMED_PACKET()    => q[...bad packet.],
+        DISCONNECT_PREXISTING()          => q[Already connected to this peer]
+        ,                                   # comes with { PeerID => [...] }
+        DISCONNECT_TOO_MANY()     => q[Enough peers already!],
+        DISCONNECT_HASHCHECKING() => q[Hash checking],
+        DISCONNECT_SEED()         => q[Disconnect seed],
+        -26                       => q[Handed a piece we never asked for]
         ,    # { Index => \d, Offset => \d, Length=> \d }
         -28 => q[Sent a reject to a non-existant piece],
         -29 => q[Rejected a request we never made.],
-        -30 => q[Failed to complete handshake within 30s],
+        DISCONNECT_TIMEOUT_HANDSHAKE() =>
+            q[Failed to complete handshake within 30s],
         -40 => q[Peer is idle],
-        USELESS_PEER() =>
+        DISCONNECT_USELESS_PEER() =>
             q[Useless peer (Not interested and not interesting.)],
-        -101 => q[Bad VC in encrypted handshake],
-        -102 => q[Failed to sync DH-5],
-        -103 => q[Bad encrypted header at stage 4],
+        -101                            => q[Bad VC in encrypted handshake],
+        DISCONNECT_HANDSHAKE_SYNC_DH5() => q[Failed to sync DH-5],
+        -103                            => q[Bad encrypted header at stage 4],
         -104 => q[Bad encrypted handshake (Bad SKEY)],
         -105 => q[Unsupported encryption scheme]
     );
-    sub USELESS_PEER        { -41; }
-    sub NOT_SERVING_TORRENT { -11; }
+    sub DISCONNECT_BY_REMOTE           {0}
+    sub DISCONNECT_LOOPBACK            {-10}
+    sub DISCONNECT_NO_SUCH_TORRENT     {-11}
+    sub DISCONNECT_HANDSHAKE_INFOHASH  {-12}
+    sub DISCONNECT_MALFORMED_HANDSHAKE {-13}
+    sub DISCONNECT_MALFORMED_PACKET    {-22}
+    sub DISCONNECT_PREXISTING          {-16}
+    sub DISCONNECT_TOO_MANY            {-17}
+    sub DISCONNECT_HASHCHECKING        {-18}
+    sub DISCONNECT_SEED                {-25}
+    sub DISCONNECT_TIMEOUT_HANDSHAKE   {-30}
+    sub DISCONNECT_USELESS_PEER        {-41}
+    sub DISCONNECT_HANDSHAKE_SYNC_DH5  {-102}
 
     # States
-    sub MSE_ONE   { 1; }
-    sub MSE_TWO   { 2; }
-    sub MSE_THREE { 3; }
-    sub MSE_FOUR  { 4; }
-    sub MSE_FIVE  { 5; }
-    sub REG_ONE   { 11; }
-    sub REG_TWO   { 12; }
-    sub REG_THREE { 13; }
-    sub REG_OKAY  { 100; }
+    sub MSE_ONE   {1}
+    sub MSE_TWO   {2}
+    sub MSE_THREE {3}
+    sub MSE_FOUR  {4}
+    sub MSE_FIVE  {5}
+    sub REG_ONE   {11}
+    sub REG_TWO   {12}
+    sub REG_THREE {13}
+    sub REG_OKAY  {100}
 
     #
-    sub CRYPTO_PLAIN { 0x01; }
-    sub CRYPTO_RC4   { 0x02; }
-    sub CRYPTO_XOR   { 0x04; }    # unimplemented
-    sub CRYPTO_AES   { 0x08; }    # unimplemented
+    sub CRYPTO_PLAIN {0x01}
+    sub CRYPTO_RC4   {0x02}
+    sub CRYPTO_XOR   {0x04}    # unimplemented
+    sub CRYPTO_AES   {0x08}    # unimplemented
 
     sub DH_P {
         return Math::BigInt->new(
             q[0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A63A36210000000000090563]
         );
     }
-    sub DH_G { 2; }
-    sub VC   { qq[\0] x 8; }
+    sub DH_G {2}
+    sub VC   { qq[\0] x 8 }
 
     sub crypto_provide {
         return pack q[N],
-            CRYPTO_PLAIN    # | CRYPTO_RC4    #| CRYPTO_XOR | CRYPTO_AES;
+            CRYPTO_PLAIN       # | CRYPTO_RC4    #| CRYPTO_XOR | CRYPTO_AES;
     }
-    sub len { pack(q[n], length(shift)); }
+    sub len { pack(q[n], length(shift)) }
 
     sub new {
 
@@ -96,7 +134,7 @@ package Net::BitTorrent::Peer;
         my ($class, $args) = @_;
         my $self = undef;
         if (not defined $args) {
-            carp q[Net::BitTorrent::Peer->new({}) requires ]
+            carp q[Net::BitTorrent::Peer->new({ }) requires ]
                 . q[parameters a hashref];
             return;
         }
@@ -111,14 +149,14 @@ END
         if ($args->{q[Socket]}) {
             if (ref($args->{q[Socket]}) ne q[GLOB]) {
                 carp
-                    q[Net::BitTorrent::Peer->new({}) requires a GLOB-type socket];
+                    q[Net::BitTorrent::Peer->new({ }) requires a GLOB-type socket];
                 return;
             }
             if (   (!$args->{q[Client]})
                 || (!blessed $args->{q[Client]})
                 || (!$args->{q[Client]}->isa(q[Net::BitTorrent])))
             {   carp
-                    q[Net::BitTorrent::Peer->new({}) requires a blessed Net::BitTorrent object in the 'Client' parameter];
+                    q[Net::BitTorrent::Peer->new({ }) requires a blessed Net::BitTorrent object in the 'Client' parameter];
                 return;
             }
             my ($port, $packed_ip)
@@ -130,10 +168,10 @@ END
             if (scalar(
                     grep {
                                $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
-                            && $_->{q[Object]}->_host
-                            && $_->{q[Object]}->_host eq $ip
-                            && $_->{q[Object]}->_port
-                            && $_->{q[Object]}->_port eq $port
+                            && $_->{q[Object]}->host
+                            && $_->{q[Object]}->host eq $ip
+                            && $_->{q[Object]}->port
+                            && $_->{q[Object]}->port eq $port
                         } values %{$args->{q[Client]}->_connections}
                 ) > $args->{q[Client]}->_connections_per_host
                 )
@@ -150,8 +188,8 @@ END
             $_client{refaddr $self}->_add_connection($self, q[ro]) or return;
             $_data_out{refaddr $self} = q[];
             $_data_in{refaddr $self}  = q[];
-            $_incoming{refaddr $self} = 1;
-            $_source{refaddr $self}   = q[Incoming];
+            $incoming{refaddr $self}  = 1;
+            $source{refaddr $self}    = q[Incoming];
             $_state{refaddr $self} = (
                                      $_client{refaddr $self}->_encryption_mode
                                      ? MSE_TWO
@@ -163,24 +201,24 @@ END
                 !~ m[^(?:(?:(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2})[.]?){4}):\d+$]
                 )
             {   carp
-                    q[Net::BitTorrent::Peer->new({}) requires an IPv4:port 'Address'];
+                    q[Net::BitTorrent::Peer->new({ }) requires an IPv4:port 'Address'];
                 return;
             }
             if (   (!$args->{q[Torrent]})
                 || (!blessed $args->{q[Torrent]})
                 || (!$args->{q[Torrent]}->isa(q[Net::BitTorrent::Torrent])))
             {   carp
-                    q[Net::BitTorrent::Peer->new({}) requires a blessed 'Torrent'];
+                    q[Net::BitTorrent::Peer->new({ }) requires a blessed 'Torrent'];
                 return;
             }
             if (!$args->{q[Source]}) {
                 carp
-                    q[Net::BitTorrent::Peer->new({}) would like to know where this peer info is from];
+                    q[Net::BitTorrent::Peer->new({ }) would like to know where this peer info is from];
                 return;
             }
             my $half_open = grep {
                 $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
-                    && !$_->{q[Object]}->_torrent
+                    && !$_->{q[Object]}->torrent
             } values %{$args->{q[Torrent]}->_client->_connections};
             if ($half_open >= $args->{q[Torrent]}->_client->_half_open) {
                 warn sprintf q[%d half open sockets!], $half_open;
@@ -190,14 +228,14 @@ END
                 >= $args->{q[Torrent]}->_client->_peers_per_torrent)
             {   return;
             }
-            my ($host, $port) = split q[:], $args->{q[Address]}, 2;
+            my ($_host, $_port) = split q[:], $args->{q[Address]}, 2;
             if (scalar(
                     grep {
                                $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
-                            && $_->{q[Object]}->_host
-                            && $_->{q[Object]}->_host eq $host
-                            && $_->{q[Object]}->_port
-                            && $_->{q[Object]}->_port eq $port
+                            && $_->{q[Object]}->host
+                            && $_->{q[Object]}->host eq $_host
+                            && $_->{q[Object]}->port
+                            && $_->{q[Object]}->port == $_port
                         } values %{$args->{q[Torrent]}->_client->_connections}
                 ) > $args->{q[Torrent]}->_client->_connections_per_host
                 )
@@ -206,6 +244,7 @@ END
             socket(my ($socket), PF_INET, SOCK_STREAM, getprotobyname(q[tcp]))
                 or return;
             $self = bless \$args->{q[Address]}, $class;
+            ($host{refaddr $self}, $port{refaddr $self}) = ($_host, $_port);
             $_socket{refaddr $self} = $socket;
             if (not($^O eq q[MSWin32]    # set non blocking
                     ? ioctl($_socket{refaddr $self}, 0x8004667e,
@@ -216,36 +255,41 @@ END
             {   return;
             }
             connect($_socket{refaddr $self},
-                    pack_sockaddr_in($port, inet_aton($host)));
+                    pack_sockaddr_in($port{refaddr $self},
+                                     inet_aton($host{refaddr $self})
+                    )
+            );
             $_client{refaddr $self} = $args->{q[Torrent]}->_client;
             weaken $_client{refaddr $self};
-            $_torrent{refaddr $self} = $args->{q[Torrent]};
-            weaken $_torrent{refaddr $self};
-            ${$_bitfield{refaddr $self}}
-                = pack(q[b*], qq[\0] x $_torrent{refaddr $self}->piece_count);
+            $torrent{refaddr $self} = $args->{q[Torrent]};
+            weaken $torrent{refaddr $self};
+            ${$bitfield{refaddr $self}}
+                = pack(q[b*], qq[\0] x $torrent{refaddr $self}->piece_count);
             my %_payload = (
-                 Reserved => $_client{refaddr $self}->_build_reserved,
-                 Infohash => pack(q[H40], $_torrent{refaddr $self}->infohash),
-                 PeerID   => $_client{refaddr $self}->peerid
+                  Reserved => $_client{refaddr $self}->_build_reserved,
+                  Infohash => pack(q[H40], $torrent{refaddr $self}->infohash),
+                  PeerID   => $_client{refaddr $self}->peerid
             );
 
-            if ($_client{refaddr $self}->_encryption_mode != 0x00) {
-                $_state{refaddr $self} = MSE_ONE;
+            if (   ($_client{refaddr $self}->_encryption_mode != 0x00)
+                && (!$args->{q[_plaintext]})    # XXX
+                )
+            {   $_state{refaddr $self} = MSE_ONE;
             }
             else {
                 $_state{refaddr $self} = REG_ONE;
             }
             $_data_in{refaddr $self} = q[];
             $_client{refaddr $self}->_add_connection($self, q[wo]) or return;
-            $_incoming{refaddr $self} = 0;
-            $_source{refaddr $self}   = $args->{q[Source]};
+            $incoming{refaddr $self} = 0;
+            $source{refaddr $self}   = $args->{q[Source]};
         }
         if ($self) {
-            ${$_am_choking{refaddr $self}}      = 1;
-            ${$_am_interested{refaddr $self}}   = 0;
-            ${$_peer_choking{refaddr $self}}    = 1;
-            ${$_peer_interested{refaddr $self}} = 0;
-            ${$_bitfield{refaddr $self}} ||= ();
+            ${$am_choking{refaddr $self}}      = 1;
+            ${$am_interested{refaddr $self}}   = 0;
+            ${$peer_choking{refaddr $self}}    = 1;
+            ${$peer_interested{refaddr $self}} = 0;
+            ${$bitfield{refaddr $self}} ||= ();
             $_last_contact{refaddr $self}  = time;            # lies
             $_crypto_select{refaddr $self} = CRYPTO_PLAIN;    # passthrough
             $requests_out{refaddr $self}   = [];
@@ -273,7 +317,28 @@ END
                         my $s = shift;
                         if (!$peerid{refaddr $s}) {
                             weaken $s;
-                            $s->_disconnect(-30);
+                            $s->_disconnect(DISCONNECT_TIMEOUT_HANDSHAKE);
+                            if ((!$incoming{refaddr $self}
+                                )    # outgoing connection
+                                 #&& ($_crypto_select{refaddr $self} != CRYPTO_PLAIN)
+                                && ($torrent{refaddr $self})
+                                && ($_state{refaddr $self} < REG_ONE)
+                                )
+                            {
+
+                                #warn q[RETRY! :D];
+                                my $peer =    # retry unencrypted
+                                    Net::BitTorrent::Peer->new(
+                                    {   Address => (
+                                                sprintf q[%s:%d], $self->host,
+                                                $self->port
+                                        ),
+                                        Torrent => $torrent{refaddr $self},
+                                        Source  => q[TODO],
+                                        _plaintext => 1    # XXX
+                                    }
+                                    );
+                            }
                         }
                         return 1;
                     },
@@ -290,12 +355,12 @@ END
                 }
             );
             if ($threads::shared::threads_shared) {
-                threads::shared::share($_bitfield{refaddr $self})
-                    if defined $_bitfield{refaddr $self};
-                threads::shared::share($_am_choking{refaddr $self});
-                threads::shared::share($_am_interested{refaddr $self});
-                threads::shared::share($_peer_choking{refaddr $self});
-                threads::shared::share($_peer_interested{refaddr $self});
+                threads::shared::share($bitfield{refaddr $self})
+                    if defined $bitfield{refaddr $self};
+                threads::shared::share($am_choking{refaddr $self});
+                threads::shared::share($am_interested{refaddr $self});
+                threads::shared::share($peer_choking{refaddr $self});
+                threads::shared::share($peer_interested{refaddr $self});
             }
             weaken($REGISTRY{refaddr $self} = $self);
         }
@@ -306,38 +371,43 @@ END
     sub peerid { return $peerid{refaddr +shift}; }
 
     # Accessors | Private | General
-    sub _socket         { return $_socket{refaddr +shift}; }
-    sub _torrent        { return $_torrent{refaddr +shift}; }
-    sub _reserved_bytes { return $_reserved_bytes{refaddr +shift}; }
-    sub _bitfield       { return ${$_bitfield{refaddr +shift}}; }
+    sub _socket        { return $_socket{refaddr +shift}; }
+    sub torrent        { return $torrent{refaddr +shift}; }
+    sub reserved_bytes { return $reserved_bytes{refaddr +shift}; }
+    sub bitfield       { return ${$bitfield{refaddr +shift}}; }
 
-    sub _port {
+    sub port {
         return if defined $_[1];
         my ($self) = @_;
-        return if not defined $_socket{refaddr $self};
-        my $peername = getpeername($_socket{refaddr $self});
-        return if not defined $peername;
-        my ($port, undef) = unpack_sockaddr_in($peername);
-        return $port;
+        if (!$port{refaddr $self}) {
+            return if not defined $_socket{refaddr $self};
+            my $peername = getpeername($_socket{refaddr $self});
+            return if not defined $peername;
+            ($port{refaddr $self}, undef) = unpack_sockaddr_in($peername);
+        }
+        return $port{refaddr $self};
     }
 
-    sub _host {
+    sub host {
         return if defined $_[1];
         my ($self) = @_;
-        return if not defined $_socket{refaddr $self};
-        my $peername = getpeername($_socket{refaddr $self});
-        return if not defined $peername;
-        my (undef, $packed_ip) = unpack_sockaddr_in($peername);
-        return inet_ntoa($packed_ip);
+        if (!$host{refaddr $self}) {
+            return if not defined $_socket{refaddr $self};
+            my $peername = getpeername($_socket{refaddr $self});
+            return if not defined $peername;
+            my (undef, $packed_ip) = unpack_sockaddr_in($peername);
+            $host{refaddr $self} = inet_ntoa($packed_ip);
+        }
+        return $host{refaddr $self};
     }
 
     # Accessors | Private | Status
-    sub _peer_choking    { return ${$_peer_choking{refaddr +shift}}; }
-    sub _am_choking      { return ${$_am_choking{refaddr +shift}}; }
-    sub _peer_interested { return ${$_peer_interested{refaddr +shift}}; }
-    sub _am_interested   { return ${$_am_interested{refaddr +shift}}; }
-    sub _incoming        { return $_incoming{refaddr +shift}; }
-    sub _source          { return $_source{refaddr +shift}; }
+    sub peer_choking    { return ${$peer_choking{refaddr +shift}}; }
+    sub am_choking      { return ${$am_choking{refaddr +shift}}; }
+    sub peer_interested { return ${$peer_interested{refaddr +shift}}; }
+    sub am_interested   { return ${$am_interested{refaddr +shift}}; }
+    sub incoming        { return $incoming{refaddr +shift}; }
+    sub source          { return $source{refaddr +shift}; }
 
     # Methods | Private
     sub _rw {
@@ -347,10 +417,10 @@ END
 
         #Carp::cluck sprintf q[%s->_rw(%d, %d, %d) | %d], __PACKAGE__, $read,
         #    $write, $error, $_state{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT);
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT);
             return;
         }
         if ($error) {
@@ -358,10 +428,10 @@ END
             $self->_disconnect($^E);
             return;
         }
-        if (defined $_torrent{refaddr $self}
-            and $_torrent{refaddr $self}->status & 2)
+        if (defined $torrent{refaddr $self}
+            and $torrent{refaddr $self}->status & 2)
         {   weaken $self;
-            $self->_disconnect(-18);
+            $self->_disconnect(DISCONNECT_HASHCHECKING);
             return;
         }
         my ($actual_read, $actual_write) = (0, 0);
@@ -371,7 +441,7 @@ END
             {   $actual_read
                     = sysread($_socket{refaddr $self}, my ($data_in), $read);
                 $_data_in{refaddr $self} .=
-                    $self->_RC4((   $_incoming{refaddr $self}
+                    $self->_RC4((   $incoming{refaddr $self}
                                   ? $_KeyA{refaddr $self}
                                   : $_KeyB{refaddr $self}
                                 ),
@@ -437,7 +507,7 @@ END
         #warn sprintf q[Sending %d bytes], length($data);
         if (   ($_crypto_select{refaddr $self} == CRYPTO_RC4)
             && ($_state{refaddr $self} >= REG_ONE))
-        {   $data = $self->_RC4((  $_incoming{refaddr $self}
+        {   $data = $self->_RC4((  $incoming{refaddr $self}
                                  ? $_KeyB{refaddr $self}
                                  : $_KeyA{refaddr $self}
                                 ),
@@ -485,7 +555,7 @@ END
                         # N::B::Protocol removed some data but couldn't parse
                         #   a packet from what was removed. Gotta be bad data.
                         weaken $self;
-                        $self->_disconnect(-22);
+                        $self->_disconnect(DISCONNECT_MALFORMED_PACKET);
                         return;
                     }
                     last PACKET;
@@ -510,12 +580,31 @@ END
                     $dispatch{$packet->{q[Type]}}($self,
                                                   $packet->{q[Payload]});
                 }
-                elsif (eval require Data::Dump) {
-                    Carp::carp q[Unknown packet! ] . Data::Dump::pp($packet);
-                }
                 else {
+                    my $packet_dump = q[];
+                    if (eval require Data::Dump) {    # I like this better
+                        $packet_dump = Data::Dump::pp($packet);
+                    }
+                    else {    # fallback to lame core module
+                        require Data::Dumper;
+                        $packet_dump = Data::Dumper::Dumper($packet);
+                    }
                     Carp::carp
-                        q[Unknown packet! ...but I don't have Data::Dump installed so when I inform him of this bug, I'll be of no real help to Net::BitTorrent's author.];
+                        sprintf <<'END', $self->as_string(1), $packet_dump;
+------------------------------------------------------------------------------
+Unknown incoming packet. This may be a bug in Net::BitTorrent, so please c+p
+the following block when you report this in the Net::BitTorrent Issue Tracker:
+http://code.google.com/p/net-bittorrent/issues/list
+------------------------------------------------------------------------------
+= Peer Information ===========================================================
+%s
+= Packet Information =========================================================
+%s
+------------------------------------------------------------------------------
+See the "Issue Tracker" section in 'perldoc Net::BitTorrent::Notes' for more
+information. Thanks!
+------------------------------------------------------------------------------
+END
                 }
             }
         }
@@ -560,7 +649,8 @@ END
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
         if ($_data_in{refaddr $self} =~ m[^\x13BitTorrent protocol.{48}$]s) {
-            warn q[Switching to plaintext handshake];
+
+            #warn q[Switching to plaintext handshake];
             $_state{refaddr $self} = REG_TWO;
             return;
         }
@@ -646,19 +736,19 @@ END
              =~ m[(..)]g);
         shift @bits;
         $_S{refaddr $self} = join q[], @bits;
-        $_torrent{refaddr $self} || return 0; # XXX - Local error. Disconnect?
+        $torrent{refaddr $self} || return 0;  # XXX - Local error. Disconnect?
         $_KeyA{refaddr $self}
             = sha1(  q[keyA]
                    . $_S{refaddr $self}
-                   . pack(q[H*], $_torrent{refaddr $self}->infohash));
+                   . pack(q[H*], $torrent{refaddr $self}->infohash));
 
         # first piece: HASH('req1' . S)
         $self->_syswrite(sha1(q[req1] . $_S{refaddr $self}));
 
         # second piece: HASH('req2', SKEY) xor HASH('req3', S)
         $self->_syswrite(
-               sha1(q[req2] . pack(q[H*], $_torrent{refaddr $self}->infohash))
-                   ^ sha1(q[req3] . $_S{refaddr $self}));
+                sha1(q[req2] . pack(q[H*], $torrent{refaddr $self}->infohash))
+                    ^ sha1(q[req3] . $_S{refaddr $self}));
 
         # third piece: ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA))
         my $PadC = q[];
@@ -727,36 +817,39 @@ END
                  ^ sha1(q[req3], $_S{refaddr $self})
                 ) eq $req2_req3
                 )
-            {   $_torrent{refaddr $self} = $torrent;
-                weaken $_torrent{refaddr $self};
-                ${$_bitfield{refaddr $self}}
-                    = pack(q[b*],
-                           qq[\0] x $_torrent{refaddr $self}->piece_count);
+            {   $torrent{refaddr $self} = $torrent;
+                weaken $torrent{refaddr $self};
+                ${$bitfield{refaddr $self}} = pack(q[b*],
+                               qq[\0] x $torrent{refaddr $self}->piece_count);
                 last INFOHASH;
             }
         }
-        if (!$_torrent{refaddr $self}) {
+        if (!$torrent{refaddr $self}) {
             $self->_disconnect(-103);
             return;
         }
-        if (!$_torrent{refaddr $self}) {
+        if (!$torrent{refaddr $self}) {
             $self->_disconnect(-104);
             return;
         }
         $_KeyB{refaddr $self}
             = sha1(  q[keyB]
                    . $_S{refaddr $self}
-                   . pack(q[H*], $_torrent{refaddr $self}->infohash));
+                   . pack(q[H*], $torrent{refaddr $self}->infohash));
         $_KeyA{refaddr $self}
             = sha1(  q[keyA]
                    . $_S{refaddr $self}
-                   . pack(q[H*], $_torrent{refaddr $self}->infohash));
+                   . pack(q[H*], $torrent{refaddr $self}->infohash));
         $self->_RC4($_KeyA{refaddr $self}, q[ ] x 1024, 1);
         my ($VC, $crypto_provide, $len_padC, $PadC, $len_IA)
             = ($self->_RC4($_KeyA{refaddr $self},
                            substr($_data_in{refaddr $self}, 0, 16, q[]))
                    =~ m[^(.{8})(....)(..)()(..)$]
             );
+        if (!($VC && $crypto_provide)) {    # XXX - Hmmm...
+                #$self->_disconnect(DISCONNECT_HANDSHAKE_DH4);
+            return;
+        }
 
         # Prioritize encryption schemes: RC4, plaintext, XOR , ...
         # XXX - Allow the user to set the order
@@ -825,13 +918,22 @@ END
         $_KeyB{refaddr $self}
             = sha1(  q[keyB]
                    . $_S{refaddr $self}
-                   . pack(q[H40], $_torrent{refaddr $self}->infohash));
+                   . pack(q[H40], $torrent{refaddr $self}->infohash));
         $self->_RC4($_KeyB{refaddr $self}, q[ ] x 1024, 1);
         my $index = index($_data_in{refaddr $self},
                           $self->_RC4($_KeyB{refaddr $self}, VC));
         if ($index == -1) {
             if (length($_data_in{refaddr $self}) >= 628) {
-                $self->_disconnect(-102);
+                $self->_disconnect(DISCONNECT_HANDSHAKE_SYNC_DH5);
+                my $peer =    # retry unencrypted
+                    Net::BitTorrent::Peer->new(
+                    {   Address =>
+                            (sprintf q[%s:%d], $self->host, $self->port),
+                        Torrent    => $torrent{refaddr $self},
+                        Source     => q[TODO],
+                        _plaintext => 1                          # XXX
+                    }
+                    ) if !$incoming{refaddr $self};
             }
             else {
                 $_client{refaddr $self}->_add_connection($self, q[rw]);
@@ -846,9 +948,17 @@ END
                 substr($_data_in{refaddr $self}, 0, 14, q[])
                 ) =~ m[^(.{8})(....)(..)$]
         );
-        if ($VC ne VC) {
+        if (!$VC || $VC ne VC) {
             weaken $self;
-            $self->_disconnect(-101);    # XXX - retry unencrypted
+            $self->_disconnect(-101);
+            my $peer =      # retry unencrypted
+                Net::BitTorrent::Peer->new(
+                {   Address => (sprintf q[%s:%d], $self->host, $self->port),
+                    Torrent    => $torrent{refaddr $self},
+                    Source     => q[TODO],
+                    _plaintext => 1                          # XXX
+                }
+                ) if !$incoming{refaddr $self};
             return;
         }
         $_crypto_select{refaddr $self} = unpack(q[N], $crypto_select);
@@ -888,9 +998,9 @@ END
 
         # Initiate connection by sending the plaintext handshake
         my %_payload = (
-                 Reserved => $_client{refaddr $self}->_build_reserved,
-                 Infohash => pack(q[H40], $_torrent{refaddr $self}->infohash),
-                 PeerID   => $_client{refaddr $self}->peerid
+                  Reserved => $_client{refaddr $self}->_build_reserved,
+                  Infohash => pack(q[H40], $torrent{refaddr $self}->infohash),
+                  PeerID   => $_client{refaddr $self}->peerid
         );
         $self->_syswrite(build_handshake(
                                $_payload{q[Reserved]}, $_payload{q[Infohash]},
@@ -919,7 +1029,7 @@ END
         return if !defined $packet;
         if ($packet->{q[Type]} != HANDSHAKE) {
             weaken $self;
-            $self->_disconnect(-13);
+            $self->_disconnect(DISCONNECT_MALFORMED_HANDSHAKE);
             return;
         }
         my $payload = $packet->{q[Payload]};
@@ -933,7 +1043,7 @@ END
         # Set bitfield
         # Send bitfield
         # Send ext handshake
-        ($_reserved_bytes{refaddr $self}, undef, $peerid{refaddr $self})
+        ($reserved_bytes{refaddr $self}, undef, $peerid{refaddr $self})
             = @{$payload};
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
@@ -947,20 +1057,20 @@ END
         );
         if ($payload->[2] eq $_client{refaddr $self}->peerid) {
             weaken $self;
-            $self->_disconnect(-10);
+            $self->_disconnect(DISCONNECT_LOOPBACK);
             return;
         }
-        $_torrent{refaddr $self} = $_client{refaddr $self}
+        $torrent{refaddr $self} = $_client{refaddr $self}
             ->_locate_torrent(unpack(q[H40], $payload->[1]));
-        if (!defined $_torrent{refaddr $self}) {
+        if (!defined $torrent{refaddr $self}) {
             weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT,
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT,
                                {Infohash => unpack(q[H40], $payload->[1])});
             return;
         }
-        weaken $_torrent{refaddr $self};
-        ${$_bitfield{refaddr $self}}
-            = pack(q[b*], qq[\0] x $_torrent{refaddr $self}->piece_count);
+        weaken $torrent{refaddr $self};
+        ${$bitfield{refaddr $self}}
+            = pack(q[b*], qq[\0] x $torrent{refaddr $self}->piece_count);
         if (scalar(
                 grep {
                            $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
@@ -969,22 +1079,23 @@ END
                     } values %{$_client{refaddr $self}->_connections}
             ) > $_client{refaddr $self}->_connections_per_host
             )
-        {   $self->_disconnect(-16, {PeerID => $peerid{refaddr $self}});
+        {   $self->_disconnect(DISCONNECT_PREXISTING,
+                               {PeerID => $peerid{refaddr $self}});
             return;
         }
-        if (scalar($_torrent{refaddr $self}->peers)
+        if (scalar($torrent{refaddr $self}->peers)
             >= $_client{refaddr $self}->_peers_per_torrent)
-        {   $self->_disconnect(-17);
+        {   $self->_disconnect(DISCONNECT_TOO_MANY);
             return;
         }
         if ($threads::shared::threads_shared) {
-            threads::shared::share($_bitfield{refaddr $self});
+            threads::shared::share($bitfield{refaddr $self});
         }
         $_state{refaddr $self} = REG_OKAY;
         my %_payload = (
-                 Reserved => $_client{refaddr $self}->_build_reserved,
-                 Infohash => pack(q[H40], $_torrent{refaddr $self}->infohash),
-                 PeerID   => $_client{refaddr $self}->peerid
+                  Reserved => $_client{refaddr $self}->_build_reserved,
+                  Infohash => pack(q[H40], $torrent{refaddr $self}->infohash),
+                  PeerID   => $_client{refaddr $self}->peerid
         );
         $self->_syswrite(build_handshake(
                                $_payload{q[Reserved]}, $_payload{q[Infohash]},
@@ -1015,7 +1126,7 @@ END
         return if !defined $packet;
         if ($packet->{q[Type]} != HANDSHAKE) {
             weaken $self;
-            $self->_disconnect(-13);
+            $self->_disconnect(DISCONNECT_MALFORMED_HANDSHAKE);
             return;
         }
         my $payload = $packet->{q[Payload]};
@@ -1030,7 +1141,7 @@ END
         # Send bitfield
         # Send ext handshake
         #
-        ($_reserved_bytes{refaddr $self}, undef, $peerid{refaddr $self})
+        ($reserved_bytes{refaddr $self}, undef, $peerid{refaddr $self})
             = @{$payload};
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
@@ -1046,14 +1157,14 @@ END
         # Avoid connecting to ourselves
         if ($payload->[2] eq $_client{refaddr $self}->peerid) {
             weaken $self;
-            $self->_disconnect(-10);
+            $self->_disconnect(DISCONNECT_LOOPBACK);
             return;
         }
 
         # make sure the infohash is what we expect
-        if ($payload->[1] ne pack q[H*], $_torrent{refaddr $self}->infohash) {
+        if ($payload->[1] ne pack q[H*], $torrent{refaddr $self}->infohash) {
             weaken $self;
-            $self->_disconnect(-12);
+            $self->_disconnect(DISCONNECT_HANDSHAKE_INFOHASH);
             return;
         }
 
@@ -1071,12 +1182,12 @@ END
         # warn((caller(0))[3]);
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # XXX - this should never happen
             return;
         }
@@ -1094,12 +1205,12 @@ END
         # warn((caller(0))[3]);
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1109,10 +1220,10 @@ END
                                          Type    => CHOKE
                                         }
         );
-        ${$_peer_choking{refaddr $self}}  = 1;
-        ${$_am_interested{refaddr $self}} = 0;
+        ${$peer_choking{refaddr $self}}  = 1;
+        ${$am_interested{refaddr $self}} = 0;
         for my $request (@{$requests_out{refaddr $self}}) {
-            my $piece = $_torrent{refaddr $self}
+            my $piece = $torrent{refaddr $self}
                 ->_piece_by_index($request->{q[Index]});
             delete $piece->{q[Blocks_Requested]}->[$request->{q[_vec_offset]}]
                 ->{refaddr $self};
@@ -1125,16 +1236,16 @@ END
         # warn((caller(0))[3]);
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        ${$_peer_choking{refaddr $self}} = 0;
+        ${$peer_choking{refaddr $self}} = 0;
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
                                          Payload => {},
@@ -1149,16 +1260,16 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        ${$_peer_interested{refaddr $self}} = 1;
+        ${$peer_interested{refaddr $self}} = 1;
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
                                          Payload => {},
@@ -1175,12 +1286,12 @@ END
         # warn((caller(0))[3]);
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1190,8 +1301,8 @@ END
                                          Type    => NOT_INTERESTED
                                         }
         );
-        ${$_peer_interested{refaddr $self}} = 1;
-        ${$_am_choking{refaddr $self}}      = 1;
+        ${$peer_interested{refaddr $self}} = 1;
+        ${$am_choking{refaddr $self}}      = 1;
         return 1;
     }
 
@@ -1200,13 +1311,13 @@ END
         # warn((caller(0))[3]);
         my ($self, $index) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $index;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1216,16 +1327,16 @@ END
                                          Type    => HAVE
                                         }
         );
-        vec(${$_bitfield{refaddr $self}}, $index, 1) = 1;
-        if ((unpack(q[b*], ${$_bitfield{refaddr $self}}) !~ m[1])
-            && $_torrent{refaddr $self}->is_complete)
+        vec(${$bitfield{refaddr $self}}, $index, 1) = 1;
+        if ((unpack(q[b*], ${$bitfield{refaddr $self}}) !~ m[1])
+            && $torrent{refaddr $self}->is_complete)
         {   weaken $self;
-            $self->_disconnect(-25);
+            $self->_disconnect(DISCONNECT_SEED);
             return;
         }
         $self->_check_interest;
-        if (${$_am_interested{refaddr $self}}
-            and not ${$_peer_choking{refaddr $self}})
+        if (${$am_interested{refaddr $self}}
+            and not ${$peer_choking{refaddr $self}})
         {   $self->_request_block;
         }
     }
@@ -1235,27 +1346,27 @@ END
         # warn((caller(0))[3]);
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $payload;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        ${$_bitfield{refaddr $self}} = $payload;
+        ${$bitfield{refaddr $self}} = $payload;
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
                                          Payload => {Bitfield => $payload},
                                          Type    => BITFIELD
                                         }
         );
-        if ((unpack(q[b*], ${$_bitfield{refaddr $self}}) !~ m[1])
-            && $_torrent{refaddr $self}->is_complete)
+        if ((unpack(q[b*], ${$bitfield{refaddr $self}}) !~ m[1])
+            && $torrent{refaddr $self}->is_complete)
         {   weaken $self;
-            $self->_disconnect(-25);
+            $self->_disconnect(DISCONNECT_SEED);
             return;
         }
         return $self->_check_interest;
@@ -1266,13 +1377,13 @@ END
         # warn((caller(0))[3]);
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $payload;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1305,14 +1416,14 @@ END
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
         return if !defined $payload;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         my ($index, $offset, $data) = @{$payload};
         my $length = length($data);
@@ -1326,7 +1437,7 @@ END
             $self->_disconnect(-26);
             return;
         }
-        $_torrent{refaddr $self}->_add_downloaded($request->{q[Length]});
+        $torrent{refaddr $self}->_add_downloaded($request->{q[Length]});
         @{$requests_out{refaddr $self}} = grep {
                    ($_->{q[Index]} != $index)
                 or ($_->{q[Offset]} != $offset)
@@ -1341,12 +1452,11 @@ END
                                          Type => PIECE
                                         }
         );
-        my $piece = $_torrent{refaddr $self}->_piece_by_index($index);
+        my $piece = $torrent{refaddr $self}->_piece_by_index($index);
         my $okay  = 0;
         for my $_retry (1 .. 3) {
 
-            if ($_torrent{refaddr $self}->_write_data($index, $offset, \$data)
-                )
+            if ($torrent{refaddr $self}->_write_data($index, $offset, \$data))
             {   $okay++;
                 last;
             }
@@ -1355,7 +1465,7 @@ END
         $piece->{q[Blocks_Received]}->[$request->{q[_vec_offset]}] = 1;
         $piece->{q[Slow]}                                          = 0;
         $piece->{q[Touch]}                                         = time;
-        for my $peer ($_torrent{refaddr $self}->peers) {
+        for my $peer ($torrent{refaddr $self}->peers) {
             for my $x (reverse 0 .. $#{$requests_out{refaddr $peer}}) {
                 if (    (defined $requests_out{refaddr $peer}->[$x])
                     and
@@ -1387,9 +1497,9 @@ END
             }
         }
         if (not grep { !$_ } @{$piece->{q[Blocks_Received]}}) {
-            if ($_torrent{refaddr $self}->_check_piece_by_index($index)
-                and defined $_torrent{refaddr $self})
-            {   for my $p ($_torrent{refaddr $self}->peers) {
+            if ($torrent{refaddr $self}->_check_piece_by_index($index)
+                and defined $torrent{refaddr $self})
+            {   for my $p ($torrent{refaddr $self}->peers) {
                     $_data_out{refaddr $p} .= build_have($index);
                     $_client{refaddr $self}->_add_connection($p, q[rw]);
                 }
@@ -1404,13 +1514,13 @@ END
         # warn((caller(0))[3]);
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $payload;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1441,30 +1551,30 @@ END
         # warn((caller(0))[3]);
         my ($self) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (!$_torrent{refaddr $self}->status & 1) {
+        if (!$torrent{refaddr $self}->status & 1) {
             weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        ${$_bitfield{refaddr $self}}
-            = pack(q[b*], qq[\1] x $_torrent{refaddr $self}->piece_count);
+        ${$bitfield{refaddr $self}}
+            = pack(q[b*], qq[\1] x $torrent{refaddr $self}->piece_count);
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
                                          Payload => {},
                                          Type    => HAVE_ALL
                                         }
         );
-        if ($_torrent{refaddr $self}->is_complete) {
+        if ($torrent{refaddr $self}->is_complete) {
             weaken $self;
-            $self->_disconnect(-25);
+            $self->_disconnect(DISCONNECT_SEED);
             return;
         }
         $self->_check_interest;
-        if (${$_am_interested{refaddr $self}}
-            and not ${$_peer_choking{refaddr $self}})
+        if (${$am_interested{refaddr $self}}
+            and not ${$peer_choking{refaddr $self}})
         {   $self->_request_block;
         }
         return 1;
@@ -1474,15 +1584,15 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (!($_torrent{refaddr $self}->status & 1)) {
+        if (!($torrent{refaddr $self}->status & 1)) {
             weaken $self;    # this should never happen
-            $self->_disconnect(NOT_SERVING_TORRENT);
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT);
             return;
         }
-        ${$_bitfield{refaddr $self}}
-            = pack(q[b*], qq[\0] x $_torrent{refaddr $self}->piece_count);
+        ${$bitfield{refaddr $self}}
+            = pack(q[b*], qq[\0] x $torrent{refaddr $self}->piece_count);
         $_client{refaddr $self}->_event(q[incoming_packet],
                                         {Peer    => $self,
                                          Payload => {},
@@ -1497,7 +1607,7 @@ END
         # warn((caller(0))[3]);
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $payload;
         $_client{refaddr $self}->_event(q[incoming_packet],
@@ -1516,7 +1626,7 @@ END
         my ($self, $payload) = @_;
         $_client{refaddr $self}->_add_connection($self, q[rw]);
         return if !defined $payload;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         my ($index, $offset, $length) = @{$payload};
         my ($request) = grep {
@@ -1535,7 +1645,7 @@ END
                 or ($_->{q[Offset]} != $offset)
                 or ($_->{q[Length]} != $length)
         } @{$requests_out{refaddr $self}};
-        my $piece = $_torrent{refaddr $self}->_piece_by_index($index);
+        my $piece = $torrent{refaddr $self}->_piece_by_index($index);
         if (not defined $piece) {
             weaken $self;
             $self->_disconnect(-28);
@@ -1559,16 +1669,16 @@ END
 
         # warn((caller(0))[3]);
         my ($self, $payload) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
         return if !defined $payload;
-        if (defined $_torrent{refaddr $self}    # this should never happen
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}    # this should never happen
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT);
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT);
             return;
         }
-        return if $_torrent{refaddr $self}->status & 32;
+        return if $torrent{refaddr $self}->status & 32;
         my ($id, $packet) = @{$payload};
         if ($packet) {
             if ($id == 0) {
@@ -1599,33 +1709,33 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        if (!$_torrent{refaddr $self}) { return; }
-        if (!($_torrent{refaddr $self}->status & 1)) {
+        if (!$torrent{refaddr $self}) { return; }
+        if (!($torrent{refaddr $self}->status & 1)) {
             weaken $self;    # this should never happen
-            $self->_disconnect(NOT_SERVING_TORRENT);
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT);
             return;
         }
-        return if $_torrent{refaddr $self}->status & 32;
-        my $interesting  = ${$_am_interested{refaddr $self}};
-        my $torrent_have = $_torrent{refaddr $self}->bitfield();
-        my $torrent_want = $_torrent{refaddr $self}->_wanted();
-        my $relevence    = ${$_bitfield{refaddr $self}} & $torrent_want;
+        return if $torrent{refaddr $self}->status & 32;
+        my $interesting  = ${$am_interested{refaddr $self}};
+        my $torrent_have = $torrent{refaddr $self}->bitfield();
+        my $torrent_want = $torrent{refaddr $self}->_wanted();
+        my $relevence    = ${$bitfield{refaddr $self}} & $torrent_want;
         $interesting = (index(unpack(q[b*], $relevence), 1, 0) != -1) ? 1 : 0;
-        if ($interesting and not ${$_am_interested{refaddr $self}}) {
-            ${$_am_interested{refaddr $self}} = 1;
+        if ($interesting and not ${$am_interested{refaddr $self}}) {
+            ${$am_interested{refaddr $self}} = 1;
             $self->_syswrite(build_interested);
             $_client{refaddr $self}->_event(q[outgoing_packet],
                           {Peer => $self, Payload => {}, Type => INTERESTED});
             $_client{refaddr $self}->_add_connection($self, q[rw]);
         }
-        elsif (not $interesting and ${$_am_interested{refaddr $self}}) {
-            ${$_am_interested{refaddr $self}} = 0;
+        elsif (not $interesting and ${$am_interested{refaddr $self}}) {
+            ${$am_interested{refaddr $self}} = 0;
             $self->_syswrite(build_not_interested);
             $_client{refaddr $self}->_event(q[outgoing_packet],
                       {Peer => $self, Payload => {}, Type => NOT_INTERESTED});
             $_client{refaddr $self}->_add_connection($self, q[rw]);
         }
-        return ${$_am_interested{refaddr $self}};
+        return ${$am_interested{refaddr $self}};
     }
 
     sub _disconnect_useless_peer {
@@ -1638,16 +1748,16 @@ END
             $self->_disconnect(-40);
             return;
         }
-        if (    ${$_peer_choking{refaddr $self}}
-            and ${$_am_interested{refaddr $self}})
+        if (    ${$peer_choking{refaddr $self}}
+            and ${$am_interested{refaddr $self}})
         {    # XXX - send uninterested?
             $self->_check_interest;
         }
-        if (    (${$_peer_choking{refaddr $self}})
-            and (!${$_am_interested{refaddr $self}})
-            and (!${$_peer_interested{refaddr $self}}))
+        if (    (${$peer_choking{refaddr $self}})
+            and (!${$am_interested{refaddr $self}})
+            and (!${$peer_interested{refaddr $self}}))
         {   weaken $self;
-            $self->_disconnect(USELESS_PEER);
+            $self->_disconnect(DISCONNECT_USELESS_PEER);
             return;
         }
         $_client{refaddr $self}->_schedule(
@@ -1679,7 +1789,7 @@ END
             if (time <= ($request->{q[Timestamp]} + 60)) {
                 next;
             }
-            my $piece = $_torrent{refaddr $self}
+            my $piece = $torrent{refaddr $self}
                 ->_piece_by_index($request->{q[Index]});
             delete $piece->{q[Blocks_Requested]}->[$request->{q[_vec_offset]}]
                 ->{refaddr $self};
@@ -1715,29 +1825,29 @@ END
         # warn((caller(0))[3]);
         my ($self, $_range) = @_;
         return if not defined $_socket{refaddr $self};
-        return if ${$_peer_choking{refaddr $self}};
-        if (!($_torrent{refaddr $self}->status & 1)) {
+        return if ${$peer_choking{refaddr $self}};
+        if (!($torrent{refaddr $self}->status & 1)) {
             weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        return if $_torrent{refaddr $self}->status & 32;
+        return if $torrent{refaddr $self}->status & 32;
         my $return = 0;
         my $range
             = defined $_range
             ? [1 .. $_range]
             : [max(1, scalar(@{$requests_out{refaddr $self}})) .. max(
-                                   25,
-                                   int((2**21)
-                                       / $_torrent{refaddr $self}->raw_data(1)
-                                           ->{q[info]}{q[piece length]}
-                                   )
+                                    25,
+                                    int((2**21)
+                                        / $torrent{refaddr $self}->raw_data(1)
+                                            ->{q[info]}{q[piece length]}
+                                    )
                )
             ];
     REQUEST:
         for (@$range) {
-            my $piece = $_torrent{refaddr $self}->_pick_piece($self);
+            my $piece = $torrent{refaddr $self}->_pick_piece($self);
             if ($piece) {
                 my $vec_offset;
                 if ($piece->{q[Endgame]}) {
@@ -1836,32 +1946,31 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
-        return $self->_disconnect(NOT_SERVING_TORRENT)
-            if !$_torrent{refaddr $self}->status & 1;
+        return if !defined $torrent{refaddr $self};
+        return $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
+            if !$torrent{refaddr $self}->status & 1;
         return if !defined $_socket{refaddr $self};
-        return if !defined $_reserved_bytes{refaddr $self};
+        return if !defined $reserved_bytes{refaddr $self};
         my ($_i, @have) = (0);
-        for my $x (split q[], unpack q[b*],
-                   $_torrent{refaddr $self}->bitfield)
+        for my $x (split q[], unpack q[b*], $torrent{refaddr $self}->bitfield)
         {   push @have, $_i if $x;
             $_i++;
         }
         if (   (scalar(@have) == 0)
-            && (ord(substr($_reserved_bytes{refaddr $self}, 7, 1)) & 0x04))
+            && (ord(substr($reserved_bytes{refaddr $self}, 7, 1)) & 0x04))
         {   $self->_syswrite(build_have_none);
             $_client{refaddr $self}->_event(q[outgoing_packet],
                            {Peer => $self, Payload => {}, Type => HAVE_NONE});
         }
-        elsif (   (scalar(@have) == $self->_torrent->piece_count)
-               && (ord(substr($_reserved_bytes{refaddr $self}, 7, 1)) & 0x04))
+        elsif (   (scalar(@have) == $self->torrent->piece_count)
+               && (ord(substr($reserved_bytes{refaddr $self}, 7, 1)) & 0x04))
         {   $self->_syswrite(build_have_all);
             $_client{refaddr $self}->_event(q[outgoing_packet],
                             {Peer => $self, Payload => {}, Type => HAVE_ALL});
         }
         elsif (scalar(@have) > 12) {
             $self->_syswrite(build_bitfield(pack q[B*], unpack q[b*],
-                                            $_torrent{refaddr $self}->bitfield
+                                            $torrent{refaddr $self}->bitfield
                              )
             );
             $_client{refaddr $self}->_event(q[outgoing_packet],
@@ -1885,18 +1994,18 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        return if not defined $_reserved_bytes{refaddr $self};
+        return if not defined $reserved_bytes{refaddr $self};
         return
-            if not ord(substr($_reserved_bytes{refaddr $self}, 5, 1)) & 0x10;
+            if not ord(substr($reserved_bytes{refaddr $self}, 5, 1)) & 0x10;
         my ($_peerport, $_packed_ip)
             = unpack_sockaddr_in(getpeername($_socket{refaddr $self}));
         my $_id      = 0;
@@ -1927,11 +2036,11 @@ END
         my ($self) = @_;
         return if not defined $self;
         return if not defined $_socket{refaddr $self};
-        return if not defined $_torrent{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        return if not defined $torrent{refaddr $self};
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
@@ -1940,7 +2049,7 @@ END
                                             Object => $self
                                            }
         );
-        return if $_torrent{refaddr $self}->status & 32;
+        return if $torrent{refaddr $self}->status & 32;
         $_client{refaddr $self}->_event(q[outgoing_packet],
                                         {Peer    => $self,
                                          Payload => {},
@@ -1956,30 +2065,30 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        return if $_torrent{refaddr $self}->status & 32;
+        return if $torrent{refaddr $self}->status & 32;
         return if not @{$requests_in{refaddr $self}};
-        return if ${$_am_choking{refaddr $self}};
-        if (defined $_torrent{refaddr $self}
-            and !($_torrent{refaddr $self}->status & 1))
+        return if ${$am_choking{refaddr $self}};
+        if (defined $torrent{refaddr $self}
+            and !($torrent{refaddr $self}->status & 1))
         {   weaken $self;
-            $self->_disconnect(NOT_SERVING_TORRENT)
+            $self->_disconnect(DISCONNECT_NO_SUCH_TORRENT)
                 ;    # this should never happen
             return;
         }
-        if (defined $_torrent{refaddr $self}
-            and ($_torrent{refaddr $self}->status & 32))
+        if (defined $torrent{refaddr $self}
+            and ($torrent{refaddr $self}->status & 32))
         {   return;
         }
         while ((length($_data_out{refaddr $self}) < 2**18)
                and @{$requests_in{refaddr $self}})
         {   my $request = shift @{$requests_in{refaddr $self}};
             next
-                unless $_torrent{refaddr $self}
+                unless $torrent{refaddr $self}
                     ->_check_piece_by_index($request->{q[Index]});
             next unless $request->{q[Length]};
-            $_torrent{refaddr $self}->_add_uploaded($request->{q[Length]});
+            $torrent{refaddr $self}->_add_uploaded($request->{q[Length]});
             $_client{refaddr $self}->_event(
                                          q[outgoing_packet],
                                          {Payload => {
@@ -1995,7 +2104,7 @@ END
                           build_piece(
                               $request->{q[Index]},
                               $request->{q[Offset]},
-                              $_torrent{refaddr $self}->_read_data(
+                              $torrent{refaddr $self}->_read_data(
                                   $request->{q[Index]}, $request->{q[Offset]},
                                   $request->{q[Length]}
                               )
@@ -2017,18 +2126,18 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and $_torrent{refaddr $self}->status & 2)
+        if (defined $torrent{refaddr $self}
+            and $torrent{refaddr $self}->status & 2)
         {   weaken $self;
-            $self->_disconnect(-18);
+            $self->_disconnect(DISCONNECT_HASHCHECKING);
             return;
         }
-        return if ${$_am_choking{refaddr $self}} == 1;
+        return if ${$am_choking{refaddr $self}} == 1;
         $requests_in{refaddr $self} = [];
-        ${$_am_choking{refaddr $self}}      = 1;
-        ${$_peer_interested{refaddr $self}} = 0;
+        ${$am_choking{refaddr $self}}      = 1;
+        ${$peer_interested{refaddr $self}} = 0;
         $self->_syswrite(build_choke);
         $_client{refaddr $self}->_event(q[outgoing_packet],
                                         {Peer    => $self,
@@ -2044,21 +2153,20 @@ END
 
         # warn((caller(0))[3]);
         my ($self) = @_;
-        return if !defined $_torrent{refaddr $self};
+        return if !defined $torrent{refaddr $self};
         return if !defined $_socket{refaddr $self};
-        if (defined $_torrent{refaddr $self}
-            and $_torrent{refaddr $self}->status & 2)
+        if (defined $torrent{refaddr $self}
+            and $torrent{refaddr $self}->status & 2)
         {   weaken $self;
-            $self->_disconnect(-18);
+            $self->_disconnect(DISCONNECT_HASHCHECKING);
             return;
         }
-        return if $_torrent{refaddr $self}->status & 32;
-        return if ${$_am_choking{refaddr $self}} == 0;
-        if (scalar(
-                 grep { $_->_am_choking == 0 } $_torrent{refaddr $self}->peers
+        return if $torrent{refaddr $self}->status & 32;
+        return if ${$am_choking{refaddr $self}} == 0;
+        if (scalar(grep { $_->am_choking == 0 } $torrent{refaddr $self}->peers
             ) <= 16    # XXX - client wide limit on number of unchoked peers
             )
-        {   ${$_am_choking{refaddr $self}} = 0;
+        {   ${$am_choking{refaddr $self}} = 0;
             $self->_syswrite(build_unchoke);
             $_client{refaddr $self}->_event(q[outgoing_packet],
                              {Peer => $self, Payload => {}, Type => UNCHOKE});
@@ -2124,25 +2232,25 @@ Choking:     %s
 Progress:
 [%s]
 ADVANCED
-            ($self->_host || q[]),
-            ($self->_port || q[]),
+            ($self->host || q[]),
+            ($self->port || q[]),
             ($peerid{refaddr $self} ? $peerid{refaddr $self} : q[Unknown]),
-            (  $_torrent{refaddr $self}
-             ? $_torrent{refaddr $self}->infohash
+            (  $torrent{refaddr $self}
+             ? $torrent{refaddr $self}->infohash
              : q[Unknown]
             ),
-            ($_incoming{refaddr $self} ? q[Incoming] : q[Outgoing]),
-            (map { $_ ? q[Yes] : q[No] } (${$_peer_interested{refaddr $self}},
-                                          ${$_am_interested{refaddr $self}},
-                                          ${$_am_choking{refaddr $self}},
-                                          ${$_peer_choking{refaddr $self}}
+            ($incoming{refaddr $self} ? q[Incoming] : q[Outgoing]),
+            (map { $_ ? q[Yes] : q[No] } (${$peer_interested{refaddr $self}},
+                                          ${$am_interested{refaddr $self}},
+                                          ${$am_choking{refaddr $self}},
+                                          ${$peer_choking{refaddr $self}}
              )
             ),
             (($_state{refaddr $self} == REG_OKAY)
              ? (sprintf q[%s],
                 join q[],
-                map { vec(${$_bitfield{refaddr $self}}, $_, 1) ? q[|] : q[ ] }
-                    0 .. $_torrent{refaddr $self}->piece_count - 1
+                map { vec(${$bitfield{refaddr $self}}, $_, 1) ? q[|] : q[ ] }
+                    0 .. $torrent{refaddr $self}->piece_count - 1
                  )
              : q[NA]
             )
@@ -2160,7 +2268,7 @@ ADVANCED
                 delete $_->{$_oID};
             }
             weaken $_client{$_nID};
-            weaken $_torrent{$_nID};
+            weaken $torrent{$_nID};
             weaken($REGISTRY{$_nID} = $_obj);
             delete $REGISTRY{$_oID};
         }
@@ -2168,9 +2276,9 @@ ADVANCED
     }
     DESTROY {
         my ($self) = @_;
-        if ($_torrent{refaddr $self}) {
+        if ($torrent{refaddr $self}) {
             for my $request (@{$requests_out{refaddr $self}}) {
-                my $piece = $_torrent{refaddr $self}
+                my $piece = $torrent{refaddr $self}
                     ->_piece_by_index($request->{q[Index]});
                 delete $piece->{q[Blocks_Requested]}
                     ->[$request->{q[_vec_offset]}]->{refaddr $self};
@@ -2247,11 +2355,67 @@ constructor should not be used directly.
 
 =over
 
-=item C<peerid>
+=item C<bitfield ( )>
+
+Returns a bitfield representing the pieces that have been reported to be
+successfully downloaded by the remote peer.
+
+=item C<am_choking ( )>
+
+Returns a boolean value based on whether or not we are currently choking
+the remote peer.
+
+=item C<am_interested ( )>
+
+Returns a boolean value based on whether or not we are currently
+interested in the set of pieces held by the remote peer
+
+=item C<host ( )>
+
+Returns the host (typically an IP address) of the remote peer.
+
+=item C<incoming ( )>
+
+Returns a boolean value based on whether or not this connection was
+initiated by the remote peer or us.
+
+=item C<peer_choking ( )>
+
+Returns a boolean value based on whether or not the remote peer is
+currently choking us.
+
+=item C<peer_interested ( )>
+
+Returns a boolean value based on whether or not the remote peer is
+currently interested in being unchoked or in requesting data from us.
+
+=item C<peerid ( )>
 
 Returns the Peer ID used to identify this peer.
 
 See also: theory.org (http://tinyurl.com/4a9cuv)
+
+=item C<port ( )>
+
+The port used by the remote peer.
+
+=item C<reserved_bytes ( )>
+
+Returns the C<8> reserved bytes from the plaintext handshake. Each bit in
+these bytes can be used to change the behavior of the protocol.
+
+See also: theory.org (http://tinyurl.com/aw76zb)
+
+=item C<source ( )>
+
+In a future version, this will return how we obtained this connection
+(DHT, user, incoming, certain tracker, etc.).
+
+=item C<torrent ( )>
+
+Returns the related L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent>
+object. This will be C<undef> if the peer has not completed the
+handshake.
 
 =item C<as_string ( [ VERBOSE ] )>
 
@@ -2287,8 +2451,6 @@ C<VERBOSE> is a boolean value.
 
 =item MSE_TWO
 
-=item NOT_SERVING_TORRENT
-
 =item REG_OKAY
 
 =item REG_ONE
@@ -2296,8 +2458,6 @@ C<VERBOSE> is a boolean value.
 =item REG_THREE
 
 =item REG_TWO
-
-=item USELESS_PEER
 
 =item VC
 
@@ -2308,6 +2468,99 @@ C<VERBOSE> is a boolean value.
 =back
 
 =end :podcoverage
+
+=head1 Notes
+
+As of version C<0.049_8> of this module, C<peer_disconnect> callbacks are
+provided with a language agnostic, numeric reason. So far, this is the
+list of possible disconnections:
+
+=over
+
+=item DISCONNECT_BY_REMOTE
+
+The connection closed by remote peer for unknown reasons
+
+=item DISCONNECT_LOOPBACK
+
+We connected to ourself according to PeerID.
+
+=item DISCONNECT_NO_SUCH_TORRENT
+
+Remote peer attempted to create a session related to a torrent we aren't
+currently serving. Occasionally, this will also provide an C<Infohash>
+parameter for your callback.
+
+=item DISCONNECT_HANDSHAKE_INFOHASH
+
+A remote peer sent us a bad plaintext handshake. This is triggered when,
+after a particular infohash was implied in an encrypted handshake, the
+remote peer sent us a mismatched infohash in the plaintext handshake.
+
+=item DISCONNECT_MALFORMED_HANDSHAKE
+
+Bad plaintext handshake. May be malformed or, if encryption is disabled
+locally, the remote peer attempted an encrypted handshake.
+
+=item DISCONNECT_MALFORMED_PACKET
+
+This is given when the remote peer gives us a malformed packet. See also
+L<DISCONNECT_MALFORMED_HANDSHAKE|/"DISCONNECT_MALFORMED_HANDSHAKE">.
+
+=item DISCONNECT_PREXISTING
+
+Already connected to this peer. When there are too many established
+connections with a particular peer (as determined by their PeerID), we
+disconnect further connections with the reason. This reason provides
+the remote peer's C<PeerID> when triggered.
+
+=item DISCONNECT_TOO_MANY
+
+Enough peers already! We've hit the hard limit for the number of peers
+allowed globally or per torrent.
+
+=item DISCONNECT_HASHCHECKING
+
+This reason is given when a remote peer connects to us while the torrent
+they're seeking is busy being hash checked (potentially in another
+thread).
+
+=item DISCONNECT_SEED
+
+This is given when we and the remote peer are both seeds.
+
+=item DISCONNECT_TIMEOUT_HANDSHAKE
+
+Peer failed to complete plaintext or encrypted handshake within 30s.
+
+=item DISCONNECT_USELESS_PEER
+
+Peer has been connected for at least 3m and is neither interested nor
+interesting.
+
+=item DISCONNECT_HANDSHAKE_SYNC_DH5
+
+Failed to sync MSE handshake at stage five.
+
+=begin TODO
+
+        -26 => q[Handed a piece we never asked for]
+        ,    # { Index => \d, Offset => \d, Length=> \d }
+        -28 => q[Sent a reject to a non-existant piece],
+        -29 => q[Rejected a request we never made.],
+        -40 => q[Peer is idle],
+        -101 => q[Bad VC in encrypted handshake],
+        -103 => q[Bad encrypted header at stage 4],
+        -104 => q[Bad encrypted handshake (Bad SKEY)],
+        -105 => q[Unsupported encryption scheme]
+
+=end TODO
+
+=back
+
+To import this list of keywords into your namespace, use the C<disconnect>
+tag. Please note that this API tweak is experimental and may change or be
+removed in a future version. ...it's also probably incomplete.
 
 =head1 Author
 
@@ -2333,6 +2586,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
+=for svn $Id: Peer.pm 3d04563 2009-02-12 19:52:19Z sanko@cpan.org $
 
 =cut

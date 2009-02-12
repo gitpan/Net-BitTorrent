@@ -24,7 +24,7 @@ package Net::BitTorrent::Torrent;
     use Net::BitTorrent::Torrent::File;
     use Net::BitTorrent::Torrent::Tracker;
     use version qw[qv];
-    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 4; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 99; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_client,  %path,            %_basedir,
                         %size,     %files,           %trackers,
@@ -379,8 +379,8 @@ package Net::BitTorrent::Torrent;
         my $_connections = $_client{refaddr $self}->_connections;
         return map {
             (    ($_->{q[Object]}->isa(q[Net::BitTorrent::Peer]))
-             and ($_->{q[Object]}->_torrent)
-             and ($_->{q[Object]}->_torrent eq $self))
+             and ($_->{q[Object]}->torrent)
+             and ($_->{q[Object]}->torrent eq $self))
                 ? $_->{q[Object]}
                 : ()
         } values %$_connections;
@@ -626,7 +626,7 @@ package Net::BitTorrent::Torrent;
             my $node = shift @nodes;
             next
                 if scalar grep {
-                sprintf(q[%s:%d], ($_->_host || q[]), ($_->_port || 0)) eq
+                sprintf(q[%s:%d], ($_->host || q[]), ($_->port || 0)) eq
                     $node    # already connected to this peer
                 } @peers;
             my $ok = $_client{refaddr $self}
@@ -698,7 +698,7 @@ package Net::BitTorrent::Torrent;
         }
         my $piece;
         my $_wanted   = $self->_wanted;
-        my $relevence = $peer->_bitfield & $_wanted;
+        my $relevence = $peer->bitfield & $_wanted;
         return if unpack(q[b*], $relevence) !~ m[1];
         my $endgame = (    # XXX - static ratio
             (sum(split(q[], unpack(q[b*], $_wanted)))
@@ -1297,7 +1297,7 @@ L<queue ( )|/"queue ( CLIENT )">.
 
 Creates a C<Net::BitTorrent::Torrent> object.  This constructor is
 called by
-L<Net::BitTorrent->add_torrent( )|Net::BitTorrent/add_torrent ( { ... } )>.
+L<Net::BitTorrent-E<gt>add_torrent( )|Net::BitTorrent/"add_torrent ( { ... } )">.
 
 C<new( )> accepts arguments as a hash, using key-value pairs:
 
@@ -1347,7 +1347,11 @@ Initial status of the torrent.  This parameter is ORed with the loaded
 and queued (if applicable) values.
 
 For example, you could set the torrent to automatically start after
-L<hashcheck|/"hashcheck ( )"> with C<{ [...] Status =E<gt> 4, [...] }>.
+L<hashcheck|/"hashcheck ( )"> with
+C<{ [...] Status =E<gt> START_AFTER_CHECK, [...] }>.
+
+To import all supported statuses into your namespace, use the
+C<status> keyword.
 
 This is an optional parameter.
 
@@ -1732,7 +1736,7 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008-2009 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of The Artistic License 2.0.  See the F<LICENSE>
@@ -1748,6 +1752,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Torrent.pm a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
+=for svn $Id: Torrent.pm 3d04563 2009-02-12 19:52:19Z sanko@cpan.org $
 
 =cut

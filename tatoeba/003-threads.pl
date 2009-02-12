@@ -72,7 +72,7 @@ Validates data. As this starts,
 connections to L<peers|Net::BitTorrent::Torrent/"peers ( )"> related to
 this L<torrent|Net::BitTorrent::Torrent> in the parent thread are closed.
 While the child does the checking, our
-L<bitfield|Net::BitTorrent::Torrent/"bitfield ( )"> is kept in synch with
+L<bitfield|Net::BitTorrent::Torrent/"bitfield ( )"> is kept in sync with
 the parent (thanks to L<threads::shared|threads::shared>), and our
 L<status|Net::BitTorrent::Torrent/"status ( )"> goes through some
 changes.
@@ -106,7 +106,7 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright (C) 2008 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008-2009 by Sanko Robinson <sanko@cpan.org>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of The Artistic License 2.0.  See the F<LICENSE>
@@ -122,6 +122,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 003-threads.pl a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
+=for svn $Id: 003-threads.pl 3d04563 2009-02-12 19:52:19Z sanko@cpan.org $
 
 =cut

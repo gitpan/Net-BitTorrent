@@ -20,12 +20,12 @@ package Net::BitTorrent;
     use Net::BitTorrent::DHT;
     use Net::BitTorrent::Version;
     use version qw[qv];
-    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 4; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 49; our $UNSTABLE_RELEASE = 5; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS) = \my (
         %_tcp,                  %_udp,
         %_schedule,             %_tid,
-        %_event,                %_torrents,
-        %_connections,          %_peerid,
+        %_event,                %torrents,
+        %_connections,          %peerid,
         %_max_ul_rate,          %_k_ul,
         %_max_dl_rate,          %_k_dl,
         %_dht,                  %_use_dht,
@@ -35,9 +35,9 @@ package Net::BitTorrent;
         %_encryption_mode
     );
     my %REGISTRY;
-    sub _MSE_DISABLED {0x00}
-    sub _MSE_ENABLED  {0x01}
-    sub _MSE_FORCED   {0x02}
+    sub _MSE_DISABLED {0}
+    sub _MSE_ENABLED  {1}
+    sub _MSE_FORCED   {2}
 
     sub new {
         my ($class, $args) = @_;
@@ -52,16 +52,16 @@ package Net::BitTorrent;
         $_peers_per_torrent{refaddr $self}    = 100;
         $_half_open{refaddr $self}            = 8;
         $_connections_per_host{refaddr $self} = 1;
-        $_torrents{refaddr $self}             = {};
+        $torrents{refaddr $self}              = {};
         $_tid{refaddr $self}                  = qq[\0] x 5;
         $_use_dht{refaddr $self}              = 1;
-        $_encryption_mode{refaddr $self}      = _MSE_DISABLED;
+        $_encryption_mode{refaddr $self}      = _MSE_ENABLED;
 
         # Internals
         $_connections{refaddr $self} = {};
         $_schedule{refaddr $self}    = {};
-        $_dht{refaddr $self} = Net::BitTorrent::DHT->new({Client => $self});
-        $_peerid{refaddr $self} = Net::BitTorrent::Version::gen_peerid();
+        $_dht{refaddr $self}   = Net::BitTorrent::DHT->new({Client => $self});
+        $peerid{refaddr $self} = Net::BitTorrent::Version::gen_peerid();
         if (defined $args) {
             if (ref($args) ne q[HASH]) {
                 carp q[Net::BitTorrent->new({}) requires ]
@@ -89,7 +89,7 @@ package Net::BitTorrent;
         # Clear everything just in case
         $self->_reset_bandwidth;
         weaken($REGISTRY{refaddr $self} = $self);
-        $$self = $_peerid{refaddr $self};
+        $$self = $peerid{refaddr $self};
         return $self;
     }
 
@@ -225,8 +225,8 @@ package Net::BitTorrent;
     }
 
     # Accessors | Public
-    sub peerid   { my ($self) = @_; return $_peerid{refaddr $self} }
-    sub torrents { my ($self) = @_; return $_torrents{refaddr $self} }
+    sub peerid   { my ($self) = @_; return $peerid{refaddr $self} }
+    sub torrents { my ($self) = @_; return $torrents{refaddr $self} }
 
     # Methods | Public
     sub do_one_loop {
@@ -456,7 +456,7 @@ package Net::BitTorrent;
                     if (scalar(
                             grep {
                                 $_->{q[Object]}->isa(q[Net::BitTorrent::Peer])
-                                    && !$_->{q[Object]}->_torrent
+                                    && !$_->{q[Object]}->torrent
                                 } values %{$_connections{refaddr $self}}
                         ) < $_half_open{refaddr $self}
                         )
@@ -485,7 +485,7 @@ package Net::BitTorrent;
                         next POPSOCK;
                     }
                     else {
-                        for my $_tor (values %{$_torrents{refaddr $self}}) {
+                        for my $_tor (values %{$torrents{refaddr $self}}) {
                             for my $_tier (@{$_tor->trackers}) {
                                 my ($tracker) = grep {
                                     $_->isa(
@@ -558,8 +558,8 @@ package Net::BitTorrent;
         carp q[Bad infohash for Net::BitTorrent->_locate_torrent(INFOHASH)]
             && return
             if $infohash !~ m[^[\d|a-f]{40}$]i;
-        return $_torrents{refaddr $self}{lc $infohash}
-            ? $_torrents{refaddr $self}{lc $infohash}
+        return $torrents{refaddr $self}{lc $infohash}
+            ? $torrents{refaddr $self}{lc $infohash}
             : undef;
     }
 
@@ -575,7 +575,7 @@ package Net::BitTorrent;
         my $torrent = Net::BitTorrent::Torrent->new($args);
         return if not defined $torrent;
         return if $self->_locate_torrent($torrent->infohash);
-        return $_torrents{refaddr $self}{$torrent->infohash} = $torrent;
+        return $torrents{refaddr $self}{$torrent->infohash} = $torrent;
     }
 
     sub remove_torrent {
@@ -591,7 +591,7 @@ package Net::BitTorrent;
                               q[Removing .torrent torrent from local client]);
         }
         $torrent->stop;    # XXX - Should this be here?
-        return delete $_torrents{refaddr $self}{$torrent->infohash};
+        return delete $torrents{refaddr $self}{$torrent->infohash};
     }
 
     # Methods | Public | Callback system
@@ -645,9 +645,9 @@ package Net::BitTorrent;
                 q[Net::BitTorrent->_schedule() requires a blessed 'Object' parameter];
             return;
         }
-        if ((!$args->{q[Time]}) || ($args->{q[Time]} !~ m[^\d+$])) {
+        if ((!$args->{q[Time]}) || ($args->{q[Time]} !~ m[^\d+(?:\.\d+)?$])) {
             carp
-                q[Net::BitTorrent->_schedule() requires an integer 'Time' parameter];
+                q[Net::BitTorrent->_schedule() requires an integer or float 'Time' parameter];
             return;
         }
         if ((!$args->{q[Code]}) || (ref $args->{q[Code]} ne q[CODE])) {
@@ -721,7 +721,7 @@ package Net::BitTorrent;
     sub as_string {
         my ($self, $advanced) = @_;
         my $dump
-            = !$advanced ? $_peerid{refaddr $self} : sprintf <<'END',
+            = !$advanced ? $peerid{refaddr $self} : sprintf <<'END',
 Net::BitTorrent
 
 Peer ID: %s
@@ -733,17 +733,16 @@ Torrents in queue: %d
 %s
 ----------
 END
-            $_peerid{refaddr $self},
+            $peerid{refaddr $self},
             $_use_dht{refaddr $self} ? q[En] : q[Dis],
             unpack(q[H*], $_dht{refaddr $self}->node_id),
             $self->_tcp_host, $self->_tcp_port, $self->_udp_host,
-            $self->_udp_port,
-            (scalar keys %{$_torrents{refaddr $self}}), join(
+            $self->_udp_port, (scalar keys %{$torrents{refaddr $self}}), join(
             qq[\r\n],
             map {
                 sprintf q[%40s (%d: %s)], $_->infohash, $_->status,
                     $_->_status_as_string()
-                } values %{$_torrents{refaddr $self}}
+                } values %{$torrents{refaddr $self}}
             );
         return defined wantarray ? $dump : print STDERR qq[$dump\n];
     }
@@ -780,19 +779,6 @@ END
 =head1 NAME
 
 Net::BitTorrent - BitTorrent peer-to-peer protocol class
-
-=head1 NOTICE
-
-=for html <span style="color: #F00; font-size: 1.5em;">
-
-THIS PROJECT IS ACTIVELY SEEKING DEVELOPERS. Ahem, I hate to shout but
-N::B could really use a second or third pair of eyes over the next few
-versions.  So, if you're interested and have cryptographic experience,
-or you're just familiar with Perl and want to chip in, see the notes
-on L<Joining the Project|Net::BitTorrent::Notes/"Joining the Project">
-and L<let me know|/"Author">.
-
-=for html </span>
 
 =head1 Synopsis
 
@@ -1349,7 +1335,8 @@ contains the following keys:
 
 =item C<Torrent>
 
-The L<Net::BitTorrent::Torrent> object related to this event.
+The L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent> object related
+to this event.
 
 =item C<Index>
 
@@ -1444,6 +1431,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: BitTorrent.pm a7a7e9d 2009-02-09 04:49:58Z sanko@cpan.org $
+=for svn $Id: BitTorrent.pm 3d04563 2009-02-12 19:52:19Z sanko@cpan.org $
 
 =cut

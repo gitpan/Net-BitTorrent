@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.049_009
+version: 0.049_099
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -14,13 +14,14 @@ resources:
   repository: http://github.com/sanko/net-bittorrent/
 requires:
   Cwd: 0
+  Data::Dumper: 0
   Digest::SHA: 5.45
   Errno: 0
   Exporter: 0
   Fcntl: 0
   File::Path: 0
   File::Spec: 0
-  Math::BigInt: 0
+  Math::BigInt: 1.78
   Module::Build: 0.3
   Scalar::Util: 1.19
   Socket: 1.77
@@ -33,41 +34,43 @@ build_requires:
   Test::More: 0.8
 recommends:
   Data::Dump: 0
+  Math::BigInt::Pari: 0
+  Math::Pari: 0
   perl: 5.10.0
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
-    version: 0.049_004
+    version: 0.049_005
   Net::BitTorrent::DHT:
     file: lib/Net/BitTorrent/DHT.pm
-    version: 0.049_002
+    version: 0.049_099
   Net::BitTorrent::Peer:
     file: lib/Net/BitTorrent/Peer.pm
-    version: 0.049_008
+    version: 0.049_099
   Net::BitTorrent::Protocol:
     file: lib/Net/BitTorrent/Protocol.pm
-    version: 0.048_002
+    version: 0.049_099
   Net::BitTorrent::Torrent:
     file: lib/Net/BitTorrent/Torrent.pm
-    version: 0.049_004
+    version: 0.049_099
   Net::BitTorrent::Torrent::File:
     file: lib/Net/BitTorrent/Torrent/File.pm
-    version: 0.042_002
+    version: 0.049_099
   Net::BitTorrent::Torrent::Tracker:
     file: lib/Net/BitTorrent/Torrent/Tracker.pm
-    version: 0.049_003
+    version: 0.049_099
   Net::BitTorrent::Torrent::Tracker::HTTP:
     file: lib/Net/BitTorrent/Torrent/Tracker/HTTP.pm
-    version: 0.049_003
+    version: 0.049_099
   Net::BitTorrent::Torrent::Tracker::UDP:
     file: lib/Net/BitTorrent/Torrent/Tracker/UDP.pm
-    version: 0.049_003
+    version: 0.049_099
   Net::BitTorrent::Util:
     file: lib/Net/BitTorrent/Util.pm
-    version: 0.040_001
+    version: 0.049_099
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.049_009
+    version: 0.049_099
 generated_by: 'Conversion, software version 7.0'
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
