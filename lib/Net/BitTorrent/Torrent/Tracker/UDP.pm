@@ -9,8 +9,7 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
     use Socket qw[inet_aton pack_sockaddr_in];
     use lib q[../../../../../lib];
     use Net::BitTorrent::Util qw[:compact];
-    use version qw[qv];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), ($VERSION_BASE / 1000), $UNSTABLE_RELEASE);
     my %REGISTRY = ();
     my @CONTENTS = \my (%_url,                  %_tier,
                         %_tid,                  %_cid,
@@ -101,8 +100,8 @@ package Net::BitTorrent::Torrent::Tracker::UDP;
                 $self->_client->peerid(),
                 ___pack64($_tier{refaddr $self}->_torrent->downloaded()),
                 ___pack64(
-                     $_tier{refaddr $self}->_torrent->raw_data(1)
-                         ->{q[info]}{q[piece length]} * sum(
+                     $_tier{refaddr $self}->_torrent->metadata(1)
+                         ->{q[piece length]} * sum(
                          split(q[],
                                unpack(
                                    q[b*],
@@ -413,6 +412,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP.pm d8d71ee 2009-02-13 20:55:16Z sanko@cpan.org $
+=for svn $Id: UDP.pm 5476ff9 2009-09-07 04:37:45Z sanko@cpan.org $
 
 =cut

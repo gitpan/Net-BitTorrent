@@ -1,5 +1,5 @@
 #!perl -w
-# $Id: UDP-talk-to-ourself.pl 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+# $Id: UDP-talk-to-ourself.pl 3685ae3 2009-05-03 20:38:28Z sanko@cpan.org $
 # Stolen from IO
 use strict;
 use warnings;
@@ -92,6 +92,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: UDP-talk-to-ourself.pl 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+=for svn $Id: UDP-talk-to-ourself.pl 3685ae3 2009-05-03 20:38:28Z sanko@cpan.org $
 
 =cut

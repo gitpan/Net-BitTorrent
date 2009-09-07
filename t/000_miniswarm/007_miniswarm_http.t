@@ -21,13 +21,6 @@ my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 {    # Just to make sure...
     no warnings q[redefine];
     *Net::BitTorrent::Torrent::private = sub { return 1 };
@@ -61,11 +54,9 @@ SKIP: {
         $client{q[seed_] . $chr}->_set_use_dht(0);
         $client{q[seed_] . $chr}->_set_connections_per_host($Peers);
         $client{q[seed_] . $chr}->_set_encryption_mode($Encrypt);
-        $client{q[seed_] . $chr}->on_event(
-            q[peer_disconnect],
-            sub {
-                warn q[Disconnect: ] . $_[1]->{q[Reason]};
-            }
+        $client{q[seed_] . $chr}->on_event(q[peer_disconnect],
+                                           sub {
+                                           }
         );
         my $torrent = $client{q[seed_] . $chr}->add_torrent(
                                      {Path    => $miniswarm_dot_torrent,
@@ -112,11 +103,9 @@ SKIP: {
         $client{$chr}->_set_use_dht(0);
         $client{$chr}->_set_connections_per_host($Peers);
         $client{$chr}->_set_encryption_mode($Encrypt);
-        $client{$chr}->on_event(
-            q[peer_disconnect],
-            sub {
-                warn q[Disconnect: ] . $_[1]->{q[Reason]};
-            }
+        $client{$chr}->on_event(q[peer_disconnect],
+                                sub {
+                                }
         );
         my $torrent =
             $client{$chr}->add_torrent(
@@ -214,7 +203,7 @@ sub setup_tracker {
                 )
         );
     (undef, $_tracker_port, undef) = unpack(q[SnC4x8], getsockname($httpd));
-    warn(sprintf q[HTTP Mini-Tracker running on 127.0.0.1:%d],
+    diag(sprintf q[HTTP Mini-Tracker running on 127.0.0.1:%d],
          $_tracker_port);
     return $_tracker_port;
 }

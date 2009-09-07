@@ -6,8 +6,7 @@ package Net::BitTorrent::Protocol;
     use Carp qw[carp];
     use lib q[../../../lib];
     use Net::BitTorrent::Util qw[:bencode];
-    use version qw[qv];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), ($VERSION_BASE / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -249,6 +248,24 @@ package Net::BitTorrent::Protocol;
         my $packet = pack(q[ca*], $msgID, bencode($data));
         return pack(q[Nca*], length($packet) + 1, 20, $packet);
     }
+    my %parse_packet_dispatch = (&KEEPALIVE      => \&_parse_keepalive,
+                                 &CHOKE          => \&_parse_choke,
+                                 &UNCHOKE        => \&_parse_unchoke,
+                                 &INTERESTED     => \&_parse_interested,
+                                 &NOT_INTERESTED => \&_parse_not_interested,
+                                 &HAVE           => \&_parse_have,
+                                 &BITFIELD       => \&_parse_bitfield,
+                                 &REQUEST        => \&_parse_request,
+                                 &PIECE          => \&_parse_piece,
+                                 &CANCEL         => \&_parse_cancel,
+                                 &PORT           => \&_parse_port,
+                                 &SUGGEST        => \&_parse_suggest,
+                                 &HAVE_ALL       => \&_parse_have_all,
+                                 &HAVE_NONE      => \&_parse_have_none,
+                                 &REJECT         => \&_parse_reject,
+                                 &ALLOWED_FAST   => \&_parse_allowed_fast,
+                                 &EXTPROTOCOL    => \&_parse_extended
+    );
 
     sub parse_packet {
         my ($data) = @_;
@@ -270,26 +287,8 @@ package Net::BitTorrent::Protocol;
         {   if ((unpack(q[N], $$data) <= length($$data))) {
                 (my ($packet_data), $$data) = unpack(q[N/aa*], $$data);
                 (my ($type), $packet_data) = unpack(q[ca*], $packet_data);
-                my %dispatch = (&KEEPALIVE      => \&_parse_keepalive,
-                                &CHOKE          => \&_parse_choke,
-                                &UNCHOKE        => \&_parse_unchoke,
-                                &INTERESTED     => \&_parse_interested,
-                                &NOT_INTERESTED => \&_parse_not_interested,
-                                &HAVE           => \&_parse_have,
-                                &BITFIELD       => \&_parse_bitfield,
-                                &REQUEST        => \&_parse_request,
-                                &PIECE          => \&_parse_piece,
-                                &CANCEL         => \&_parse_cancel,
-                                &PORT           => \&_parse_port,
-                                &SUGGEST        => \&_parse_suggest,
-                                &HAVE_ALL       => \&_parse_have_all,
-                                &HAVE_NONE      => \&_parse_have_none,
-                                &REJECT         => \&_parse_reject,
-                                &ALLOWED_FAST   => \&_parse_allowed_fast,
-                                &EXTPROTOCOL    => \&_parse_extended
-                );
-                if (defined $dispatch{$type}) {
-                    my $payload = $dispatch{$type}($packet_data);
+                if (defined $parse_packet_dispatch{$type}) {
+                    my $payload = $parse_packet_dispatch{$type}($packet_data);
                     $packet = {Type => $type,
                                (defined $payload
                                 ? (Payload => $payload)
@@ -438,11 +437,20 @@ END
         return unpack(q[N], $packet);
     }
 
-    sub _parse_extended {
+    sub _parse_extended_old {
         my ($packet) = @_;
         if ((!$packet) || (!length($packet))) { return; }
         my ($id, $payload) = unpack(q[ca*], $packet);
         return ([$id, scalar bdecode($payload)]);
+    }
+
+    sub _parse_extended {
+        my ($packet) = @_;
+        if ((!$packet) || (!length($packet))) { return; }
+        my ($id, $payload) = unpack(q[ca*], $packet);
+        ($payload, my $data) = bdecode($payload);
+        $payload->{q[DATA]} = $data if $data;
+        return ([$id, $payload]);
     }
 
     sub _build_dht_query_ping {
@@ -981,6 +989,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm d8d71ee 2009-02-13 20:55:16Z sanko@cpan.org $
+=for svn $Id: Protocol.pm 5476ff9 2009-09-07 04:37:45Z sanko@cpan.org $
 
 =cut

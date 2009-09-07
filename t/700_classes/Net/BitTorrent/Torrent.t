@@ -19,19 +19,12 @@ my $test_builder = Test::More->builder;
 my $build        = Module::Build->current;
 my %torrents     = ();
 _locate_torrents();
-plan tests => int(6 + (90 * scalar keys %torrents));
+plan tests => int(6 + (87 * scalar keys %torrents));
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
 my $threads         = $build->notes(q[threads]);
 my $profile         = $build->notes(q[profile]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 SKIP: {
     is(Net::BitTorrent::Torrent->new(), undef, q[new() returns undef]);
     is(Net::BitTorrent::Torrent->new(q[FAIL!]),
@@ -46,11 +39,8 @@ SKIP: {
         sprintf q[{ Path => '%s' } returns undef], q[./]);
     for my $_key (sort { $a cmp $b } keys %torrents) {
         my $dot_torrent = $torrents{$_key};
-        warn sprintf q[Testing with '%s'], $dot_torrent;
         my ($tempdir)
             = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
-        warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir)
-        );
         my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
         skip(q[Failed to create client],
              (      $test_builder->{q[Expected_Tests]}
@@ -69,11 +59,12 @@ SKIP: {
         }
         is($torrent->path, rel2abs($dot_torrent),
             q[Absolute paths returned from path()]);
-        is_deeply($torrent->raw_data(1), _raw_data($_key),
+        is_deeply($torrent->metadata(1),
+                  _raw_data($_key)->{q[info]},
                   sprintf q[Totally raw data for %s torrent looks good.],
                   $_key);
-        is_deeply(scalar(bdecode($torrent->raw_data)),
-                  _raw_data($_key),
+        is_deeply(scalar(bdecode($torrent->metadata)),
+                  _raw_data($_key)->{q[info]},
                   sprintf q[bencoded raw data for %s torrent looks good.],
                   $_key
         );
@@ -112,15 +103,6 @@ SKIP: {
         );
         is($torrent->_client, $client, sprintf q[Client is correct (%s)],
             $_key);
-        is($torrent->comment,
-            _raw_data($_key)->{q[comment]},
-            sprintf q[comment is correct (%s)], $_key);
-        is($torrent->created_by,
-            _raw_data($_key)->{q[created by]},
-            sprintf q[created_by is correct (%s)], $_key);
-        is($torrent->creation_date,
-            _raw_data($_key)->{q[creation date]},
-            sprintf q[creation_date is correct (%s)], $_key);
         is($torrent->name,
             _raw_data($_key)->{q[info]}{q[name]},
             sprintf q[name is correct (%s)], $_key);
@@ -169,7 +151,6 @@ SKIP: {
             $_key
         );
         {
-            warn sprintf q[Undocumented BlockLength parameter tests], $_key;
             my $_torrent_Test =
                 Net::BitTorrent::Torrent->new({Path        => $dot_torrent,
                                                BaseDir     => $tempdir,
@@ -199,8 +180,7 @@ SKIP: {
             ];
             ok($orphan_torrent->status, sprintf q[Status indicates... (%s)],
                 $_key);
-            warn $orphan_torrent->status;
-            is($orphan_torrent->status, $IS{q[Loaded]},
+            ok($orphan_torrent->status & $IS{q[Loaded]},
                 sprintf q[ ...torrent is loaded but has no parent. (%s)],
                 $_key);
             my $_torrent_Test =
@@ -212,30 +192,25 @@ SKIP: {
                 );
             isa_ok($_torrent_Test, q[Net::BitTorrent::Torrent],
                    sprintf q[{ [...],  Status => 'Test'} (%s)], $_key);
-            is( $_torrent_Test->status,
-                ($IS{q[Started]} + $IS{q[Queued]} + $IS{q[Loaded]}),
+            ok( $_torrent_Test->status
+                    & ($IS{q[Started]} | $IS{q[Queued]} | $IS{q[Loaded]}),
                 sprintf
                     q[ ...torrent is started (pending hashcheck) and loaded. (%s)],
                 $_key
             );
-            warn $_torrent_Test->status;
             ok($_torrent_Test->stop, sprintf q[Stop an active torrent (%s)],
                 $_key);
-            warn $_torrent_Test->status;
             ok($_torrent_Test->status ^ $IS{q[Started]},
                 sprintf q[ ...Status says we're stopped. (%s)], $_key);
             ok($_torrent_Test->start, sprintf q[Start a stopped torrent (%s)],
                 $_key);
-            warn $_torrent_Test->status;
             ok($_torrent_Test->status & $IS{q[Started]},
                 sprintf q[ ...Status says we're started. (%s)], $_key);
             ok($_torrent_Test->pause, sprintf q[Pause a torrent (%s)], $_key);
-            warn $_torrent_Test->status;
             ok($_torrent_Test->pause & $IS{q[Paused]},
                 sprintf q[ ...Status says we're paused. (%s)], $_key);
             ok($_torrent_Test->start, sprintf q[Start a paused torrent (%s)],
                 $_key);
-            warn $_torrent_Test->status;
             ok($_torrent_Test->status ^ $IS{q[Paused]},
                 sprintf q[ ...Status says we're started. (%s)], $_key);
             my $_torrent_unchecked =
@@ -251,8 +226,8 @@ SKIP: {
                    $IS{q[StartAfterCheck]},
                    $_key
             );
-            is( $_torrent_unchecked->status,
-                $IS{q[Loaded]} + $IS{q[StartAfterCheck]},
+            ok( $_torrent_unchecked->status & $IS{q[Loaded]}
+                    | $IS{q[StartAfterCheck]},
                 sprintf
                     q[ ...Status == %d (Loaded, Start after Check, Orphan) (%s)],
                 $IS{q[Loaded]} + $IS{q[StartAfterCheck]},
@@ -260,14 +235,15 @@ SKIP: {
             );
             ok($_torrent_unchecked->hashcheck,
                 sprintf q[ ...checking (%s)], $_key);
-            is( $_torrent_unchecked->status,
-                $IS{q[Loaded]} + $IS{q[Checked]},
+            ok( $_torrent_unchecked->status
+                    & ($IS{q[Loaded]} | $IS{q[Checked]}),
                 sprintf q[ ...Status == %d (Loaded, Checked, Orphan) (%s)],
                 $IS{q[Loaded]} + $IS{q[Checked]},
                 $_key
             );
         }
-        warn(q[TODO: Test BaseDir param]);
+
+        # TODO: Test BaseDir param
         is($torrent->downloaded, 0, sprintf q[    downloaded == 0 (%s)],
             $_key);
         is( $torrent->_add_downloaded(1024),       1024,
@@ -300,7 +276,8 @@ SKIP: {
         }
         like(unpack(q[b*], $torrent_with_files->_wanted()), qr[^0+$],
              sprintf q[And now we want nothing (%s)], $_key);
-        warn q[TODO: _piece_by_index  # returns undef];
+
+        # TODO: _piece_by_index  # returns undef
         is($torrent->_piece_by_index(),
             undef, sprintf q[_piece_by_index( ) requires an index (%s)],
             $_key);
@@ -391,7 +368,8 @@ SKIP: {
             sprintf q[Resume data file was created... (%s)], $_key);
         ok(-s $_filename,
             sprintf q[               ...and has data. (%s)], $_key);
-        warn q[TODO: Restore data];
+
+        # TODO: Restore data
     SKIP: {
             skip q[Multi-threaded tests have been skipped], 5 if !$threads;
             skip
@@ -411,7 +389,8 @@ SKIP: {
             my $_bitfield = $_threaded_torrent->bitfield();
             threads->create(
                 sub {
-                    warn q[Change contents of cached bitfield...];
+
+                    # Change contents of cached bitfield...
                     vec($_bitfield, 0, 8) = 1;
                     $_threaded_torrent->_set_bitfield($_bitfield);
                     $_threaded_torrent->_set_status(0);
@@ -425,7 +404,8 @@ SKIP: {
                 sprintf q[Parent reads status is now 0 (%s)], $_key);
         }
     }
-    warn q[TODO: Per-torrent callbacks];
+
+    # TODO: Per-torrent callbacks
 }
 
 sub _locate_torrents {
@@ -489,4 +469,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Torrent.t 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+$Id: Torrent.t b06cecb 2009-08-31 04:12:52Z sanko@cpan.org $

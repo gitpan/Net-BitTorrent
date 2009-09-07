@@ -20,13 +20,6 @@ my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 plan tests => 172;
 SKIP: {
     my $client = Net::BitTorrent->new();
@@ -124,8 +117,6 @@ SKIP: {
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
     my ($filehandle, $filename) = tempfile(DIR => $tempdir);
-    warn(sprintf(q[ File::Temp created '%s' for us to play with], $filename));
-    warn(q[Net::BitTorrent::Torrent::File->new() requires parameters...]);
     is(Net::BitTorrent::Torrent::File->new(),
         undef, q[Net::BitTorrent::Torrent::File->new( )]);
     is( Net::BitTorrent::Torrent::File->new(Path => $filename),
@@ -229,7 +220,6 @@ SKIP: {
                                             }
         );
     isa_ok($file, q[Net::BitTorrent::Torrent::File], q[Path => ] . $filename);
-    warn(q[Check all sorts of stuff...]);
     is($file->priority, 2, q[   ...priority() defaults to 2]);
     is($file->set_priority(), undef,
         q[   ...set_priority() requires a parameter]);
@@ -291,7 +281,6 @@ SKIP: {
         ;                                                         # 0 but true
     ok($file->_close(), q[Close the file]);
     is($file->_systell(), undef, q[Cannot seek on a closed file]);
-    warn(q[TODO: systell wence param]);
     ok($file->_open(q[r]), q['r' opens the file for read]);
     is($file->mode(),      q[r],  q[Mode is now 'r']);
     is($file->_read(),     undef, q[Read requires a length]);
@@ -300,7 +289,6 @@ SKIP: {
     is($file->mode(),   q[w],  q[Mode is now 'w']);
     is($file->_write(), undef, q[Write requires data]);
     ok($file->_mkpath, q[mkpath]);
-    warn(q[Testing utf8 handling...]);
 SKIP: {
         skip(sprintf(q[Requires perl 5.8.1 or better; you have v%vd], $^V),
              10)
@@ -347,7 +335,8 @@ SKIP: {
         is($utf8_file->_sysseek(2),
             undef, q[Cannot set position on a closed file]);
         is($utf8_file->_read(15), undef, q[Cannot read from closed file]);
-        warn(q[TODO: check if file actually exists]);
+
+        # TODO: check if file actually exists
     }
 }
 __END__
@@ -364,4 +353,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: File.t 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+$Id: File.t 91d4c6b 2009-08-31 03:58:10Z sanko@cpan.org $

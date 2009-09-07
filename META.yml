@@ -1,6 +1,6 @@
 ---
 name: Net-BitTorrent
-version: 0.050
+version: 0.050_050
 author:
   - 'Sanko Robinson <sanko@cpan.org>'
 abstract: BitTorrent peer-to-peer protocol
@@ -8,10 +8,13 @@ license: artistic_2
 resources:
   ChangeLog: http://github.com/sanko/net-bittorrent/commits/master
   MailingList: http://groups.google.com/group/net-bittorrent
-  bugtracker: http://code.google.com/p/net-bittorrent/issues/list
+  bugtracker: http://github.com/sanko/net-bittorrent/issues
   homepage: http://sankorobinson.com/net-bittorrent/
   license: http://www.perlfoundation.org/artistic_license_2_0
   repository: http://github.com/sanko/net-bittorrent/
+build_requires:
+  Module::Build: 0.3
+  Test::More: 0.8
 requires:
   Cwd: 0
   Data::Dumper: 0
@@ -27,16 +30,14 @@ requires:
   Socket: 1.77
   Test::More: 0.8
   Time::HiRes: 0
-  perl: 5.8.8
-  version: 0.74
-build_requires:
-  Module::Build: 0.3
-  Test::More: 0.8
+  perl: v5.8.8
 recommends:
   Data::Dump: 0
   Math::BigInt::Pari: 0
   Math::Pari: 0
-  perl: 5.10.0
+  perl: v5.10.0
+configure_requires:
+  Module::Build: 0.34
 provides:
   Net::BitTorrent:
     file: lib/Net/BitTorrent.pm
@@ -46,35 +47,35 @@ provides:
     version: 0.050
   Net::BitTorrent::Peer:
     file: lib/Net/BitTorrent/Peer.pm
-    version: 0.050
+    version: 0.050_010
   Net::BitTorrent::Protocol:
     file: lib/Net/BitTorrent/Protocol.pm
     version: 0.050
   Net::BitTorrent::Torrent:
     file: lib/Net/BitTorrent/Torrent.pm
-    version: 0.050
+    version: 0.050_012
   Net::BitTorrent::Torrent::File:
     file: lib/Net/BitTorrent/Torrent/File.pm
-    version: 0.050
+    version: 0.050_001
   Net::BitTorrent::Torrent::Tracker:
     file: lib/Net/BitTorrent/Torrent/Tracker.pm
     version: 0.050
   Net::BitTorrent::Torrent::Tracker::HTTP:
     file: lib/Net/BitTorrent/Torrent/Tracker/HTTP.pm
-    version: 0.050
+    version: 0.050_001
   Net::BitTorrent::Torrent::Tracker::UDP:
     file: lib/Net/BitTorrent/Torrent/Tracker/UDP.pm
-    version: 0.050
+    version: 0.050_001
   Net::BitTorrent::Util:
     file: lib/Net/BitTorrent/Util.pm
     version: 0.050
   Net::BitTorrent::Version:
     file: lib/Net/BitTorrent/Version.pm
-    version: 0.050
+    version: 0.050_050
 generated_by: 'Conversion, software version 7.0'
 meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
 keywords:
   - BitTorrent
   - client
@@ -83,3 +84,25 @@ keywords:
   - torrent
   - socket
   - DHT
+  - Kademlia
+  - exhange
+  - kad
+  - Mainline
+  - MSE
+  - stream
+  - encryption
+  - cryptography
+  - PHE
+  - PE
+  - DH
+  - D-H
+  - Diffie-Hellman
+  - key
+  - exchange
+  - RC4
+  - ARC4
+  - Alleged
+  - ARCFOUR
+no_index:
+  file:
+    - scripts/net-bittorrent.pl

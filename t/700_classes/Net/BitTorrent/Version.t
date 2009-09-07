@@ -14,13 +14,6 @@ my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 $|++;
 plan tests => 5;
 SKIP: {
@@ -73,4 +66,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Version.t 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+$Id: Version.t 91d4c6b 2009-08-31 03:58:10Z sanko@cpan.org $

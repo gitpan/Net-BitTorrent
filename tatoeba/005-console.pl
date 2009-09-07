@@ -353,6 +353,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 005-console.pl 3d04563 2009-02-12 19:52:19Z sanko@cpan.org $
+=for svn $Id: 005-console.pl 3685ae3 2009-05-03 20:38:28Z sanko@cpan.org $
 
 =cut

@@ -6,8 +6,8 @@ package Net::BitTorrent::Torrent::File;
     use Carp qw[carp];
     use Scalar::Util qw[blessed weaken refaddr];
     use Fcntl qw[/O_/ /SEEK/ :flock];
-    use version qw[qv];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    use File::Path qw[mkpath];
+    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 1; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), ($VERSION_BASE / 1000), $UNSTABLE_RELEASE);
     my (@CONTENTS)
         = \
         my (%path, %torrent, %size, %index, %priority, %mode, %handle,
@@ -85,9 +85,9 @@ package Net::BitTorrent::Torrent::File;
         for my $index (0 .. $index{refaddr $self} - 1) {
             $start += $torrent{refaddr $self}->files->[$index]->size;
         }
-        my $end          = $start + $size{refaddr $self};
-        my $piece_length = $torrent{refaddr $self}->raw_data(1)
-            ->{q[info]}{q[piece length]};
+        my $end = $start + $size{refaddr $self};
+        my $piece_length
+            = $torrent{refaddr $self}->metadata(1)->{q[piece length]};
         my $have      = 0;
         my $_bitfield = $torrent{refaddr +shift}->bitfield;
         $start = int($start / $piece_length);
@@ -441,30 +441,28 @@ END
     sub _sysopen {
         my ($self, $mode) = @_;
         $self->_mkpath() if $mode &= O_WRONLY;
-        if ((    $^O eq q[MSWin32]
-             and utf8::is_utf8($path{refaddr $self})
-             and require Win32API::File
-             and require Encode
-            )
-            )
+        if (    $^O eq q[MSWin32]
+            and utf8::is_utf8($path{refaddr $self})
+            and require Win32
+            and require Win32API::File
+            and require Encode)
         {   Win32API::File->import(qw[:ALL]);
-            Encode->import(qw[find_encoding encode]);
-            for my $null (qq[\0], q[]) {
+            my $path = $path{refaddr $self};
+            foreach my $null (qq[\0], q[]) {
+                my $_path = $path . $null;
+                utf8::decode($_path);
                 $win32_handle{refaddr $self}
-                    = CreateFileW(
-                                 encode(
-                                     q[UTF-16LE], $path{refaddr $self} . $null
-                                 ),
-                                 (($mode &= O_WRONLY) ? GENERIC_WRITE()
-                                  : GENERIC_READ()
-                                 ),
-                                 FILE_SHARE_READ(),
-                                 [],
-                                 (($mode &= O_WRONLY) ? OPEN_ALWAYS()
-                                  : OPEN_EXISTING()
-                                 ),
-                                 FILE_ATTRIBUTE_NORMAL(),
-                                 0
+                    = CreateFileW(Encode::encode("UTF-16LE", $_path),
+                                  (($mode &= O_WRONLY) ? GENERIC_WRITE()
+                                   : GENERIC_READ()
+                                  ),
+                                  FILE_SHARE_READ(),
+                                  [],
+                                  (($mode &= O_WRONLY) ? OPEN_ALWAYS()
+                                   : OPEN_EXISTING()
+                                  ),
+                                  FILE_ATTRIBUTE_NORMAL(),
+                                  0
                     ) and last;
             }
             return if not $win32_handle{refaddr $self};
@@ -698,6 +696,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: File.pm d8d71ee 2009-02-13 20:55:16Z sanko@cpan.org $
+=for svn $Id: File.pm 5476ff9 2009-09-07 04:37:45Z sanko@cpan.org $
 
 =cut

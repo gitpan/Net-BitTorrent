@@ -19,13 +19,6 @@ my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 plan tests => 90;
 my ($tempdir) = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
 warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
@@ -89,9 +82,10 @@ SKIP: {
     isa_ok($client->_tcp, q[GLOB], q[TCP is good]);
     ok($client->_tcp_host, q[_tcp_host]);
     ok($client->_tcp_port, q[_tcp_port]);
-    warn(q[ [Alpha] _socket_open_tcp() and new() accept textual]);
-    warn(q[         hostnames ('localhost', 'ganchan.somewhere.net', etc.)]);
-    warn(q[         which are automatically resolved.]);
+
+    # [Alpha] _socket_open_tcp() and new() accept textual hostnames
+    #         ('localhost', 'ganchan.somewhere.net', etc.) which are
+    #         automatically resolved.
     ok($client->_socket_open_tcp(q[localhost], 0),
         q[_socket_open_tcp('localhost', 0) [Undocumented]]);
     my ($port_one, $packed_ip_one)
@@ -123,9 +117,6 @@ SKIP: {
     isa_ok($client->_udp, q[GLOB], q[UDP is good]);
     ok($client->_udp_host, q[_udp_host]);
     ok($client->_udp_port, q[_udp_port]);
-    warn(q[ [Alpha] _socket_open_udp() and new() accept textual]);
-    warn(q[         hostnames ('localhost', 'ganchan.somewhere.net', etc.)]);
-    warn(q[         which are automatically resolved.]);
     ok($client->_socket_open_udp(q[localhost], 0),
         q[_socket_open_udp('localhost', 0) [Undocumented]]);
     my ($port_one, $packed_ip_one)
@@ -170,10 +161,9 @@ SKIP: {
               },
               q[_sockets() returns the dht object and the client itself]
     );
-    warn(  q[This next bit (tries) to create a server, client, and ]
-         . q[the accepted loopback...]);
-    warn(q[Think happy thoughts.]);
-    warn(q[Testing Net::BitTorrent->new()]);
+
+    # This next bit (tries) to create a server, client, and the accepted
+    # loopback... Think happy thoughts.
     my $client_no_params = Net::BitTorrent->new();
     isa_ok($client_no_params, q[Net::BitTorrent], q[new( )]);
     is(Net::BitTorrent->new(LocalPort => [20502 .. 20505]),
@@ -222,7 +212,6 @@ SKIP: {
         = unpack_sockaddr_in(getsockname($client_list_port->_tcp));
     is($port, 20505, q[Correct port was opened (20505).]);
 }
-warn(q[Testing Net::BitTorrent->add_torrent()]);
 is($client->add_torrent(q[./t/900_data/950_torrents/952_multi.torrent]),
     undef, q[Needs hash ref params]);
 $torrent = $client->add_torrent(
@@ -292,4 +281,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: BitTorrent.t 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+$Id: BitTorrent.t 91d4c6b 2009-08-31 03:58:10Z sanko@cpan.org $

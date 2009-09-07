@@ -18,19 +18,11 @@ my $build           = Module::Build->current;
 my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-$SIG{__WARN__} = (
-    $verbose
-    ? sub {
-        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
-        }
-    : sub { }
-);
 my ($flux_capacitor, %peers) = (0, ());
 plan tests => 17;
 SKIP: {
     my ($tempdir)
         = tempdir(q[~NBSF_test_XXXXXXXX], CLEANUP => 1, TMPDIR => 1);
-    warn(sprintf(q[File::Temp created '%s' for us to play with], $tempdir));
     my $client = Net::BitTorrent->new({LocalHost => q[127.0.0.1]});
     skip(q[Failed to create client],
          ($test_builder->{q[Expected_Tests]} - $test_builder->{q[Curr_Test]})
@@ -103,7 +95,8 @@ SKIP: {
     ok($_ip_address->_announce(q[completed]),
         q[_announce('completed') == okay]);
     ok($_ip_address->as_string, q[as_string]);
-    warn q[TODO: Install event handlers];
+
+    # TODO: Install event handlers
 }
 __END__
 Copyright (C) 2008-2009 by Sanko Robinson <sanko@cpan.org>
@@ -119,4 +112,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: UDP.t 3f42870 2009-02-12 05:01:56Z sanko@cpan.org $
+$Id: UDP.t 91d4c6b 2009-08-31 03:58:10Z sanko@cpan.org $
