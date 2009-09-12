@@ -36,7 +36,7 @@ if (!$torrent) {
     exit;
 }
 l q[Loaded torrent okay. Raw data follows...];
-l Dumper $torrent->metadata(1);
+l Dumper $torrent->raw_data(1);
 l q[Setting client-wide callbacks...];
 $client->on_event(
     q[ip_filter],
@@ -198,6 +198,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 002-debug.pl c260f8c 2009-09-07 02:35:29Z sanko@cpan.org $
+=for svn $Id: 002-debug.pl d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
 
 =cut

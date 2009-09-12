@@ -13,6 +13,13 @@ my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
+$SIG{__WARN__} = (
+    $verbose
+    ? sub {
+        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
+        }
+    : sub { }
+);
 $|++;
 
 BEGIN {
@@ -521,7 +528,8 @@ SKIP: {
         q[parse_packet(\$packet) == undef (where $packet == "\0\0\0\r\25\0\0\4\0\0\4\0\0\0\1\0\0")]
     );
 
-    # Here we simulate a 'real' P2P session to check packet parsing
+    #
+    warn(q[Here we simulate a 'real' P2P session to check packet parsing]);
     my @original_data = (build_handshake(pack(q[C*], split(q[], q[00000000])),
                                          pack(q[H*], q[0123456789] x 4),
                                          q[random peer id here!]
@@ -806,8 +814,7 @@ SKIP: {
         join(q[], @original_data),
         sprintf(q[   ...was shifted from data. (line %d)], __LINE__));
     is_deeply(\@original_data, [], q[Looks like we're done.]);
-
-    # TODO: DHT packets
+    warn q[TODO: DHT packets!];
 }
 __END__
 Copyright (C) 2008-2009 by Sanko Robinson <sanko@cpan.org>
@@ -823,4 +830,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Protocol.t b06cecb 2009-08-31 04:12:52Z sanko@cpan.org $
+$Id: Protocol.t d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $

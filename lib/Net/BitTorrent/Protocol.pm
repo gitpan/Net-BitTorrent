@@ -6,7 +6,8 @@ package Net::BitTorrent::Protocol;
     use Carp qw[carp];
     use lib q[../../../lib];
     use Net::BitTorrent::Util qw[:bencode];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), ($VERSION_BASE / 1000), $UNSTABLE_RELEASE);
+    use version qw[qv];
+    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -437,20 +438,11 @@ END
         return unpack(q[N], $packet);
     }
 
-    sub _parse_extended_old {
-        my ($packet) = @_;
-        if ((!$packet) || (!length($packet))) { return; }
-        my ($id, $payload) = unpack(q[ca*], $packet);
-        return ([$id, scalar bdecode($payload)]);
-    }
-
     sub _parse_extended {
         my ($packet) = @_;
         if ((!$packet) || (!length($packet))) { return; }
         my ($id, $payload) = unpack(q[ca*], $packet);
-        ($payload, my $data) = bdecode($payload);
-        $payload->{q[DATA]} = $data if $data;
-        return ([$id, $payload]);
+        return ([$id, scalar bdecode($payload)]);
     }
 
     sub _build_dht_query_ping {
@@ -989,6 +981,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Protocol.pm 5476ff9 2009-09-07 04:37:45Z sanko@cpan.org $
+=for svn $Id: Protocol.pm d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
 
 =cut

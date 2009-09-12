@@ -21,10 +21,17 @@ my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-my $BlockLength     = 2**14;
-my $Seeds           = 1;
-my $Peers           = 5;
-my $Timeout         = 120;
+$SIG{__WARN__} = (
+    $verbose
+    ? sub {
+        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
+        }
+    : sub { }
+);
+my $BlockLength = 2**14;
+my $Seeds       = 1;
+my $Peers       = 5;
+my $Timeout     = 120;
 plan tests => int(($Seeds * 2) + ($Peers * 2));
 my $sprintf = q[%0] . length($Peers > $Seeds ? $Peers : $Seeds) . q[d];
 my $_infohash = q[2b3aaf361bd40540bf7e3bfd140b954b90e4dfbc];
@@ -172,7 +179,7 @@ sub setup_tracker {
                 )
         );
     ($_tracker_port, $_tracker_host) = unpack_sockaddr_in(getsockname($udpd));
-    diag(sprintf q[UDP Mini-Tracker running on udp://%s:%d/],
+    warn(sprintf q[UDP Mini-Tracker running on udp://%s:%d/],
          inet_ntoa($_tracker_host),
          $_tracker_port);
     return $_tracker_port;
@@ -263,8 +270,7 @@ sub unpack64 {    # [id://36314]
         ($hi, $lo) = ($lo, $hi) if !$little;
         $big = $lo + $hi * (1 + ~0);
         if ($big + 1 == $big) {
-
-            # Forced to approximate!
+            warn q[Forced to approximate!\n];
         }
     }
     return $big;

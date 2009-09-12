@@ -11,7 +11,8 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::Util qw[:bencode :compact];
     use Net::BitTorrent::Protocol qw[:dht];
     use Net::BitTorrent::Version;
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), ($VERSION_BASE / 1000), $UNSTABLE_RELEASE);
+    use version qw[qv];
+    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     my @CONTENTS
         = \my (%_client, %tid, %node_id, %outstanding_p, %nodes, %tracking);
     my %REGISTRY;
@@ -106,8 +107,8 @@ package Net::BitTorrent::DHT;
         my $ok = $_client{refaddr $self}->_event(q[ip_filter],
              {Address => sprintf q[%s:%d], $args->{q[ip]}, $args->{q[port]}});
         if (defined $ok and $ok == 0) { return; }
-        my $_resolved = inet_aton($args->{q[ip]});    # XXX - delay resolving
-        return if !$_resolved;    # because it's often slow
+        my $_resolved = inet_aton($args->{q[ip]});
+        return if !$_resolved;
         my $paddr = pack_sockaddr_in($args->{q[port]}, $_resolved);
         $nodes{refaddr $self}{$paddr} = {
                                        birth     => time,
@@ -789,6 +790,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: DHT.pm 5476ff9 2009-09-07 04:37:45Z sanko@cpan.org $
+=for svn $Id: DHT.pm d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
 
 =cut

@@ -16,6 +16,13 @@ my $build           = Module::Build->current;
 my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
+$SIG{__WARN__} = (
+    $verbose
+    ? sub {
+        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
+        }
+    : sub { }
+);
 $|++;
 my $multi_dot_torrent  = q[./t/900_data/950_torrents/952_multi.torrent];
 my $single_dot_torrent = q[./t/900_data/950_torrents/951_single.torrent];
@@ -27,13 +34,20 @@ SKIP: {
                                        Path   => $single_dot_torrent
                                       }
         );
-    $client->on_event(q[tracker_success], sub { my ($client, $args) = @_; });
-    $client->on_event(q[tracker_connect], sub { my ($client, $args) = @_; });
+    $client->on_event(q[tracker_success],
+                      sub { my ($client, $args) = @_; warn q[Announce]; });
+    $client->on_event(q[tracker_connect],
+                      sub { my ($client, $args) = @_; warn q[Connect] });
     $client->on_event(q[tracker_disconnect],
-                      sub { my ($client, $args) = @_; });
-    $client->on_event(q[tracker_failure], sub { my ($client, $args) = @_; });
-    $client->on_event(q[tracker_read],    sub { my ($client, $args) = @_; });
-    $client->on_event(q[tracker_write],   sub { my ($client, $args) = @_; });
+                      sub { my ($client, $args) = @_; warn q[Disconnect] });
+    $client->on_event(q[tracker_failure],
+                      sub { my ($client, $args) = @_; warn q[Failure] });
+    $client->on_event(q[tracker_read],
+                      sub { my ($client, $args) = @_; warn q[Read] });
+    $client->on_event(q[tracker_write],
+                      sub { my ($client, $args) = @_; warn q[Wrote] });
+    warn(q[Testing Net::BitTorrent::Torrent::Tracker]);
+    warn(q[new() requires parameters...]);
     is(Net::BitTorrent::Torrent::Tracker->new(), undef, q[new( )]);
     is( Net::BitTorrent::Torrent::Tracker->new(
                                         URLs => q[http://example.com/announce]
@@ -110,8 +124,7 @@ SKIP: {
               ],
               q[urls]
     );
-
-    # TODO: create a fake tracker and connect to it
+    warn(q[TODO: create a fake tracker and connect to it]);
 }
 __END__
 Copyright (C) 2008-2009 by Sanko Robinson <sanko@cpan.org>
@@ -127,4 +140,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Tracker.t 91d4c6b 2009-08-31 03:58:10Z sanko@cpan.org $
+$Id: Tracker.t d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $

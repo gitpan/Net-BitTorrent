@@ -33,10 +33,11 @@ sub _percent_complete {
     for my $index (0 .. $self->index - 1) {
         $start += $self->torrent->files->[$index]->size;
     }
-    my $end          = $start + $self->size;
-    my $piece_length = $self->torrent->metadata(1)->{q[piece length]};
-    my $have         = 0;
-    my $_bitfield    = $self->torrent->bitfield;
+    my $end = $start + $self->size;
+    my $piece_length
+        = $self->torrent->raw_data(1)->{q[info]}{q[piece length]};
+    my $have      = 0;
+    my $_bitfield = $self->torrent->bitfield;
     $start = int($start / $piece_length);
     $end   = int(($end / $piece_length) + 1);
     for my $index ($start .. $end) { $have += vec($_bitfield, $index, 1); }
@@ -144,6 +145,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 004-resume.pl 20e106d 2009-09-07 03:14:11Z sanko@cpan.org $
+=for svn $Id: 004-resume.pl d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
 
 =cut

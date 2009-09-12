@@ -1,42 +1,23 @@
-Version 0.0XXX | In the not too distant future | 5476ff9
+Version 0.051 | 2009-09-12 04:52:06Z (Sat, 12 Sep 2009) | 694da26
 
     API Changes/Compatibility Information:
-     * N::B::Torrent::raw_data() is now N::B::Torrent::metadata() and only
-         returns the 'info' portion of the original torrent.
-     * UTF-8 filenames may be broken. (Tested and okay on Win32)
-     * N::B::Torrent->status now has a HAVE_METADATA field. This is false if
-         we are using a (BEP09) magnet link and have not downloaded the
-         complete metadata from a remote peer.
-     * We support both the 32bit and 40bit (...ugh, why?) magnet links.
-     * BEP09 doesn't... you know the drill. N::B::Torrent->comment(),
-         N::B::Torrent->created_by(), N::B::Torrent->created_by() have all
-         been removed.
-     * N::B::Torrent->raw_data() only returns the 'info' part of the metadata
+     * N/A
 
     Resolved Issues/Bug Fixes:
      * DHT nodes found in metadata are now handled according to spec
        - Bug reported by Wouter Godefroy via email
 
     Protocol/Behavioral Changes:
-     * Partial (download only) BEP09 (Extension for Peers to Send Metadata
-         Files) support
+     * N/A
 
     Documentation/Sample Code/Test Suite:
-     * New script /scripts/net-bittorrent.pl is installed with distribution.
-         It is a very short version of /tatoeba/005-console.pl
-     * Tests have been updated to reflect the various BEP09-related changes
+    * New script /scripts/net-bittorrent.pl is installed with distribution. It
+        is a very short version of /tatoeba/005-console.pl
 
     Notes:
-     * I *do not* suggest an upgrade for any current users. Plain and simple.
-     * ...I would also suggest using the previous major version to any new
-         users. BEP09 is more of a toy than anything useful and has forced me
-         to make changes to stuff I'd rather have left alone. This code may,
-         in fact, never make it to the CPAN.
      * Meanwhile...
-         - New IRC-based support: irc://irc.freenode.org/net-bittorrent
+         - New IRC-based support: irc://irc.p2p-network.com/net-bittorrent
          - Bug tracker is now at http://github.com/sanko/net-bittorrent/issues
-         - uTP is now documented as BEP29
-           + http://bittorrent.org/beps/bep_0029.html
 
 ---
 Version 0.050 | 2009-02-13 20:55:16Z (Fri, 13 Feb 2009) | d8d71ee
@@ -417,6 +398,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://github.com/sanko/net-bittorrent/commits/master
 
-$Ver: 0.050_050 $ from git $Rev: 5476ff9 $
-$Date: 2009-09-07 04:37:45Z (Mon, 07 Sep 2009) $
-$Url: http://github.com/sanko/net-bittorrent//raw/5476ff9295cc2a215cf71225221e22ea3b609b07/Changes $
+$Ver: 0.051 $ from git $Rev: fe2bc68 $
+$Date: 2009-09-12 04:03:51Z (Sat, 12 Sep 2009) $
+$Url: http://github.com/sanko/net-bittorrent//raw/fe2bc6892bd154c7c17806e125387168d2984f78/Changes $

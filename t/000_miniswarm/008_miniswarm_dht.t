@@ -1,4 +1,4 @@
-# -*- perl -*-
+#!perl -Iinc
 # Miniature swarm of 1 seed, 3 DHT trackers, and 5 new peers
 #
 use strict;
@@ -6,7 +6,7 @@ use warnings;
 use Module::Build;
 use Test::More;
 use File::Temp qw[];
-use lib q[../../lib];
+use lib q[../../lib ../../../];
 use Time::HiRes qw[];
 use Net::BitTorrent::Protocol qw[:types];
 use Net::BitTorrent::Util qw[:compact :bencode];
@@ -21,10 +21,17 @@ my $okay_tcp        = $build->notes(q[okay_tcp]);
 my $okay_udp        = $build->notes(q[okay_udp]);
 my $release_testing = $build->notes(q[release_testing]);
 my $verbose         = $build->notes(q[verbose]);
-my $BlockLength     = 2**14;
-my $Seeds           = 1;
-my $Peers           = 5;
-my $Timeout         = 180;
+$SIG{__WARN__} = (
+    $verbose
+    ? sub {
+        diag(sprintf(q[%02.4f], Time::HiRes::time- $^T), q[ ], shift);
+        }
+    : sub { }
+);
+my $BlockLength = 2**14;
+my $Seeds       = 1;
+my $Peers       = 5;
+my $Timeout     = 180;
 plan tests => int($Seeds + $Peers + 3) * 2;
 my $sprintf = q[%0] . length($Peers > $Seeds ? $Peers : $Seeds) . q[d];
 my $_infohash = q[2b3aaf361bd40540bf7e3bfd140b954b90e4dfbc];

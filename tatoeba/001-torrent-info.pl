@@ -3,10 +3,10 @@ use strict;
 use warnings;
 use Data::Dump;
 use Net::BitTorrent::Torrent;
-my $torrent = Net::BitTorrent::Torrent->new({Path => '956_dht.torrent'})
+my $torrent = Net::BitTorrent::Torrent->new({Path => 'a.legal.torrent'})
     or exit;
 $torrent->as_string(1);
-dd $torrent->metadata(1);
+dd $torrent->raw_data(1);
 print map { qq[\n] . $_->path } @{$torrent->files};
 
 =pod
@@ -51,7 +51,7 @@ to give you a rundown of what can be parsed from the file.
 =item Line 9
 
 Prints a dump of the .torrent file's
-L<metadata|Net::BitTorrent::Torrent/"metadata ( [ RAW ] )">.
+L<metadata|Net::BitTorrent::Torrent/"raw_data ( [ RAW ] )">.
 
 =item Line 10
 
@@ -91,6 +91,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: 001-torrent-info.pl c260f8c 2009-09-07 02:35:29Z sanko@cpan.org $
+=for svn $Id: 001-torrent-info.pl d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
 
 =cut
