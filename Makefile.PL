@@ -51,4 +51,4 @@ the Creative Commons Attribution-Share Alike 3.0 License.  See
 http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
 clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 
-$Id: Makefile.PL d8d71ee 2009-02-13 20:55:16Z sanko@cpan.org $
+$Id: Makefile.PL 64e98b0 2009-09-12 05:23:14Z sanko@cpan.org $

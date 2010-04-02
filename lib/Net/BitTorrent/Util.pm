@@ -32,7 +32,7 @@ package Net::BitTorrent::Util;
             return
                 join(q[], q[d],
                      (map { bencode($_) . bencode($ref->{$_}) }
-                          sort keys %{$ref}
+                      sort keys %{$ref}
                      ),
                      q[e]
                 );
@@ -237,6 +237,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Util.pm d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
+=for svn $Id: Util.pm 07f0c35 2010-04-02 18:31:29Z sanko@cpan.org $
 
 =cut

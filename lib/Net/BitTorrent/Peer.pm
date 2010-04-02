@@ -11,7 +11,7 @@ package Net::BitTorrent::Peer;
     use Math::BigInt;
     use Digest::SHA qw[sha1];
     use version qw[qv];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
+    our $VERSION_BASE = 52; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
     use vars qw[@EXPORT_OK %EXPORT_TAGS];
     use Exporter qw[];
     *import = *import = *Exporter::import;
@@ -221,7 +221,8 @@ END
                     && !$_->{q[Object]}->torrent
             } values %{$args->{q[Torrent]}->_client->_connections};
             if ($half_open >= $args->{q[Torrent]}->_client->_half_open) {
-                warn sprintf q[%d half open sockets!], $half_open;
+
+                #warn sprintf q[%d half open sockets!], $half_open;
                 return;
             }
             if (scalar($args->{q[Torrent]}->peers)
@@ -2589,6 +2590,6 @@ clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
 Neither this module nor the L<Author|/Author> is affiliated with
 BitTorrent, Inc.
 
-=for svn $Id: Peer.pm d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
+=for svn $Id: Peer.pm 07f0c35 2010-04-02 18:31:29Z sanko@cpan.org $
 
 =cut
