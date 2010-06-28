@@ -1,667 +1,575 @@
-#!/usr/bin/perl -w
 package Net::BitTorrent::DHT;
 {
-    use strict;
-    use warnings;
-    use Digest::SHA qw[sha1_hex];
-    use Scalar::Util qw[blessed weaken refaddr];
-    use Carp qw[carp];
-    use Socket qw[/inet_/ /pack_sockaddr_in/];
-    use lib q[../../../lib/];
-    use Net::BitTorrent::Util qw[:bencode :compact];
-    use Net::BitTorrent::Protocol qw[:dht];
-    use Net::BitTorrent::Version;
-    use version qw[qv];
-    our $VERSION_BASE = 50; our $UNSTABLE_RELEASE = 0; our $VERSION = sprintf(($UNSTABLE_RELEASE ? q[%.3f_%03d] : q[%.3f]), (version->new(($VERSION_BASE))->numify / 1000), $UNSTABLE_RELEASE);
-    my @CONTENTS
-        = \my (%_client, %tid, %node_id, %outstanding_p, %nodes, %tracking);
-    my %REGISTRY;
+    use Moose;
+    use AnyEvent;
+    use lib '../../../lib';
+    use Net::BitTorrent::Protocol::BEP03::Bencode qw[bdecode];
+    use Net::BitTorrent::Protocol::BEP05::Packets qw[:all];
+    use Net::BitTorrent::Network::Utility qw[:paddr :sockaddr];
+    use Net::BitTorrent::Types qw[:dht];
+    use Net::BitTorrent::Protocol::BEP05::RoutingTable;
+    use 5.10.0;
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
-    sub new {
-        my ($class, $args) = @_;
-        my $self = undef;
-        if (!$args or (ref($args) ne q[HASH])) {
-            carp __PACKAGE__
-                . q[->new( { ... } ) requires parameters passed as a hashref];
-            return;
+    # Stub
+    sub BUILD {1}
+
+    #
+    has 'client' => (isa       => 'Net::BitTorrent',
+                     is        => 'ro',
+                     predicate => 'has_client'
+    );
+
+    # Standalone?
+    after 'BUILD' => sub {
+        my ($s, $a) = @_;
+        return has '+client' => (handles => qr[^udp.*]) if $s->has_client;
+        require Moose::Util;
+        Moose::Util::apply_all_roles($s,
+                                     'Net::BitTorrent::DHT::Standalone',
+                                     {rebless_params => $a});
+
+        # Hey! Open up!
+        $s->udp6;
+        $s->udp4;
+    };
+
+    #
+    for my $type (qw[requests replies]) {
+        for my $var (qw[count length]) {
+            my $attr = join '_', '', 'recv_invalid', $var;
+            has $attr => (isa      => 'Int',
+                          is       => 'ro',
+                          init_arg => undef,
+                          traits   => ['Counter'],
+                          handles  => {'_inc' . $attr => 'inc'},
+                          default  => 0
+            );
+            for my $dir (qw[recv send]) {
+                my $attr = join '_', '', $dir, $type, $var;
+                has $attr => (isa      => 'Int',
+                              is       => 'ro',
+                              init_arg => undef,
+                              traits   => ['Counter'],
+                              handles  => {'_inc' . $attr => 'inc'},
+                              default  => 0
+                );
+            }
         }
-        if (   !$args->{q[Client]}
-            or !blessed($args->{q[Client]})
-            or !$args->{q[Client]}->isa(q[Net::BitTorrent]))
-        {   carp __PACKAGE__
-                . q[->new( { ... } ) requires parameters passed as a hashref];
-            return;
-        }
-        my $node_id = Net::BitTorrent::Version->gen_node_id();
-        $self = bless \$node_id, $class;
+    }
+    has 'nodeid' => (isa        => 'NBTypes::DHT::NodeID',
+                     is         => 'ro',
+                     lazy_build => 1,
+                     builder    => '_build_nodeid',
+                     coerce     => 1
+    );
 
-        # Defaults
-        $_client{refaddr $self} = $args->{q[Client]};
-        weaken $_client{refaddr $self};
-        $node_id{refaddr $self} = $node_id;
-        $nodes{refaddr $self}   = {};
-        $tid{refaddr $self}     = q[aaaaa];
+    sub _build_nodeid {
+        require Digest::SHA;
+        return Digest::SHA::sha1(rand(time * $^T) . $0 . 'Sanko was here.');
+    }
 
-        # Boot
-        $_client{refaddr $self}->_schedule(
-                                          {Code => sub { shift->_pulse() },
-                                           Time   => time + 3,
-                                           Object => $self
-                                          }
+    #
+    sub send {
+        my ($self, $node, $packet, $reply) = @_;
+        my $sent = send((  $node->ipv6
+                         ? $self->udp6_sock
+                         : $self->udp4_sock
+                        ),
+                        $packet, 0,
+                        $node->sockaddr
         );
-        $_client{refaddr $self}->_schedule(    # boot up
-            {Code => sub {
-                 my ($s) = @_;
-                 for my $node (values %{$nodes{refaddr $s}}) {
-                     $self->_ping_out($node);
-                     $self->_find_node_out($node, $node_id{refaddr $s});
-                 }
-             },
-             Time   => time + 2,
-             Object => $self
-            }
-        );
-        weaken($REGISTRY{refaddr $self} = $self);
-        return $self;
-    }
-
-    # Accessors | Private
-    sub _client {
-        return if defined $_[1];
-        return $_client{refaddr + $_[0]};
-    }
-
-    sub _peers {
-        my ($self, $info_hash) = @_;
-        return q[] if !$tracking{refaddr $self}{$info_hash};
-        $tracking{refaddr $self}{$info_hash}{q[touch]} = time;
-        return $tracking{refaddr $self}{$info_hash}{q[peers]};
-    }
-
-    # Accesors | Public
-    sub node_id {
-        return if defined $_[1];
-        return $node_id{refaddr + $_[0]};
-    }
-
-    sub nodes {
-        return if defined $_[1];
-        return [map { {ip => $_->{q[ip]}, port => $_->{q[port]}} }
-                values %{$nodes{refaddr + $_[0]}}];
-    }
-
-    # Setters | Private
-    sub _set_node_id {
-        return if not defined $_[1];
-        return $node_id{refaddr + $_[0]} = $_[1];
-    }
-
-    # Methods | Public
-    sub add_node {
-        my ($self, $args) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return if scalar keys %{$nodes{refaddr $self}} >= 300; # max 300 nodes
-        return if ref $args ne q[HASH];
-        return if !$args->{q[port]};
-        return if !$args->{q[ip]};
-        my $ok = $_client{refaddr $self}->_event(q[ip_filter],
-             {Address => sprintf q[%s:%d], $args->{q[ip]}, $args->{q[port]}});
-        if (defined $ok and $ok == 0) { return; }
-        my $_resolved = inet_aton($args->{q[ip]});
-        return if !$_resolved;
-        my $paddr = pack_sockaddr_in($args->{q[port]}, $_resolved);
-        $nodes{refaddr $self}{$paddr} = {
-                                       birth     => time,
-                                       fail      => 0,
-                                       id        => undef,
-                                       ip        => $args->{q[ip]},
-                                       okay      => 0,
-                                       paddr     => $paddr,
-                                       ping      => time - 61,          # lies
-                                       port      => $args->{q[port]},
-                                       prev_find => 0,
-                                       prev_get  => 0,
-                                       prev_ann  => 0,
-                                       seen      => time - 60,          # lies
-                                       token_i   => undef,
-                                       token_o   => undef
-            }
-            if !$nodes{refaddr $self}{$paddr};
-        return $nodes{refaddr $self}{$paddr};
-    }
-
-    sub _pulse {
-        my ($self) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        for my $tid (
-            grep {
-                $outstanding_p{refaddr $self}{$_}{q[sent]} < time - 20
-            }
-            keys %{$outstanding_p{refaddr $self}}
-            )
-        {    # old packets
-            $nodes{refaddr $self}
-                {$outstanding_p{refaddr $self}{$tid}{q[paddr]}}{q[fail]}++;
-            delete $outstanding_p{refaddr $self}{$tid};
-        }
-        for my $paddr (
-            grep {
-                (!defined $nodes{refaddr $self}{$_}
-                 {q[seen]})    # XXX - mystery bug
-                    or
-                    (($nodes{refaddr $self}{$_}{q[seen]} < time - (60 * 15)))
-                    or ($nodes{refaddr $self}{$_}{q[fail]} > 10)
-            } keys %{$nodes{refaddr $self}}
-            )
-        {                      # old/bad nodes
-            delete $nodes{refaddr $self}{$paddr};
-        }
-        for my $paddr (
-            grep {
-                (($nodes{refaddr $self}{$_}{q[ping]}
-                      > $nodes{refaddr $self}{$_}{q[seen]}
-                 )
-                     and
-                     ($nodes{refaddr $self}{$_}{q[ping]} < time - (60 * 8))
-                    )
-            } keys %{$nodes{refaddr $self}}
-            )
-        {    # old/bad nodes
-            $self->_ping_out($nodes{refaddr $self}{$paddr});
-        }
-        for my $info_hash (keys %{$tracking{refaddr $self}})
-        {    # stale tracker data
-            delete $tracking{refaddr $self}{$info_hash}
-                if $tracking{refaddr $self}{$info_hash}{q[touch]}
-                    < time - (60 * 30);
-        }
-
-        # TODO: remove bad nodes, etc.
-        $_client{refaddr $self}->_schedule(
-                                          {Code => sub { shift->_pulse() },
-                                           Time   => time + 45,
-                                           Object => $self
-                                          }
-        );
-    }
-
-    sub _on_data {
-        my ($self, $paddr, $data) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        my ($packet, $leftover) = bdecode($data);
-        my $node;
-        if (    (defined $packet)
-            and (ref $packet eq q[HASH])
-            and $packet->{q[y]})
-        {   if ($packet->{q[y]} eq q[q]) {    # query
-                if ($packet->{q[q]} eq q[ping]) {
-                    $self->_ping_reply($paddr, $packet->{q[t]});
-                    if (q[XXX - I don't want this in the final version. ...do I?]
-                        and !$nodes{refaddr $self}{$paddr})
-                    {   my ($_port, $_ip) = unpack_sockaddr_in($paddr);
-                        $_ip = inet_ntoa($_ip);
-                        my $ok = $_client{refaddr $self}->_event(q[ip_filter],
-                                 {Address => sprintf q[%s:%d], $_ip, $_port});
-                        if (defined $ok and $ok == 0) { return; }
-                        my $new_node
-                            = $self->add_node({ip => $_ip, port => $_port});
-                        return if !$new_node;
-                    }
-                    if (defined $nodes{refaddr $self}{$paddr}) {
-                        $nodes{refaddr $self}{$paddr}{q[id]}
-                            ||= $packet->{q[a]}{q[id]};
-                        $nodes{refaddr $self}{$paddr}{q[ping]} = time;
-                        $nodes{refaddr $self}{$paddr}{q[seen]} = time;
-                        $self->_find_node_out($nodes{refaddr $self}{$paddr},
-                                              $node_id{refaddr $self});
-                    }
-                    return;
-                }
-                elsif ($packet->{q[q]} eq q[find_node]) {
-                    my ($_port, $_ip) = unpack_sockaddr_in($paddr);
-                    $_ip = inet_ntoa($_ip);
-                    my $ok = $_client{refaddr $self}->_event(q[ip_filter],
-                                 {Address => sprintf q[%s:%d], $_ip, $_port});
-                    if (defined $ok and $ok == 0) { return; }
-
-          # if (!$nodes{refaddr $self}{$paddr}) {
-          #    my ($port, $host) = unpack_sockaddr_in($paddr);
-          #    $self->add_node({ip=>inet_ntoa($host), port=>$port}) || return;
-          #}
-          #$node = $nodes{refaddr $self}{$paddr};
-          #$nodes{refaddr $self}{$paddr}{q[id]}||=
-          #        $packet->{q[a]}{q[id]};
-                    my $nodes = compact(
-                          map { sprintf q[%s:%d], $_->{q[ip]}, $_->{q[port]} }
-                              grep { $_->{q[ip]} =~ m[^[\d\.]+$] }
-                              $self->_locate_nodes_near_target(
-                                                    $packet->{q[a]}{q[target]}
-                              )
-                    );
-                    $self->_find_node_reply($paddr, $packet->{q[t]},
-                                            $packet->{q[a]}{q[id]}, $nodes)
-
-                        #if $nodes;
-                }
-                elsif ($packet->{q[q]} eq q[get_peers]) {
-                    if (!$nodes{refaddr $self}{$paddr}) {
-                        my ($port, $host) = unpack_sockaddr_in($paddr);
-                        $self->add_node(
-                                     {ip => inet_ntoa($host), port => $port});
-                        return if !$nodes{refaddr $self}{$paddr};
-                    }
-                    $node = $nodes{refaddr $self}{$paddr};
-                    $node->{q[id]} ||= $packet->{q[a]}{q[id]};
-                    $node->{q[seen]} = time;
-                    $node->{q[okay]}++;
-                    $node->{q[fail]}    = 0;
-                    $node->{q[token_o]} = q[NB_] . $self->_generate_token;
-                    if ($tracking{refaddr $self}
-                        {$packet->{q[a]}{q[info_hash]}})
-                    {   my @values = uncompact($tracking{refaddr $self}
-                                   {$packet->{q[a]}{q[info_hash]}}{q[peers]});
-                        @values = map { compact($_) }
-                            grep {$_} @values[0 .. 7];    # max 8
-                        my $outgoing_packet
-                            = _build_dht_reply_values(
-                                      $packet->{q[t]}, $packet->{q[a]}{q[id]},
-                                      \@values,        $node->{q[token_o]});
-                        send($_client{refaddr $self}->_udp(),
-                             $outgoing_packet, 0, $paddr);
-                        $tracking{refaddr $self}
-                            {$packet->{q[a]}{q[info_hash]}}{q[touch]} = time;
-                    }
-                    else {
-                        my $nodes = compact(
-                            map {
-                                sprintf q[%s:%d], $_->{q[ip]}, $_->{q[port]}
-                                } grep { $_->{q[ip]} =~ m[^[\d\.]+$] }
-                                $self->_locate_nodes_near_target(
-                                                 $packet->{q[a]}{q[info_hash]}
-                                )
-                        );
-                        send($_client{refaddr $self}->_udp(),
-                             _build_dht_reply_get_peers(
-                                      $packet->{q[t]}, $packet->{q[a]}{q[id]},
-                                      $nodes,          $node->{q[token_o]}
-                             ),
-                             0, $paddr
-                        );
-                    }
-                }
-                elsif ($packet->{q[q]} eq q[announce_peer]) {
-                    if (!$nodes{refaddr $self}{$paddr}) {
-
-                        # XXX - reply with an error msg
-                        #die q[...we don't know this node];
-                        return;
-                    }
-                    $node = $nodes{refaddr $self}{$paddr};
-                    $node->{q[id]} ||= $packet->{q[a]}{q[id]};
-                    $node->{q[seen]} = time;
-                    $node->{q[okay]}++;
-                    $node->{q[fail]} = 0;
-                    if (   (!$node->{q[token_o]})
-                        || ($packet->{q[a]}{q[token]} ne $node->{q[token_o]}))
-                    {    # XXX - reply with token error msg
-                            #die pp $node;
-                        return;
-                    }
-                    elsif ((!$tracking{refaddr $self}
-                            {$packet->{q[a]}{q[info_hash]}}
-                           )
-                           and (scalar(keys %{$tracking{refaddr $self}}) > 64)
-                        )
-                    {       # enough torrents
-                            # XXX - reply with error msg?
-                            #
-                        return;
-                    }
-                    else {
-                        my @current_peers = uncompact($tracking{refaddr $self}
-                                   {$packet->{q[a]}{q[info_hash]}}{q[peers]});
-                        if (scalar(@current_peers) > 128)
-                        {    # enough peers for this torrent
-                                # XXX - reply with error msg?
-                                #
-                            return;
-                        }
-                        $tracking{refaddr $self}
-                            {$packet->{q[a]}{q[info_hash]}}{q[peers]}
-                            = compact(@current_peers,
-                                      sprintf(q[%s:%d],
-                                              $node->{q[ip]},
-                                              $packet->{q[a]}{q[port]})
-                            );
-                        $self->_ping_reply($paddr, $packet->{q[t]});
-                        $tracking{refaddr $self}
-                            {$packet->{q[a]}{q[info_hash]}}{q[touch]} = time;
-
-                        #warn q[Now on hand: ]
-                        #    . pp uncompact($tracking{refaddr $self}
-                        #                   {$packet->{q[a]}{q[info_hash]}});
-                    }
-                }
-                else {
-
-                    #die pp $packet;
-                }
-            }
-            elsif ($packet->{q[y]} eq q[r]) {    # reply
-                my $original_packet
-                    = $outstanding_p{refaddr $self}{$packet->{q[t]}};
-                if (!$original_packet) {
-
-                    #warn q[...unexpected reply: ] . pp $packet;
-                    #warn pp $outstanding_p{refaddr $self}{$packet->{q[t]}};
-                    #
-                    return;
-                }
-                return if !$nodes{refaddr $self}{$paddr};
-                $node = $nodes{refaddr $self}{$paddr};
-                if ($original_packet->{q[paddr]} ne $paddr) {
-                    my ($fake_port, $fake_host) = unpack_sockaddr_in($paddr);
-                    $fake_host = inet_ntoa($fake_host);
-                    my ($real_port, $real_host)
-                        = unpack_sockaddr_in($original_packet->{q[paddr]});
-                    $real_host = inet_ntoa($real_host);
-
-#warn sprintf
-#    qq[...wrong remote node sent this reply %s to %s |\n %s:%d|%s\n  vs\n %s:%d|%s],
-#    pp($packet),
-#    pp($original_packet),
-#    $fake_host, $fake_port, pp($paddr),
-#    $real_host, $real_port,
-#    pp($original_packet->{q[paddr]});
-                    return;
-                }
-                delete $outstanding_p{refaddr $self}{$packet->{q[t]}};
-                $node->{q[seen]} = time;
-                $node->{q[okay]}++;
-                $node->{q[fail]} = 0;
-                $node->{q[id]}
-                    = $node->{q[id]}
-                    ? $node->{q[id]}
-                    : $packet->{q[r]}{q[id]};
-                $node->{q[token_i]}
-                    = $packet->{q[r]}{q[token]}
-                    ? $packet->{q[r]}{q[token]}
-                    : $node->{q[token_i]};
-
-                #warn sprintf q[%s:%d sent us %s in reply to %s],
-                #    $node->{q[ip]}, $node->{q[port]},
-                #    pp(bdecode($data)), pp($original_packet);
-                if ($packet->{q[r]}{q[nodes]}) {
-                    for my $_node (uncompact($packet->{q[r]}{q[nodes]})) {
-                        my ($ip, $port) = split q[:], $_node, 2;
-                        my $new_node
-                            = $self->add_node({ip => $ip, port => $port});
-                        next if !$new_node;
-
-                        #$self->_ping_out($new_node);
-                        #
-                        #warn pp $original_packet;
-                        my $_data = bdecode($original_packet->{q[packet]});
-
-                        #warn pp $_data;
-                        my $info_hash
-                            = $_data->{q[a]}{q[target]}
-                            ? $_data->{q[a]}{q[target]}
-                            : $_data->{q[a]}{q[info_hash]};
-
-                        #    warn pp $info_hash;
-                        $self->_get_peers_out($new_node, $info_hash);
-                    }
-                }
-                if ($packet->{q[r]}{q[values]}) {
-
-                    #warn pp $original_packet;
-                    my $torrent =
-                        $_client{refaddr $self}->_locate_torrent(
-                                        unpack q[H40],
-                                        bdecode($original_packet->{q[packet]})
-                                            ->{q[a]}{q[info_hash]}
-                        );
-                    if ($torrent) {
-                        $tracking{refaddr $self}{$torrent->infohash} = {
-                                    peers =>
-                                        compact(
-                                        uncompact(
-                                            $tracking{refaddr $self}
-                                                {$torrent->infohash}{q[peers]}
-                                        ),
-                                        (map { uncompact($_) }
-                                             @{$packet->{q[r]}{q[values]}}
-                                        )
-                                        ),
-                                    touch => time
-                        };
-                    }
-                    $self->_find_node_out($node, $node_id{refaddr $self});
-                }
-            }
-            elsif ($packet->{q[y]} eq q[e]) {    # error
-                    #if ( $packet->{q[e]}->[0] ==  ) {  }
-                    # XXX - Should DHT have events?
-                    #use Data::Dump qw[pp];
-                    #warn sprintf qq[Error: %s\from %s\nnoriginal packet: %s],
-                    #    pp($packet), pp($nodes{refaddr $self}{$paddr}),
-                    #    pp(scalar bdecode(
-                 #                $outstanding_p{refaddr $self}{$packet->{q[t]}}
-                 #                    {q[packet]}
-                 #       )
-                 #    );
-                delete $outstanding_p{refaddr $self}{$packet->{q[t]}};
-            }
-            else {    #warn q[...what just happend? ] . pp bdecode($data)
-            }
+        if ($reply) {
+            $self->_inc_send_replies_count;
+            $self->_inc_send_replies_length($sent);
         }
         else {
-
-            # AZ or garbage. ...as if the two were different.
-            #use Data::Dump qw[pp];
-            #warn q[Bad packet: ] . pp($data);
+            $self->_inc_send_requests_count;
+            $self->_inc_send_requests_length($sent);
         }
+        return $sent;
     }
 
-    sub _ping_out {
-        my ($self, $node) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return if $node->{q[seen]} > time - 120;
-        my $tid = $self->_generate_token;
-        my $packet = _build_dht_query_ping($tid, $node_id{refaddr $self});
-        $outstanding_p{refaddr $self}{$tid} = {attempts => 1,
-                                               sent     => time,
-                                               packet   => $packet,
-                                               paddr    => $node->{q[paddr]}
+    #
+    has 'ipv4_routing_table' => (
+                      isa => 'Net::BitTorrent::Protocol::BEP05::RoutingTable',
+                      is  => 'ro',
+                      lazy_build => 1,
+                      handles    => {
+                                  ipv4_add_node => 'add_node',
+                                  ipv4_buckets  => 'buckets'
+                      }
+    );
+    has 'ipv6_routing_table' => (
+                      isa => 'Net::BitTorrent::Protocol::BEP05::RoutingTable',
+                      is  => 'ro',
+                      lazy_build => 1,
+                      handles    => {
+                                  ipv6_add_node => 'add_node',
+                                  ipv6_buckets  => 'buckets'
+                      }
+    );
+
+    sub _build_ipv4_routing_table {
+        Net::BitTorrent::Protocol::BEP05::RoutingTable->new(dht => shift);
+    }
+
+    sub _build_ipv6_routing_table {
+        Net::BitTorrent::Protocol::BEP05::RoutingTable->new(dht => shift);
+    }
+    after 'BUILD' => sub {
+        my ($self, $args) = @_;
+        return if !defined $args->{'boot_nodes'};
+        for my $node (@{$args->{'boot_nodes'}}) {
+            require Net::BitTorrent::Protocol::BEP05::Node;
+            my $sockaddr = sockaddr($node->[0], $node->[1]);
+            next if !$sockaddr;
+            $node =
+                Net::BitTorrent::Protocol::BEP05::Node->new(
+                                               host          => $node->[0],
+                                               port          => $node->[1],
+                                               sockaddr      => $sockaddr,
+                                               routing_table => (
+                                                   length $sockaddr == 28
+                                                   ? $self->ipv6_routing_table
+                                                   : $self->ipv4_routing_table
+                                               )
+                );
+            (  $node->ipv6
+             ? $self->ipv6_routing_table->add_node($node)
+             : $self->ipv4_routing_table->add_node($node)
+            )->find_node($self->nodeid);
+        }
+    };
+
+    #
+    for my $type (qw[get_peers announce_peer find_node]) {
+        has "_${type}_quests" => (isa      => 'ArrayRef[Ref]',
+                                  is       => 'ro',
+                                  init_arg => undef,
+                                  traits   => ['Array'],
+                                  handles  => {
+                                              "add_${type}_quest" => 'push',
+                                              "${type}_quests" => 'elements',
+                                              "get_${type}_quest"   => 'get',
+                                              "grep_${type}_quests" => 'grep',
+                                              "map_${type}_quests"  => 'map'
+                                  },
+                                  default => sub { [] }
+        );
+        after "add_${type}_quest" => sub {
+            require Scalar::Util;
+            Scalar::Util::weaken $_[0]->{"_${type}_quests"}->[-1];
         };
-        return
-            send($_client{refaddr $self}->_udp(),
-                 $packet, 0, $node->{q[paddr]});
     }
 
-    sub _ping_reply {
-        my ($self, $paddr, $tid) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return
-            send($_client{refaddr $self}->_udp(),
-                 _build_dht_reply_ping($tid, $node_id{refaddr $self}),
-                 0, $paddr);
-    }
+    #
+    my $onesixty_constraint;
 
-    sub _announce_peer_out {
-        my ($self, $node, $infohash) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return if $node->{q[prev_ann]} > time - (60 * 15);
-        my $tid = $self->_generate_token;
-        return if !$node->{q[token_i]};
-        my $packet =
-            _build_dht_query_announce($tid,
-                                      $node_id{refaddr $self},
-                                      $infohash,
-                                      $node->{q[token_i]},
-                                      $_client{refaddr $self}->_tcp_port
-            );
-        $outstanding_p{refaddr $self}{$tid} = {attempts => 1,
-                                               sent     => time,
-                                               packet   => $packet,
-                                               paddr    => $node->{q[paddr]}
-        };
-        $node->{q[prev_find]} = 0;
-        $node->{q[prev_ann]}  = time;
-        return
-            send($_client{refaddr $self}->_udp(),
-                 $packet, 0, $node->{q[paddr]});
-    }
-
-    sub _find_node_out {
-        my ($self, $node, $target) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return if $node->{q[prev_find]} > time - (60 * 5);
-        my $tid = $self->_generate_token;
-        my $packet = _build_dht_query_find_node($tid, $node_id{refaddr $self},
-                                                $target);
-        $outstanding_p{refaddr $self}{$tid} = {attempts => 1,
-                                               sent     => time,
-                                               packet   => $packet,
-                                               paddr    => $node->{q[paddr]}
-        };
-        $node->{q[prev_find]} = time;
-        return
-            send($_client{refaddr $self}->_udp(),
-                 $packet, 0, $node->{q[paddr]});
-    }
-
-    # Send find_node result to peer
-    sub _find_node_reply {
-        my ($self, $paddr, $tid, $id, $nodes) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return
-            send($_client{refaddr $self}->_udp(),
-                 _build_dht_reply_find_node($tid, $id, $nodes),
-                 0, $paddr);
-    }
-
-    sub _get_peers_out {
-        my ($self, $node, $info_hash) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return if $node->{q[prev_get]} > time - (60 * 10);
-        my $tid    = $self->_generate_token;
-        my $packet = _build_dht_query_get_peers($tid, $node_id{refaddr $self},
-                                                $info_hash);
-        $outstanding_p{refaddr $self}{$tid} = {attempts => 1,
-                                               sent     => time,
-                                               packet   => $packet,
-                                               paddr    => $node->{q[paddr]}
-        };
-        $node->{q[prev_get]} = time;
-        return
-            send($_client{refaddr $self}->_udp(),
-                 $packet, 0, $node->{q[paddr]});
-    }
-
-    # Methods | Private | Fake routing table
-    sub _locate_nodes_near_target {
-        my ($self, $target) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        my $_target = hex unpack q[H4], $target;
-        my @nodes;
-        for my $node (
-            sort {
-                hex(unpack q[H4], $a->{q[id]}) ^ $_target cmp
-                    hex(unpack q[H4], $b->{q[id]}) ^ $_target
-            }
-            grep { $_->{q[id]} } values %{$nodes{refaddr $self}}
+    sub get_peers {
+        my ($self, $infohash, $code) = @_;
+        $onesixty_constraint //=
+            Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+        $infohash = $onesixty_constraint->coerce($infohash);
+        require Scalar::Util;
+        Scalar::Util::weaken $self;
+        my $quest = [
+            $infohash,
+            $code,
+            [],
+            AE::timer(
+                0,
+                0.25 * 60,
+                sub {
+                    return if !$self;
+                    for my $rt ($self->ipv6_routing_table,
+                                $self->ipv4_routing_table)
+                    {   for my $node (
+                                     @{$rt->nearest_bucket($infohash)->nodes})
+                        {   $node->get_peers($infohash);
+                        }
+                    }
+                }
             )
-        {   push @nodes, $node;
-            last if scalar @nodes == 8;
-        }
-        return @nodes;
+        ];
+        $self->add_get_peers_quest($quest);
+        return $quest;
     }
 
-    # Methods | Private | Peer search
-    sub _scrape {
-        my ($self, $torrent) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        if (   (!$torrent)
-            || (!blessed $torrent)
-            || (!$torrent->isa(q[Net::BitTorrent::Torrent])))
-        {   carp
-                q[Net::BitTorrent::DHT::Node->_scrape() requires a Net::BitTorrent::Torrent];
+    sub announce_peer {
+        my ($self, $infohash, $port, $code) = @_;
+        $onesixty_constraint //=
+            Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+        $infohash = $onesixty_constraint->coerce($infohash);
+        require Scalar::Util;
+        Scalar::Util::weaken $self;
+        my $quest = [
+            $infohash,
+            $code, $port,
+            [],
+            AE::timer(
+                10,
+                0.25 * 60,
+                sub {
+                    return if !$self;
+                    for my $rt ($self->ipv6_routing_table,
+                                $self->ipv4_routing_table)
+                    {   for my $node (
+                                     @{$rt->nearest_bucket($infohash)->nodes})
+                        {   $node->announce_peer($infohash, $port);
+                        }
+                    }
+                }
+            )
+        ];
+        $self->add_announce_peer_quest($quest);
+        return $quest;
+    }
+
+    sub find_node {
+        my ($self, $target, $code) = @_;
+        $onesixty_constraint //=
+            Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+        $target = $onesixty_constraint->coerce($target);
+        require Scalar::Util;
+        Scalar::Util::weaken $self;
+        my $quest = [
+            $target, $code,
+            [],
+            AE::timer(
+                0,
+                0.25 * 60,
+                sub {
+                    return if !$self;
+                    for my $rt ($self->ipv6_routing_table,
+                                $self->ipv4_routing_table)
+                    {   for my $node (@{$rt->nearest_bucket($target)->nodes})
+                        {   $node->find_node($target);
+                        }
+                    }
+                }
+            )
+        ];
+        $self->add_find_node_quest($quest);
+        return $quest;
+    }
+
+    #
+    sub _on_udp6_in {
+        my ($self, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
+        my $packet = bdecode $data;
+        if (   !$packet
+            || !ref $packet
+            || ref $packet ne 'HASH'
+            || !keys %$packet)
+        {   $self->_inc_recv_invalid_count;
+            $self->_inc_recv_invalid_length(length $data);
             return;
         }
-        if ($torrent->private) {
-            carp q[Private torrents disallow DHT];
+        my $node
+            = $self->ipv6_routing_table->find_node_by_sockaddr($sockaddr);
+        if (!defined $node) {
+            $node =
+                Net::BitTorrent::Protocol::BEP05::Node->new(
+                                   host          => $host,
+                                   port          => $port,
+                                   routing_table => $self->ipv6_routing_table,
+                                   sockaddr      => $sockaddr
+                );
+        }
+    }
+
+    sub _on_udp4_in {
+        my ($self, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
+        my $packet = bdecode $data;
+        if (   !$packet
+            || !ref $packet
+            || ref $packet ne 'HASH'
+            || !keys %$packet
+            || !defined $packet->{'y'})
+        {   $self->_inc_recv_invalid_count;
+            $self->_inc_recv_invalid_length(length $data);
             return;
         }
-        my $info_hash = pack q[H40], $torrent->infohash;
-        for my $node ($self->_locate_nodes_near_target($info_hash)) {
-            $self->_find_node_out($node, $info_hash);
-            $self->_get_peers_out($node, $info_hash);
+        my $node
+            = $self->ipv4_routing_table->find_node_by_sockaddr($sockaddr);
+        if (!defined $node) {
+            require Net::BitTorrent::Protocol::BEP05::Node;
+            $node =
+                Net::BitTorrent::Protocol::BEP05::Node->new(
+                                   host          => $host,
+                                   port          => $port,
+                                   routing_table => $self->ipv4_routing_table,
+                                   sockaddr      => $sockaddr
+                );
         }
-        return 1;
-    }
 
-    sub _announce {
-        my ($self, $torrent) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        if (   (!$torrent)
-            || (!blessed $torrent)
-            || (!$torrent->isa(q[Net::BitTorrent::Torrent])))
-        {   carp
-                q[Net::BitTorrent::DHT::Node->_scrape() requires a Net::BitTorrent::Torrent];
-            return;
-        }
-        if ($torrent->private) {
-            carp q[Private torrents disallow DHT];
-            return;
-        }
-        my $info_hash = pack q[H40], $torrent->infohash;
-        for my $node ($self->_locate_nodes_near_target($info_hash)) {
+        # Basic identity checks
+        # TODO - if v is set, make sure it matches
+        #      - make note of changes in nodeid/sockaddr combinations
+        return $node->routing_table->del_node($node)
+            if $node->has_nodeid    # Wait, this is me!
+                && ($node->nodeid->Lexicompare($self->nodeid) == 0);
+        $node->touch;
 
-            #if !$node->{q[token_i]};
-            $self->_find_node_out($node, $info_hash);
-            $self->_announce_peer_out($node, $info_hash);
-        }
-        return 1;
-    }
+        #
+        if ($packet->{'y'} eq 'r') {
+            if (defined $packet->{'r'}) {
+                if ($node->is_expecting($packet->{'t'})) {
+                    $self->_inc_recv_replies_count;
+                    $self->_inc_recv_replies_length(length $data);
+                    $node->_v($packet->{'v'})
+                        if !$node->_has_v && defined $packet->{'v'};
+                    my $req
+                        = $node->del_request($packet->{'t'}); # For future ref
+                    $req->{'cb'}->($packet, $host, $port)
+                        if defined $req->{'cb'};
+                    my $type = $req->{'type'};
+                    $node->_nodeid($packet->{'r'}{'id'})
+                        if !$node->has_nodeid;    # Adds node to router table
+                    if ($type eq 'ping') {
+                    }
+                    elsif ($type eq 'find_node') {
+                        my ($quest) = $self->grep_find_node_quests(
+                            sub {
+                                defined $_
+                                    && $req->{'target'}->equal($_->[0]);
+                            }
+                        );
+                        return if !defined $quest;
+                        require Net::BitTorrent::Protocol::BEP23::Compact;
+                        my @nodes = map {
+                            Net::BitTorrent::Protocol::BEP23::Compact::uncompact_ipv4(
+                                                                           $_)
+                            } ref $packet->{'r'}{'nodes'}
+                            ? @{$packet->{'r'}{'nodes'}}
+                            : $packet->{'r'}{'nodes'};
+                        {
+                            my %seen = ();
+                            @{$quest->[2]}
+                                = grep { !$seen{$_->[0]}{$_->[1]}++ }
+                                @{$quest->[2]}, @nodes;
+                        }
+                        $self->ipv4_add_node($_) for @nodes;
+                        $quest->[1]->($quest->[0], $node, \@nodes);
+                    }
+                    elsif ($type eq 'get_peers') {
 
-    sub _generate_token {
-        my ($self) = @_;
-        return if !$_client{refaddr $self}->_use_dht;
-        return ++$tid{refaddr $self};
-    }
+                        # TODO - store token by id
+                        if (!(    defined $packet->{'r'}{'nodes'}
+                               || defined $packet->{'r'}{'values'}
+                            )
+                            )
+                        {    # Malformed packet
+                            ...;
+                        }
+                        if (defined $packet->{'r'}{'nodes'}) {
+                            require Net::BitTorrent::Protocol::BEP23::Compact;
+                            for my $new_node (    # XXX - may be ipv6
+                                Net::BitTorrent::Protocol::BEP23::Compact::uncompact_ipv4(
+                                                       $packet->{'r'}{'nodes'}
+                                )
+                                )
+                            {   $new_node = $self->ipv4_add_node($new_node);
+                                $new_node->get_peers($req->{'info_hash'})
+                                    if $new_node;
+                            }
+                            if (defined $packet->{'r'}{'values'}) {    # peers
+                                my ($quest) = $self->grep_get_peers_quests(
+                                    sub {
+                                        defined $_
+                                            && $req->{'info_hash'}
+                                            ->equal($_->[0]);
+                                    }
+                                );
+                                return if !defined $quest;
+                                require
+                                    Net::BitTorrent::Protocol::BEP23::Compact;
+                                my @peers = map {
+                                    Net::BitTorrent::Protocol::BEP23::Compact::uncompact_ipv4(
+                                                                           $_)
+                                    } ref $packet->{'r'}{'values'}
+                                    ? @{$packet->{'r'}{'values'}}
+                                    : $packet->{'r'}{'values'};
+                                {
+                                    my %seen = ();
+                                    @{$quest->[2]}
+                                        = grep { !$seen{$_->[0]}{$_->[1]}++ }
+                                        @{$quest->[2]}, @peers;
+                                }
+                                $quest->[1]
+                                    ->($req->{'info_hash'}, $node, \@peers);
+                            }
+                            if (defined $packet->{'r'}{'token'})
+                            {    # for announce_peer
+                                $node->_set_announce_peer_token_in(
+                                                  $req->{'info_hash'}->to_Hex,
+                                                  $packet->{'r'}{'token'});
+                            }
+                        }
+                    }
+                    elsif ($type eq 'announce_peer') {
+                        my ($quest) = $self->grep_announce_peer_quests(
+                            sub {
+                                defined $_
+                                    && $req->{'info_hash'}->equal($_->[0]);
+                            }
+                        );
+                        return if !defined $quest;
+                        push @{$quest->[3]}, [$node->host, $node->port];
+                        $quest->[1]
+                            ->($req->{'info_hash'}, $node, $quest->[2]);
+                        $node->get_prev_get_peers(0)
+                            if    # seek peers sooner than we should
+                            $node->defined_prev_get_peers($req->{'info_hash'}
+                            );
+                    }
+                    else {
+                        use Data::Dump;
+                        warn sprintf '%s:%d', $node->host, $node->port;
+                        ddx $packet;
+                        ddx $req;
+                        ...;
+                    }
+                }
+                else {            # A reply we are not expecting. Strange.
+                    $node->inc_fail;
+                    $self->_inc_recv_invalid_count;
+                    $self->_inc_recv_invalid_length(length $data);
 
-    sub as_string {
-        my ($self, $advanced) = @_;
-        my $dump = !$advanced ? $node_id{refaddr $self} : sprintf <<'END',
-Net::BitTorrent::DHT
-
-Node ID: %s
-END
-            $node_id{refaddr $self};
-        return defined wantarray ? $dump : print STDERR qq[$dump\n];
-    }
-
-    sub CLONE {
-        for my $_oID (keys %REGISTRY) {
-            my $_obj = $REGISTRY{$_oID};
-            my $_nID = refaddr $_obj;
-            for (@CONTENTS) {
-                $_->{$_nID} = $_->{$_oID};
-                delete $_->{$_oID};
+                    #...;
+                }
             }
-            weaken $_client{$_nID};
-            delete $outstanding_p{$_nID};
-            weaken($REGISTRY{$_nID} = $_obj);
-            delete $REGISTRY{$_oID};
         }
-        return 1;
+        elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
+            $self->_inc_recv_requests_count;
+            $self->_inc_recv_requests_length(length $data);
+            my $type = $packet->{'q'};
+            $node->_nodeid($packet->{'a'}{'id'})
+                if !$node->has_nodeid;    # Adds node to router table
+            if ($type eq 'ping' && defined $packet->{'t'}) {
+                return $node->_reply_ping($packet->{'t'});
+            }
+            elsif ($type eq 'get_peers'
+                   && defined $packet->{'a'}{'info_hash'})
+            {   $onesixty_constraint //=
+                    Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+                return
+                    $node->_reply_get_peers($packet->{'t'},
+                     $onesixty_constraint->coerce($packet->{'a'}{'info_hash'})
+                    );
+            }
+            elsif ($type eq 'find_node'
+                   && defined $packet->{'a'}{'target'})
+            {   $onesixty_constraint //=
+                    Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+                return
+                    $node->_reply_find_node($packet->{'t'},
+                      $onesixty_constraint->coerce($packet->{'a'}{'target'}));
+            }
+            elsif ($type eq 'announce_peer'
+                   && defined $packet->{'a'}{'info_hash'})
+            {   $onesixty_constraint //=
+                    Moose::Util::TypeConstraints::find_type_constraint(
+                                                      'NBTypes::DHT::NodeID');
+                return
+                    $node->_reply_announce_peer(
+                    $packet->{'t'},
+                    $onesixty_constraint->coerce($packet->{'a'}{'info_hash'}),
+                    $packet->{'a'},
+                    );
+            }
+            else {
+                ...;
+            }
+        }
+        elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
+            use Data::Dump;
+            warn sprintf 'Error from %s:%d', $node->host, $node->port;
+            ddx $packet;
+        }
+        else {
+            use Data::Dump;
+            warn sprintf '%s:%d', $node->host, $node->port;
+            ddx $packet;
+            ddx $data;
+
+            #...;
+            # TODO: ID checks against $packet->{'a'}{'id'}
+        }
     }
-    DESTROY {
-        my ($self) = @_;
-        for (@CONTENTS) { delete $_->{refaddr $self}; }
-        return delete $REGISTRY{refaddr $self};
+
+    sub dump_ipv4_buckets {
+        my @return = _dump_buckets($_[0], $_[0]->ipv4_routing_table());
+        return wantarray ? @return : sub { say $_ for @_ }
+            ->(@return);
+    }
+
+    sub dump_ipv6_buckets {
+        my @return = _dump_buckets($_[0], $_[0]->ipv6_routing_table());
+        return wantarray ? @return : sub { say $_ for @_ }
+            ->(@return);
+    }
+
+    sub _dump_buckets {
+        my ($self, $routing_table) = @_;
+        my @return = sprintf 'Num buckets: %d. My DHT ID: %s',
+            $routing_table->count_buckets, $self->nodeid->to_Hex;
+        my ($x, $t_primary, $t_backup) = (0, 0, 0);
+        for my $bucket (@{$routing_table->buckets}) {
+            push @return, sprintf 'Bucket %s: %s (replacement cache: %d)',
+                $x++, $bucket->floor->to_Hex, $bucket->count_backup_nodes;
+            for my $node (@{$bucket->nodes}) {
+                push @return,
+                    sprintf '    %s %s:%d fail:%d seen:%d age:%s ver:%s',
+                    $node->nodeid->to_Hex, $node->host,
+                    $node->port, $node->fail || 0, $node->seen,
+                    __duration(time - $node->birth), $node->v || '?';
+            }
+            $t_primary += $bucket->count_nodes;
+            $t_backup  += $bucket->count_backup_nodes;
+        }
+        push @return, sprintf 'Total peers: %d (in replacement cache %d)',
+            $t_primary + $t_backup, $t_backup;
+        push @return, sprintf 'Outstanding add nodes: %d',
+            scalar $routing_table->outstanding_add_nodes;
+        push @return,
+            sprintf
+            'Received: %d requests (%s), %d replies (%s), %d invalid (%s)',
+            $self->_recv_requests_count,
+            __data($self->_recv_requests_length),
+            $self->_recv_replies_count,
+            __data($self->_recv_replies_length),
+            $self->_recv_invalid_count,
+            __data($self->_recv_invalid_length);
+        push @return, sprintf 'Sent: %d requests (%s), %d replies (%s)',
+            $self->_send_requests_count,
+            __data($self->_send_requests_length),
+            $self->_send_replies_count,
+            __data($self->_send_replies_length);
+        return @return;
+    }
+
+    sub __duration ($) {
+        my %dhms = (d => int($_[0] / (24 * 60 * 60)),
+                    h => ($_[0] / (60 * 60)) % 24,
+                    m => ($_[0] / 60) % 60,
+                    s => $_[0] % 60
+        );
+        return join ' ',
+            map { $dhms{$_} ? $dhms{$_} . $_ : () } sort keys %dhms;
+    }
+
+    sub __data($) {
+              $_[0] >= 1073741824 ? sprintf('%0.2f GB', $_[0] / 1073741824)
+            : $_[0] >= 1048576    ? sprintf('%0.2f MB', $_[0] / 1048576)
+            : $_[0] >= 1024       ? sprintf('%0.2f KB', $_[0] / 1024)
+            :                       $_[0] . ' bytes';
     }
 }
 1;
@@ -670,101 +578,289 @@ END
 
 =head1 NAME
 
-Net::BitTorrent::DHT - Kademlia based Distributed Hash Table
+Net::BitTorrent::DHT - Kademlia-like DHT Node
 
-=head1 Constructor
+=head1 Description
 
-=over
-
-=item C<new ( [ARGS] )>
-
-Creates a C<Net::BitTorrent::DHT> object.  This constructor should not be
-used directly.
-
-=back
+BitTorrent uses a "distributed sloppy hash table" (DHT) for storing peer
+contact information for "trackerless" torrents. In effect, each peer becomes a
+tracker. The protocol is based on L<Kademila|/Kademlia> and is implemented
+over UDP.
 
 =head1 Methods
 
+L<Net::BitTorrent::DHT|Net::BitTorrent::DHT>'s API is simple but powerful.
+...well, I think so anyway.
+
+=head1 Net::BitTorrent::DHT->new( )
+
+The constructor accepts a number different arguments which all greatly affect
+the function of your DHT node. Any combination of the following arguments may
+be used during construction.
+
+Note that L<standalone|Net::BitTorrent::DHT::Standalone> DHT nodes do not
+support or require the C<client> argument but internally a
+L<Net::BitTorrent|Net::BitTorrent> client is passed and serves as the parent
+of this node. For brevity, the following examples assume you are building a
+L<standalone node|Net::BitTorrent::DHT::Standalone> (for reasearch, etc.).
+
+=head2 Net::BitTorrent::DHT->new( nodeid => 'F' x 40 )
+
+During construction, our local DHT nodeID can be set during construction. This
+is mostly useful when creating a
+L<standalone DHT node|Net::BitTorrent::DHT::Standalone>.
+
+    use Net::BitTorrent::DHT;
+    # Plain text hex string
+    my $node_a = Net::BitTorrent::DHT->new( nodeid => 'F' x 40 );
+    # Packed hex string
+    my $node_b = Net::BitTorrent::DHT->new( nodeid => pack 'H*', 'F' x 40 );
+    # Bit::Vector object
+    require Bit::Vector;
+    my $node_c = Net::BitTorrent::DHT->new(
+        nodeid => Bit::Vector->new_Hex( 160, 'ABCD' x 10 )
+    );
+    # A SHA1 digest
+    require Digest::SHA;
+    my $node_d = Net::BitTorrent::DHT->new(
+        nodeid => Digest::SHA::sha1( $possibly_random_value )
+    );
+
+Note that storing and reusing DHT nodeIDs over a number of sessions may seem
+advantagious (as if you had a "reserved parking place" in the DHT network) but
+will likely not improve performance as unseen nodeIDs are removed from remote
+routing tables after a half hour.
+
+Also note that, for ease of use, the constructor can coerce many different
+forms into the L<Bit::Vector|Bit::Vector> object we're expecting. NodeIDs,
+like SHA1 digests, are 160-bit integers.
+
+=head2 Net::BitTorrent::DHT->new( port => ... )
+
+Opens a specific UDP port number to the outside world on both IPv4 and IPv6.
+
+    use Net::BitTorrent::DHT;
+    # A single possible port
+    my $node_a = Net::BitTorrent::DHT->new( port => 1123 );
+    # A list of ports
+    my $node_b = Net::BitTorrent::DHT->new( port => [1235 .. 9875] );
+
+Note that when handed a list of ports, they are each tried until we are able
+to bind to the specific port.
+
+=head1 Net::BitTorrent::DHT->find_node( $target, $callback )
+
+This method asks for remote nodes with nodeIDs closer to our target. As the
+remote nodes respond, the callback is called with the following arguments:
+
 =over
 
-=item C<add_node ( { [...] } )>
+=item * target
 
-Adds a single node to the routing table.  Expects a hashref with the
-following keys:
+This is the target nodeid. This is useful when you've set the same callback
+for multiple, concurrent C<find_node( )> L<quest|/"Quests and Callbacks"> .
 
-=over
+=item * node
 
-=item C<ip>
+This is a blessed object. TODO.
 
-The hostname/IP address of the remote node.
+=item * nodes
 
-=item C<port>
-
-The port the remote node has open for DHT.
+This is a list of ip:port combinations the remote node claims are close to our
+target.
 
 =back
 
-This is an advanced method and should not (normally) should not be used.
-
-=item C<node_id ( )>
-
-Get the Node ID used to identify this L<client|/Net::BitTorrent> in the
-DHT swarm.
-
-=item C<nodes ( )>
-
-Returns a list of nodes from the routing table in a format suitable for
-handing off to L<add_node( )|/"add_node ( { [...] } )"> one by one.
-
-=item C<as_string ( [ VERBOSE ] )>
-
-Returns a 'ready to print' dump of the  object's data structure.  If
-called in void context, the structure is printed to C<STDERR>.
-C<VERBOSE> is a boolean value.
-
-=back
-
-=head1 Bugs
-
-In this alpha, there are a number of places where I break away from the
-specification.  These will all be fixed in a future version.
+A single C<find_node> L<quest|Net::BitTorrent::Notes/"Quests and Callbacks">
+is an array ref which contains the following data:
 
 =over
 
-=item *
+=item * target
 
-The routing table is flat.
+This is the target nodeID.
+
+=item * coderef
+
+This is the callback triggered as we locate new peers.
+
+=item * nodes
+
+This is a list of nodes we have announced to so far.
+
+=item * timer
+
+This is an L<AnyEvent|AnyEvent> timer which is triggered every few minutes.
+
+Don't modify this.
 
 =back
 
-=head1 Notes
+    use Net::BitTorrent::DHT;
+    my $node = Net::BitTorrent::DHT->new( );
+    my $quest_a = $dht->find_node( pack( 'H*', 'A' x 40 ), \&dht_cb );
+    my $quest_b = $dht->find_node( '1' x 40, \&dht_cb );
 
-While bandwidth to/from DHT nodes will probably never be limited like
-other traffic, in the future, it will be taken into account and "drained"
-from the rate limiter.  If there's a burst of DHT traffic, the peer
-traffic may be limited to avoid the total to exceed the global limit.
+    sub dht_cb {
+        my ($target, $node, $nodes) = @_;
+        say sprintf '%s:%d handed us %d nodes they claim are close to %s',
+            $node->host, $node->port, scalar(@$nodes),  $target->to_Hex;
+    }
 
-=head1 See Also
+=head1 Net::BitTorrent::DHT->get_peers( $infohash, $callback )
 
-I have used a number of references for implementation second opinions:
+This method initiates a search for peers serving a torrent with this infohash.
+As they are found, the callback is called with the following arguments:
 
 =over
 
-=item The Kademlia Paper
+=item * infohash
 
-http://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf
+This is the infohash related to these peers. This is useful when you've set
+the same callback for multiple, concurrent C<get_peers( )> quests.
 
-=item BEP 5: DHT
+=item * node
 
-http://www.bittorrent.org/beps/bep_0005.html
+This is a blessed object. TODO.
 
-=item Notes about the BitTorrent DHT Protocol from GetRight
+=item * peers
 
-http://getright.com/torrentdev.html
+This is an array ref of peers sent to us by aforementioned remote node.
 
 =back
 
+A single C<get_peers> L<quest|Net::BitTorrent::Notes/"Quests and Callbacks">
+is an array ref which contains the following data:
 
+=over
+
+=item * infohash
+
+This is the infohash related to these peers.
+
+=item * coderef
+
+This is the callback triggered as we locate new peers.
+
+=item * peers
+
+This is a compacted list of all peers found so far. This is probably more
+useful than the list passed to the callback.
+
+=item * timer
+
+This is an L<AnyEvent|AnyEvent> timer which is triggered every five minutes.
+When triggered, the node requests new peers from nodes in the bucket nearest
+to the infohash.
+
+Don't modify this.
+
+=back
+
+    use Net::BitTorrent::DHT;
+    my $node = Net::BitTorrent::DHT->new( );
+    my $quest_a = $dht->get_peers(pack('H*', 'A' x 40), \&dht_cb);
+    my $quest_b = $dht->get_peers('1' x 40, \&dht_cb);
+
+    sub dht_cb {
+        my ($infohash, $node, $peers) = @_;
+        say sprintf 'We found %d peers for %s from %s:%d via DHT', scalar(@$peers),
+            $infohash->to_Hex, $node->host, $node->port;
+    }
+
+=head1 Net::BitTorrent::DHT->announce_peer( $infohash, $port, $callback )
+
+This method announces that the peer controlling the querying node is
+downloading a torrent on a port. These outgoing queries are sent to nodes
+'close' to the target infohash. As the remote nodes respond, the callback is
+called with the following arguments:
+
+=over
+
+=item * infohash
+
+This is the infohash related to this announcment. This is useful when you've
+set the same callback for multiple, concurrent C<announce_peer( )>
+L<quest|/"Quests and Callbacks"> .
+
+=item * port
+
+This is port you defined above.
+
+=item * node
+
+This is a blessed object. TODO.
+
+=back
+
+A single C<announce_peer> L<quest|/"Quests and Callbacks"> is an array ref
+which contains the following data:
+
+=over
+
+=item * infohash
+
+This is the infohash related to these peers.
+
+=item * coderef
+
+This is the callback triggered as we locate new peers.
+
+=item * port
+
+This is port you defined above.
+
+=item * nodes
+
+This is a list of nodes we have announced to so far.
+
+=item * timer
+
+This is an L<AnyEvent|AnyEvent> timer which is triggered every few minutes.
+
+Don't modify this.
+
+=back
+
+C<announce_peer> queries require a token sent in reply to a C<get_peers> query
+so they should be used together.
+
+=for meditation
+Should I automatically send get_peers queries before an announce if the token
+is missing?
+
+    use Net::BitTorrent::DHT;
+    my $node = Net::BitTorrent::DHT->new( );
+    my $quest_a = $dht->announce_peer(pack('H*', 'A' x 40), 6881, \&dht_cb);
+    my $quest_b = $dht->announce_peer('1' x 40, 9585, \&dht_cb);
+
+    sub dht_cb {
+        my ($infohash, $port, $node) = @_;
+        say sprintf '%s:%d now knows we are serving %s on port %d',
+            $node->host, $node->port, $infohash->to_Hex, $port;
+    }
+
+=head1 Net::BitTorrent::DHT->dump_ipv4_buckets( )
+
+This is a quick utility method which returns or prints (depending on context)
+a list of the IPv4-based routing table's bucket structure.
+
+    use Net::BitTorrent::DHT;
+    my $node = Net::BitTorrent::DHT->new( );
+    # After some time has passed...
+    $node->dump_ipv4_buckets; # prints to STDOUT with say
+    my @dump = $node->dump_ipv4_buckets; # returns list of lines
+
+=head1 Net::BitTorrent::DHT->dump_ipv6_buckets( )
+
+This is a quick utility method which returns or prints (depending on context)
+a list of the IPv6-based routing table's bucket structure.
+
+    use Net::BitTorrent::DHT;
+    my $node = Net::BitTorrent::DHT->new( );
+    # After some time has passed...
+    $node->dump_ipv6_buckets; # prints to STDOUT with say
+    my @dump = $node->dump_ipv6_buckets; # returns list of lines
 
 =head1 Author
 
@@ -774,22 +870,24 @@ CPAN ID: SANKO
 
 =head1 License and Legal
 
-Copyright (C) 2008-2009 by Sanko Robinson E<lt>sanko@cpan.orgE<gt>
+Copyright (C) 2008-2010 by Sanko Robinson <sanko@cpan.org>
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of The Artistic License 2.0.  See the F<LICENSE>
-file included with this distribution or
-http://www.perlfoundation.org/artistic_license_2_0.  For
-clarification, see http://www.perlfoundation.org/artistic_2_0_notes.
+This program is free software; you can redistribute it and/or modify it under
+the terms of
+L<The Artistic License 2.0|http://www.perlfoundation.org/artistic_license_2_0>.
+See the F<LICENSE> file included with this distribution or
+L<notes on the Artistic License 2.0|http://www.perlfoundation.org/artistic_2_0_notes>
+for clarification.
 
-When separated from the distribution, all POD documentation is covered
-by the Creative Commons Attribution-Share Alike 3.0 License.  See
-http://creativecommons.org/licenses/by-sa/3.0/us/legalcode.  For
-clarification, see http://creativecommons.org/licenses/by-sa/3.0/us/.
+When separated from the distribution, all original POD documentation is
+covered by the
+L<Creative Commons Attribution-Share Alike 3.0 License|http://creativecommons.org/licenses/by-sa/3.0/us/legalcode>.
+See the
+L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/us/>.
 
-Neither this module nor the L<Author|/Author> is affiliated with
-BitTorrent, Inc.
+Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
+Inc.
 
-=for svn $Id: DHT.pm d3c97de 2009-09-12 04:31:46Z sanko@cpan.org $
+=for rcs $Id: DHT.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
 
 =cut

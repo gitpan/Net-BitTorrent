@@ -1,10 +1,31 @@
-Version 0.052 | 2010-04-02 18:31:29Z (Fri, 02 Apr 2010) | 07f0c35
+Version 0.XXXXX | In the not too distant future | be4f2da
+
+    API Changes/Compatibility Information:
+     * Rewrite!
+
+    Resolved Issues/Bug Fixes:
+     * Rewrite!
+
+    Protocol/Behavioral Changes:
+     * Rewrite!
 
     Documentation/Sample Code/Test Suite:
-    * miniswarm tests are given less time before giving up
-    * 'bad' test (checking if port was opened twice... which seems to be okay
+     * Guess.
+
+    Notes:
+     * Meanwhile...
+         - This distribution is going through a rewrite. You know, ...fyi.
+         - This particular dist is being uploaded to test the DHT code so far.
+         - See http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent
+
+---
+Version 0.0052 | 2010-06-18 00:24:58Z (Fri, 18 Jun 2010) | d08d622
+
+    Documentation/Sample Code/Test Suite:
+     * miniswarm tests are given less time before giving up
+     * 'bad' test (checking if port was opened twice... which seems to be okay
         on some systems) has been removed
-    * Removing t/900_data/950_torrents/951_single.torrent which was used to
+     * Removing t/900_data/950_torrents/951_single.torrent which was used to
         test large file support (caused "Out of memory!" errors on smokers
         with limited resources)
 
@@ -12,6 +33,7 @@ Version 0.052 | 2010-04-02 18:31:29Z (Fri, 02 Apr 2010) | 07f0c35
      * This will probably be the last 'stable' version before Net::BitTorrent
         is rewritten. Stuff in TODO.pod will be expanded and used as a roadmap
 
+---
 Version 0.051 | 2009-09-12 04:52:06Z (Sat, 12 Sep 2009) | 694da26
 
     API Changes/Compatibility Information:
@@ -342,7 +364,7 @@ Version 0.020 | 2008-05-22 19:09:05 -0400 (Thu, 22 May 2008)
   - Upgrade is recommended in general.
   - Upgrade is strongly recommended for Win32 systems.
   - New sample code: scripts/web-gui.pl
-    + µTorrent WebUI-like demo of alternative event processing.
+    + ÂµTorrent WebUI-like demo of alternative event processing.
   - To keep N::B from growing too messy and to make co-development attractive,
       I'm imposing some coding standards, defining what should be internal,
       and deciding how N::B should behave.  Between that and the nice weather,
@@ -410,8 +432,8 @@ Version 0.008 | 2008-04-01 19:46:20 -0400 (Tue, 01 Apr 2008)
 
 _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
-    http://github.com/sanko/net-bittorrent/commits/master
+    http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/
 
-$Ver: 0.052 $ from git $Rev: 07f0c35 $
-$Date: 2010-04-02 18:31:29Z (Fri, 02 Apr 2010) $
-$Url: http://github.com/sanko/net-bittorrent//raw/07f0c359852c544af35477308b26705bc2e593a5/Changes $
+$Ver: 0.074000_001 $ from git $Rev: be4f2da $
+$Date: 2010-06-28 16:13:33Z (Mon, 28 Jun 2010) $
+$Url: http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent/raw/master/Changes $
