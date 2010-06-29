@@ -22,42 +22,33 @@ my $mb = $class->new(
     dist_author   => 'Sanko Robinson <sanko@cpan.org>',
     dist_abstract => 'BitTorrent peer-to-peer protocol',
     requires      => {
-                 'AnyEvent'                   => 0,
+                 AnyEvent                     => 0,
                  'AnyEvent::Handle::Throttle' => '0.000002002',
                  'Bit::Vector'                => 0,
-                 'Moose'                      => 0,
                  'Digest::SHA'                => 5.45,
-                 'Exporter'                   => 0,
+                 Exporter                     => 0,
                  'File::Path'                 => 0,
                  'File::Spec'                 => 0,
                  'Module::Build'              => 0.30,
-                 'perl'                       => '5.10.0',
+                 Moose                        => 0,
+                 perl                         => '5.12.0',
                  'Scalar::Util'               => 1.19,
                  'Test::More'                 => 0.80
     },
     build_requires => {'Module::Build' => 0.30,
-                       'Test::More'    => 0.80,
-                       'perl'          => '5.10.0',
-                       'Module::Build' => 0.30,
+                       perl            => '5.12.0',
                        'TAP::Harness'  => 3.18,
-                       'Test::Class'   => 0.35
+                       'Test::Class'   => 0.35,
+                       'Test::More'    => 0.80
     },
-    recommends       => {'perl' => '5.12.0'},
+    recommends       => {perl => '5.13.0'},
     test_files       => \@tests,
     test_file_exts   => [qw(.t .tap .txt)],
     use_tap_harness  => 1,
     tap_harness_args => {
-        jobs  => 9,
-        rules => {
-            par => [
-                {seq => '/t/10000_by_class/Net/BitTorrent/DHT/*'},
-
-                #{ seq => '../ext/IO_Compress_Zlib/t/*' },
-                #{ seq => '../lib/CPANPLUS/*' },
-                #{ seq => '../lib/ExtUtils/t/*' },
-                '*'
-            ]
-        }
+         jobs => 9,
+         rules =>
+             {par => [{seq => '/t/10000_by_class/Net/BitTorrent/DHT/*'}, '*']}
     },
     meta_merge => {
         keywords  => [qw[BitTorrent torrent client DHT UDP]],
@@ -122,6 +113,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Build.PL be4f2da 2010-06-28 16:13:33Z sanko@cpan.org $
+=for rcs $Id: Build.PL 1e746b1 2010-06-29 05:51:38Z sanko@cpan.org $
 
 =cut

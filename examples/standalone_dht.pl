@@ -1,11 +1,11 @@
 use strict;
 use warnings;
-use 5.10.1;
+use 5.12.0;
 use AnyEvent;
 use lib '../lib';
 use Net::BitTorrent::DHT;
 $|++;
-our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 4; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
 # Standalone node with user-defined port and boot_nodes
 my $dht = Net::BitTorrent::DHT->new(
@@ -73,6 +73,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Notes.pod 5d9d1db 2010-06-07 13:52:01Z sanko@cpan.org $
+=for rcs $Id: standalone_dht.pl 3b6f767 2010-06-29 03:18:37Z sanko@cpan.org $
 
 =cut

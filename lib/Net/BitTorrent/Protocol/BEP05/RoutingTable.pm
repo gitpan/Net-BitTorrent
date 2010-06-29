@@ -7,8 +7,8 @@ package Net::BitTorrent::Protocol::BEP05::RoutingTable;
     use Net::BitTorrent::Protocol::BEP05::Packets qw[:all];
     use Net::BitTorrent::Network::Utility qw[:paddr :sockaddr];
     use Net::BitTorrent::Types;
-    use 5.10.0;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    use 5.12.0;
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 4; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     #
     has 'tracker' => (isa      => 'Net::BitTorrent::Protocol::BEP05::Tracker',
@@ -160,6 +160,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Notes.pod 5d9d1db 2010-06-07 13:52:01Z sanko@cpan.org $
+=for rcs $Id: RoutingTable.pm a9b7d6f 2010-06-29 05:55:21Z sanko@cpan.org $
 
 =cut

@@ -3,7 +3,7 @@ package Net::BitTorrent;
     use 5.010;
     use Moose;
     use Moose::Util::TypeConstraints;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 4; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use AnyEvent;
     use lib '../../lib';
     use Net::BitTorrent::Types qw[:client];
@@ -127,7 +127,7 @@ package Net::BitTorrent;
                                writer     => '_set_' . $prot . $ipv,
                                predicate  => '_has_' . $prot . $ipv
                     );
-                has $prot 
+                has $prot
                     . $ipv
                     . '_sock' => (
                                  is         => 'ro',
@@ -138,7 +138,7 @@ package Net::BitTorrent;
                                  writer => '_set_' . $prot . $ipv . '_sock',
                                  predicate => '_has_' . $prot . $ipv . '_sock'
                     );
-                has $prot 
+                has $prot
                     . $ipv
                     . '_host' => (
                                  is      => 'ro',
@@ -423,6 +423,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: BitTorrent.pm be4f2da 2010-06-28 16:13:33Z sanko@cpan.org $
+=for rcs $Id: BitTorrent.pm a9b7d6f 2010-06-29 05:55:21Z sanko@cpan.org $
 
 =cut

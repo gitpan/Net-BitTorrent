@@ -145,6 +145,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Notes.pod 5d9d1db 2010-06-07 13:52:01Z sanko@cpan.org $
+=for rcs $Id: UDP.pm 025ed39 2010-06-29 03:17:29Z sanko@cpan.org $
 
 =cut
