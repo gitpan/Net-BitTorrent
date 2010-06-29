@@ -23,7 +23,7 @@
    "provides" : {
       "Net::BitTorrent" : {
          "file" : "lib/Net/BitTorrent.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::DHT" : {
          "file" : "lib/Net/BitTorrent/DHT.pm",
@@ -39,15 +39,15 @@
       },
       "Net::BitTorrent::Network::TCP" : {
          "file" : "lib/Net/BitTorrent/Network/TCP.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Network::UDP" : {
          "file" : "lib/Net/BitTorrent/Network/UDP.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Network::Utility" : {
          "file" : "lib/Net/BitTorrent/Network/Utility.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Peer" : {
          "file" : "lib/Net/BitTorrent/Peer.pm",
@@ -71,11 +71,11 @@
       },
       "Net::BitTorrent::Protocol::BEP05::Bucket" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP05/Bucket.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Protocol::BEP05::Node" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP05/Node.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Protocol::BEP05::Packets" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP05/Packets.pm",
@@ -83,11 +83,11 @@
       },
       "Net::BitTorrent::Protocol::BEP05::RoutingTable" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP05/RoutingTable.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Protocol::BEP05::Tracker" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP05/Tracker.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Protocol::BEP07::Compact" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP07/Compact.pm",
@@ -151,5 +151,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_001"
+   "version" : "0.074000_002"
 }
