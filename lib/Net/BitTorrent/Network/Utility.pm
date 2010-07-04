@@ -13,7 +13,7 @@ package Net::BitTorrent::Network::Utility;
     require Exporter;
     our @ISA = qw[Exporter];
     our %EXPORT_TAGS = (socket   => [qw[client server]],
-                        paddr    => [qw[sockaddr paddr2ip]],
+                        paddr    => [qw[sockaddr paddr2ip ip2paddr]],
                         sockaddr => [qw[pack_sockaddr unpack_sockaddr]],
                         vars     => [qw[%cache]]
     );
@@ -38,18 +38,50 @@ package Net::BitTorrent::Network::Utility;
 
     sub paddr2ip ($) {    # snagged from NetAddr::IP::Util
         return inet_ntoa($_[0]) if length $_[0] == 4;    # ipv4
+        return inet_ntoa($1)
+            if length $_[0] == 16 && $_[0] =~ m[^\0{12}(.{4})$];    # ipv4
         return unless length($_[0]) == 16;
         my @hex = (unpack('n8', $_[0]));
         $hex[9] = $hex[7] & 0xff;
         $hex[8] = $hex[7] >> 8;
         $hex[7] = $hex[6] & 0xff;
         $hex[6] >>= 8;
-        my $return = sprintf("%X:%X:%X:%X:%X:%X:%D:%D:%D:%D", @hex);
-        $return =~ s/(0+:)+/:/;
-        $return =~ s/^0+//;
-        $return =~ s/^:+/::/;
-        $return =~ s/::0+/::/;
+        my $return = sprintf '%X:%X:%X:%X:%X:%X:%D:%D:%D:%D', @hex;
+        $return =~ s|(0+:)+ |:|x;
+        $return =~ s|^0+     ||x;
+        $return =~ s|^:+   |::|x;
+        $return =~ s|::0+  |::|x;
         return $return;
+    }
+
+    sub ip2paddr ($) {
+        my ($addr) = @_;
+        $addr = '::' . $addr unless $addr =~ /:/;
+        if ($addr =~ /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+        {    # mixed hex, dot-quad
+            return undef if $2 > 255 || $3 > 255 || $4 > 255 || $5 > 255;
+            $addr = sprintf('%s%X%02X:%X%02X', $1, $2, $3, $4, $5)
+                ;    # convert to pure hex
+        }
+        my $c;
+        return undef
+            if $addr =~ /[^:\da-f]/i ||    # non-hex character
+                (($c = $addr) =~ s/::/x/ && $c =~ /(?:x|:):/)
+                ||                         # double :: ::?
+                $addr =~ /[0-9a-fA-F]{5,}/;    # more than 4 digits
+        $c = $addr =~ tr[:][:];                # count the colons
+        return undef if $c < 7 && $addr !~ /::/;
+        if ($c > 7) {                          # strip leading or trailing ::
+            return undef
+                unless $addr =~ s|^::|:|
+                    || $addr =~ s|::$|:|;
+            return undef if --$c > 7;
+        }
+        $addr =~ s|::|:::| while $c++ < 7;     # expand compressed fields
+        $addr .= 0 if $addr =~ m[:$];
+        my @hex = split ':', $addr;
+        $hex[$_] = hex $hex[$_] || 0 for 0 .. $#hex;
+        return pack 'n8', @hex;
     }
 
     sub pack_sockaddr {
@@ -161,6 +193,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Utility.pm 025ed39 2010-06-29 03:17:29Z sanko@cpan.org $
+=for rcs $Id: Utility.pm dd2d8d4 2010-07-03 05:24:58Z sanko@cpan.org $
 
 =cut

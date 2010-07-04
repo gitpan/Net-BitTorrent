@@ -5,7 +5,7 @@ package Net::BitTorrent::DHT::Standalone;
     use Net::BitTorrent::Protocol::BEP03::Bencode qw[bdecode];
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     has 'port' => (is      => 'ro',
-                   isa     => 'Int',
+                   isa     => 'Int|ArrayRef[Int]',
                    builder => '_build_port',
                    writer  => '_set_port'
     );
@@ -19,7 +19,7 @@ package Net::BitTorrent::DHT::Standalone;
         has 'udp'
             . $ipv => (is         => 'ro',
                        init_arg   => undef,
-                       isa        => 'Object',
+                       isa        => 'Maybe[Object]',
                        lazy_build => 1,
                        writer     => '_set_udp' . $ipv,
                        predicate  => '_has_udp' . $ipv
@@ -44,42 +44,115 @@ package Net::BitTorrent::DHT::Standalone;
             );
     }
 
-    sub _build_udp6 {
-        my ($self) = @_;
-        require Net::BitTorrent::Network::Utility;
-        return Net::BitTorrent::Network::Utility::server(
-            $self->udp6_host,
-            $self->port,
-            sub { $self->_on_udp6_in(@_); },
-            sub {
-                my ($sock, $host, $port) = @_;
+    #
+    has 'ip_filter' => (is       => 'ro',
+                        isa      => 'Net::BitTorrent::Network::IPFilter',
+                        init_arg => undef,
+                        builder  => '_build_ip_filter'
+    );
 
-                #if ($self->port != $port) { ...; }
-                $self->_set_udp6_sock($sock);
-                $self->_set_udp6_host($host);
-                $self->_set_port($port);
-            },
-            'udp'
+    sub _build_ip_filter {
+        require Net::BitTorrent::Network::IPFilter;
+        Net::BitTorrent::Network::IPFilter->new();
+    }
+
+    sub _build_udp6 {
+        my $s = shift;
+        my $server;
+        for my $port (ref $s->port ? @{$s->port} : $s->port) {
+            require Net::BitTorrent::Network::Utility;
+            $server = Net::BitTorrent::Network::Utility::server(
+                $s->udp6_host,
+                $port,
+                sub { $s->_on_udp6_in(@_); },
+                sub {
+                    my ($actual_socket, $actual_host, $actual_port) = @_;
+
+                    #if ($self->port != $port) { ...; }
+                    $s->_set_udp6_sock($actual_socket);
+                    $s->_set_udp6_host($actual_host);
+                    $s->_set_port($actual_port);
+                },
+                'udp'
+            );
+            last if defined $server;
+        }
+        return $server if $server;
+        $s->trigger_listen_failed(
+            {protocol => 'udp6',
+             severity => 'fatal',
+             event    => 'listen_failed',
+             message => 'Failed to open IPv6 port to the outside world: ' . $!
+            }
         );
+        return;
     }
 
     sub _build_udp4 {
-        my ($self) = @_;
-        require Net::BitTorrent::Network::Utility;
-        return Net::BitTorrent::Network::Utility::server(
-            $self->udp4_host,
-            $self->port,
-            sub { $self->_on_udp4_in(@_); },
-            sub {
-                my ($sock, $host, $port) = @_;
-                if ($self->port != $port) { ...; }
-                $self->_set_udp4_sock($sock);
-                $self->_set_udp4_host($host);
-                $self->_set_port($port);
-            },
-            'udp'
+        my $s = shift;
+        my $server;
+        for my $port (ref $s->port ? @{$s->port} : $s->port) {
+            require Net::BitTorrent::Network::Utility;
+            $server = Net::BitTorrent::Network::Utility::server(
+                $s->udp4_host,
+                $port,
+                sub { $s->_on_udp4_in(@_); },
+                sub {
+                    my ($actual_socket, $actual_host, $actual_port) = @_;
+
+                    #if ($self->port != $port) { ...; }
+                    $s->_set_udp4_sock($actual_socket);
+                    $s->_set_udp4_host($actual_host);
+                    $s->_set_port($actual_port);
+                },
+                'udp'
+            );
+            last if defined $server;
+        }
+        return $server if $server;
+        $s->trigger_listen_failed(
+            {protocol => 'udp4',
+             severity => 'fatal',
+             event    => 'listen_failed',
+             message => 'Failed to open IPv4 port to the outside world: ' . $!
+            }
         );
+        return;
     }
+    around '_on_udp4_in' => sub {
+        my ($c, $s, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
+        my $range = $s->ip_filter->is_banned($host);
+        if (defined $range) {
+            $s->trigger_ip_filter(
+                           {protocol => 'udp4',
+                            severity => 'debug',
+                            event    => 'ip_filter',
+                            ip       => $host,
+                            range    => $range,
+                            message => 'Incoming data was blocked by ipfilter'
+                           }
+            );
+            return;
+        }
+        $c->($s, $sock, $sockaddr, $host, $port, $data, $flags);
+    };
+    around '_on_udp6_in' => sub {
+        my ($c, $s, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
+        my $range = $s->ip_filter->is_banned($host);
+        if (defined $range) {
+            $s->trigger_ip_filter(
+                           {protocol => 'udp6',
+                            severity => 'debug',
+                            event    => 'ip_filter',
+                            ip       => $host,
+                            range    => $range,
+                            message => 'Incoming data was blocked by ipfilter'
+                           }
+            );
+            return;
+        }
+        $c->($s, $sock, $sockaddr, $host, $port, $data, $flags);
+    };
 }
 1;
 
@@ -137,6 +210,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Standalone.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
+=for rcs $Id: Standalone.pm 8f5bca1 2010-07-03 19:49:02Z sanko@cpan.org $
 
 =cut

@@ -9,7 +9,7 @@ our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 4; our $VERSION = sprintf('%1.3f%
 
 # Standalone node with user-defined port and boot_nodes
 my $dht = Net::BitTorrent::DHT->new(
-          port => 1338,
+          port => [1338, 0],
           boot_nodes =>
               [['router.bittorrent.com', 6881], ['router.utorrent.com', 6881]]
 );
@@ -73,6 +73,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: standalone_dht.pl 3b6f767 2010-06-29 03:18:37Z sanko@cpan.org $
+=for rcs $Id: standalone_dht.pl 058713a 2010-07-03 19:49:52Z sanko@cpan.org $
 
 =cut

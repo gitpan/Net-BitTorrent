@@ -8,8 +8,8 @@ Net::BitTorrent::Protocol::BEP05 - DHT Protocol
 
 BEP: 5
 Title: DHT Protocol
-Version: $Revision: 5b0c1e21aeb18611074c80c896da7bebe5c076e1 $
-Last-Modified: $Date: 2010-05-17 22:12:16Z (Mon, 17 May 2010) $
+Version: $Revision: c749a99651402641638eeb4f05f616fee2290289 $
+Last-Modified: $Date: 2010-07-03 14:19:08Z (Sat, 03 Jul 2010) $
 Author:  Andrew Loewenstern <drue@bittorrent.com>
 Status:  Draft
 Type:    Standards Track
@@ -342,6 +342,8 @@ Information System Based on the XOR Metric", *IPTPS 2002*.
 http://www.cs.rice.edu/Conferences/IPTPS02/109.pdf
 
 =item X<entropy> Use SHA1 and plenty of entropy to ensure a unique ID.
+
+=back
 
 =head1 Copyright
 

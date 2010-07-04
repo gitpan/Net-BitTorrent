@@ -143,6 +143,19 @@ package Net::BitTorrent::Peer;
     my $infohash_constraint;
     after 'BUILD' => sub {
         my ($s, $a) = @_;
+        my $range = $s->client->ip_filter->is_banned($s->host);
+        if (defined $range) {
+            $s->trigger_ip_filter(
+                               {protocol => ($s->ipv6 ? 'udp6' : 'udp4'),
+                                severity => 'debug',
+                                event    => 'ip_filter',
+                                ip       => $s->host,
+                                range    => $range,
+                                message => 'Connection terminated by ipfilter'
+                               }
+            );
+            return $s->disconnect('Connection terminated by ipfilter');
+        }
         require Scalar::Util;
         Scalar::Util::weaken $s;
         my $hand_shake_writer = sub {
@@ -323,15 +336,14 @@ package Net::BitTorrent::Peer;
         ...;
     };
 =cut
-
     my %_packet_dispatch;
 
     sub _handle_packet {
         my ($self, $packet) = @_;
         return if !$self->has_torrent;
         return if !$self->has_handle;
-        use Data::Dump;
-        ddx $packet;
+        #use Data::Dump;
+        #ddx $packet;
         %_packet_dispatch = (
             BITFIELD => sub {    # 5
                 my ($s, $bitfield) = @_;

@@ -23,7 +23,8 @@ package Net::BitTorrent::DHT;
     # Standalone?
     after 'BUILD' => sub {
         my ($s, $a) = @_;
-        return has '+client' => (handles => qr[^udp.*]) if $s->has_client;
+        return has '+client' => (handles => qr[^(?:udp.*|ip_filter)])
+            if $s->has_client;
         require Moose::Util;
         Moose::Util::apply_all_roles($s,
                                      'Net::BitTorrent::DHT::Standalone',
@@ -71,21 +72,34 @@ package Net::BitTorrent::DHT;
 
     #
     sub send {
-        my ($self, $node, $packet, $reply) = @_;
+        my ($s, $node, $packet, $reply) = @_;
+        my $range = $s->ip_filter->is_banned($node->host);
+        if (defined $range) {
+            $s->trigger_ip_filter(
+                           {protocol => ($node->ipv6 ? 'udp6' : 'udp4'),
+                            severity => 'debug',
+                            event    => 'ip_filter',
+                            ip       => $node->host,
+                            range    => $range,
+                            message => 'Outgoing data was blocked by ipfilter'
+                           }
+            );
+            return $s->routing_table->del_node($node);
+        }
         my $sent = send((  $node->ipv6
-                         ? $self->udp6_sock
-                         : $self->udp4_sock
+                         ? $s->udp6_sock
+                         : $s->udp4_sock
                         ),
                         $packet, 0,
                         $node->sockaddr
         );
         if ($reply) {
-            $self->_inc_send_replies_count;
-            $self->_inc_send_replies_length($sent);
+            $s->_inc_send_replies_count;
+            $s->_inc_send_replies_length($sent);
         }
         else {
-            $self->_inc_send_requests_count;
-            $self->_inc_send_requests_length($sent);
+            $s->_inc_send_requests_count;
+            $s->_inc_send_requests_length($sent);
         }
         return $sent;
     }
@@ -428,11 +442,11 @@ package Net::BitTorrent::DHT;
                             );
                     }
                     else {
-                        use Data::Dump;
+                        #use Data::Dump;
                         warn sprintf '%s:%d', $node->host, $node->port;
-                        ddx $packet;
-                        ddx $req;
-                        ...;
+                        #ddx $packet;
+                        #ddx $req;
+                        #...;
                     }
                 }
                 else {            # A reply we are not expecting. Strange.
@@ -489,15 +503,15 @@ package Net::BitTorrent::DHT;
             }
         }
         elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
-            use Data::Dump;
+            #use Data::Dump;
             warn sprintf 'Error from %s:%d', $node->host, $node->port;
-            ddx $packet;
+            #ddx $packet;
         }
         else {
-            use Data::Dump;
+            #use Data::Dump;
             warn sprintf '%s:%d', $node->host, $node->port;
-            ddx $packet;
-            ddx $data;
+            #ddx $packet;
+            #ddx $data;
 
             #...;
             # TODO: ID checks against $packet->{'a'}{'id'}
@@ -768,7 +782,7 @@ Don't modify this.
             $infohash->to_Hex, $node->host, $node->port;
     }
 
-=head1 Net::BitTorrent::DHT->announce_peer( $infohash, $port, $callback )
+=head1 Net::BitTorrent::DHT->B<announce_peer>( $infohash, $port, $callback )
 
 This method announces that the peer controlling the querying node is
 downloading a torrent on a port. These outgoing queries are sent to nodes
@@ -888,6 +902,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
+=for rcs $Id: DHT.pm 1339c8b 2010-07-04 02:14:55Z sanko@cpan.org $
 
 =cut
