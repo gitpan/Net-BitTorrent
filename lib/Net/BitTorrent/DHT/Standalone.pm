@@ -3,7 +3,7 @@ package Net::BitTorrent::DHT::Standalone;
     use Moose::Role;
     use lib '../../../../lib';
     use Net::BitTorrent::Protocol::BEP03::Bencode qw[bdecode];
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     has 'port' => (is      => 'ro',
                    isa     => 'Int|ArrayRef[Int]',
                    builder => '_build_port',
@@ -24,7 +24,7 @@ package Net::BitTorrent::DHT::Standalone;
                        writer     => '_set_udp' . $ipv,
                        predicate  => '_has_udp' . $ipv
             );
-        has 'udp' 
+        has 'udp'
             . $ipv
             . '_sock' => (is         => 'ro',
                           init_arg   => undef,
@@ -34,7 +34,7 @@ package Net::BitTorrent::DHT::Standalone;
                           writer     => '_set_udp' . $ipv . '_sock',
                           predicate  => '_has_udp' . $ipv . '_sock'
             );
-        has 'udp' 
+        has 'udp'
             . $ipv
             . '_host' => (is        => 'ro',
                           isa       => 'Str',
@@ -58,7 +58,8 @@ package Net::BitTorrent::DHT::Standalone;
 
     sub _build_udp6 {
         my $s = shift;
-        my $server;
+        my ($server, $actual_socket, $actual_host, $actual_port);
+
         for my $port (ref $s->port ? @{$s->port} : $s->port) {
             require Net::BitTorrent::Network::Utility;
             $server = Net::BitTorrent::Network::Utility::server(
@@ -66,7 +67,7 @@ package Net::BitTorrent::DHT::Standalone;
                 $port,
                 sub { $s->_on_udp6_in(@_); },
                 sub {
-                    my ($actual_socket, $actual_host, $actual_port) = @_;
+                      ($actual_socket, $actual_host, $actual_port) = @_;
 
                     #if ($self->port != $port) { ...; }
                     $s->_set_udp6_sock($actual_socket);
@@ -77,20 +78,30 @@ package Net::BitTorrent::DHT::Standalone;
             );
             last if defined $server;
         }
-        return $server if $server;
-        $s->trigger_listen_failed(
+        if ($server) {
+            $s->trigger_listen_success(
+            {port => $actual_port,
+                protocol => 'udp6',
+             severity => 'debug',
+             event    => 'listen_success',
+             message => sprintf 'Opened IPv6 port %d to the outside world', $actual_port
+            }
+        )}
+        else{
+            $s->trigger_listen_failure(
             {protocol => 'udp6',
              severity => 'fatal',
-             event    => 'listen_failed',
+             event    => 'listen_failure',
              message => 'Failed to open IPv6 port to the outside world: ' . $!
             }
-        );
-        return;
+        )
+        }
+        return $server;
     }
 
     sub _build_udp4 {
         my $s = shift;
-        my $server;
+        my ($server, $actual_socket, $actual_host, $actual_port);
         for my $port (ref $s->port ? @{$s->port} : $s->port) {
             require Net::BitTorrent::Network::Utility;
             $server = Net::BitTorrent::Network::Utility::server(
@@ -98,8 +109,7 @@ package Net::BitTorrent::DHT::Standalone;
                 $port,
                 sub { $s->_on_udp4_in(@_); },
                 sub {
-                    my ($actual_socket, $actual_host, $actual_port) = @_;
-
+                   ($actual_socket, $actual_host, $actual_port) = @_;
                     #if ($self->port != $port) { ...; }
                     $s->_set_udp4_sock($actual_socket);
                     $s->_set_udp4_host($actual_host);
@@ -109,26 +119,35 @@ package Net::BitTorrent::DHT::Standalone;
             );
             last if defined $server;
         }
-        return $server if $server;
-        $s->trigger_listen_failed(
+        if ($server) {
+            $s->trigger_listen_success(
+            {port => $actual_port,protocol => 'udp4',
+             severity => 'debug',
+             event    => 'listen_success',
+             message => sprintf 'Opened IPv4 port %d to the outside world', $actual_port
+            }
+        )}
+        else{
+            $s->trigger_listen_failure(
             {protocol => 'udp4',
              severity => 'fatal',
-             event    => 'listen_failed',
+             event    => 'listen_failure',
              message => 'Failed to open IPv4 port to the outside world: ' . $!
             }
-        );
-        return;
+        )
+        }
+        return $server;
     }
     around '_on_udp4_in' => sub {
         my ($c, $s, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
-        my $range = $s->ip_filter->is_banned($host);
-        if (defined $range) {
+        my $rule = $s->ip_filter->is_banned($host);
+        if (defined $rule) {
             $s->trigger_ip_filter(
                            {protocol => 'udp4',
                             severity => 'debug',
                             event    => 'ip_filter',
                             ip       => $host,
-                            range    => $range,
+                            rule    => $rule,
                             message => 'Incoming data was blocked by ipfilter'
                            }
             );
@@ -138,14 +157,14 @@ package Net::BitTorrent::DHT::Standalone;
     };
     around '_on_udp6_in' => sub {
         my ($c, $s, $sock, $sockaddr, $host, $port, $data, $flags) = @_;
-        my $range = $s->ip_filter->is_banned($host);
-        if (defined $range) {
+        my $rule = $s->ip_filter->is_banned($host);
+        if (defined $rule) {
             $s->trigger_ip_filter(
                            {protocol => 'udp6',
                             severity => 'debug',
                             event    => 'ip_filter',
                             ip       => $host,
-                            range    => $range,
+                            rule    => $rule,
                             message => 'Incoming data was blocked by ipfilter'
                            }
             );
@@ -153,6 +172,23 @@ package Net::BitTorrent::DHT::Standalone;
         }
         $c->($s, $sock, $sockaddr, $host, $port, $data, $flags);
     };
+
+    # Callback system
+     sub _build_callback_no_op {
+            sub {1}
+        }
+        has "on_$_" => (isa        => 'CodeRef',
+                        is         => 'rw',
+                        traits     => ['Code'],
+                        handles    => {"trigger_$_" => 'execute_method'},
+                        lazy_build => 1,
+                        builder    => '_build_callback_no_op',
+                        clearer    => "_no_$_",
+                        weak_ref   => 1
+            )
+            for qw[
+            listen_failure listen_success
+        ];
 }
 1;
 
@@ -210,6 +246,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Standalone.pm 8f5bca1 2010-07-03 19:49:02Z sanko@cpan.org $
+=for rcs $Id: Standalone.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
 
 =cut

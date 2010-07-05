@@ -23,27 +23,23 @@
    "provides" : {
       "Net::BitTorrent" : {
          "file" : "lib/Net/BitTorrent.pm",
-         "version" : "0.074000_004"
+         "version" : "0.074000_005"
       },
       "Net::BitTorrent::DHT" : {
          "file" : "lib/Net/BitTorrent/DHT.pm",
-         "version" : "0.074000_001"
-      },
-      "Net::BitTorrent::DHT::Callbacks" : {
-         "file" : "lib/Net/BitTorrent/DHT/Callbacks.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::DHT::Standalone" : {
          "file" : "lib/Net/BitTorrent/DHT/Standalone.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Network::IPFilter" : {
          "file" : "lib/Net/BitTorrent/Network/IPFilter.pm",
-         "version" : "0.074000_005"
+         "version" : "0.074000_006"
       },
-      "Net::BitTorrent::Network::IPFilter::Range" : {
-         "file" : "lib/Net/BitTorrent/Network/IPFilter/Range.pm",
-         "version" : "0.074000_001"
+      "Net::BitTorrent::Network::IPFilter::Rule" : {
+         "file" : "lib/Net/BitTorrent/Network/IPFilter/Rule.pm",
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Network::TCP" : {
          "file" : "lib/Net/BitTorrent/Network/TCP.pm",
@@ -59,7 +55,7 @@
       },
       "Net::BitTorrent::Peer" : {
          "file" : "lib/Net/BitTorrent/Peer.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_002"
       },
       "Net::BitTorrent::Protocol::BEP03::Bencode" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Bencode.pm",
@@ -159,5 +155,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_005"
+   "version" : "0.074000_006"
 }

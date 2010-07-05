@@ -9,7 +9,7 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::Types qw[:dht];
     use Net::BitTorrent::Protocol::BEP05::RoutingTable;
     use 5.10.0;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     # Stub
     sub BUILD {1}
@@ -73,14 +73,14 @@ package Net::BitTorrent::DHT;
     #
     sub send {
         my ($s, $node, $packet, $reply) = @_;
-        my $range = $s->ip_filter->is_banned($node->host);
-        if (defined $range) {
+        my $rule = $s->ip_filter->is_banned($node->host);
+        if (defined $rule) {
             $s->trigger_ip_filter(
                            {protocol => ($node->ipv6 ? 'udp6' : 'udp4'),
                             severity => 'debug',
                             event    => 'ip_filter',
                             ip       => $node->host,
-                            range    => $range,
+                            rule     => $rule,
                             message => 'Outgoing data was blocked by ipfilter'
                            }
             );
@@ -442,14 +442,16 @@ package Net::BitTorrent::DHT;
                             );
                     }
                     else {
+
                         #use Data::Dump;
                         warn sprintf '%s:%d', $node->host, $node->port;
+
                         #ddx $packet;
                         #ddx $req;
                         #...;
                     }
                 }
-                else {            # A reply we are not expecting. Strange.
+                else {    # A reply we are not expecting. Strange.
                     $node->inc_fail;
                     $self->_inc_recv_invalid_count;
                     $self->_inc_recv_invalid_length(length $data);
@@ -503,16 +505,19 @@ package Net::BitTorrent::DHT;
             }
         }
         elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
+
             #use Data::Dump;
             warn sprintf 'Error from %s:%d', $node->host, $node->port;
+
             #ddx $packet;
         }
         else {
+
             #use Data::Dump;
             warn sprintf '%s:%d', $node->host, $node->port;
+
             #ddx $packet;
             #ddx $data;
-
             #...;
             # TODO: ID checks against $packet->{'a'}{'id'}
         }
@@ -902,6 +907,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm 1339c8b 2010-07-04 02:14:55Z sanko@cpan.org $
+=for rcs $Id: DHT.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
 
 =cut

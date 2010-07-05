@@ -16,11 +16,13 @@ package Net::BitTorrent::Protocol::BEP03::Tracker::HTTP;
 
     sub scrape {
         my ($self, @infohash) = @_;
+
         #use Data::Dump;
         #ddx \@infohash;
         #ddx $self;
         #warn $self->torrent->infohash;
         return if $self->url !~ m[^(.+)/announce(\b(?:[^/])*)$];
+
         #warn sprintf '%s/scrape%s', $1, $2 || '';
         #die 'scrape! ' . $self->url;
         my $url = $self->url;
@@ -147,6 +149,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: HTTP.pm 1339c8b 2010-07-04 02:14:55Z sanko@cpan.org $
+=for rcs $Id: HTTP.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
 
 =cut

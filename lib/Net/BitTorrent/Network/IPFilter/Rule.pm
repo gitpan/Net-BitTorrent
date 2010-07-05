@@ -1,9 +1,9 @@
-package Net::BitTorrent::Network::IPFilter::Range;
+package Net::BitTorrent::Network::IPFilter::Rule;
 {
     use Moose;
     use Moose::Util::TypeConstraints;
     use 5.012.000;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../../';
     use Net::BitTorrent::Types qw[:paddr];
     sub BUILD { 1; }
@@ -54,7 +54,7 @@ package Net::BitTorrent::Network::IPFilter::Range;
 
 =head1 NAME
 
-Net::BitTorrent::Network::IPFilter::Range -
+Net::BitTorrent::Network::IPFilter::Rule -
 
 =head1 Description
 
@@ -86,6 +86,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Range.pm a6bab88 2010-07-03 05:04:05Z sanko@cpan.org $
+=for rcs $Id: Rule.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
 
 =cut

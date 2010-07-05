@@ -6,7 +6,7 @@ package Net::BitTorrent::Peer;
     use lib '../../../lib';
     use Net::BitTorrent::Types qw[:torrent];
     use Net::BitTorrent::Protocol::BEP03::Packets qw[parse_packet :types];
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     #
     sub BUILD {1}
@@ -23,7 +23,7 @@ package Net::BitTorrent::Peer;
                      isa      => 'Net::BitTorrent',
                      required => 1,
                      weak_ref => 1,
-                     handles  => qr[^trigger_peer_.+_callback$]
+                     handles  => qr[^trigger_.+$]
     );
     has 'fh' => (is         => 'ro',
                  isa        => 'GlobRef',
@@ -143,14 +143,14 @@ package Net::BitTorrent::Peer;
     my $infohash_constraint;
     after 'BUILD' => sub {
         my ($s, $a) = @_;
-        my $range = $s->client->ip_filter->is_banned($s->host);
-        if (defined $range) {
+        my $rule = $s->client->ip_filter->is_banned($s->handle->{'peername'});
+        if (defined $rule) {
             $s->trigger_ip_filter(
                                {protocol => ($s->ipv6 ? 'udp6' : 'udp4'),
                                 severity => 'debug',
                                 event    => 'ip_filter',
                                 ip       => $s->host,
-                                range    => $range,
+                                rule     => $rule,
                                 message => 'Connection terminated by ipfilter'
                                }
             );
@@ -342,6 +342,7 @@ package Net::BitTorrent::Peer;
         my ($self, $packet) = @_;
         return if !$self->has_torrent;
         return if !$self->has_handle;
+
         #use Data::Dump;
         #ddx $packet;
         %_packet_dispatch = (
@@ -377,11 +378,13 @@ package Net::BitTorrent::Peer;
     {    # Callback system
         after 'BUILD' => sub {
             my $s = shift;
-            $s->trigger_peer_construction_callback($s);
+
+            #$s->trigger_peer_construction($s);
         };
         after 'DEMOLISH' => sub {
             my $s = shift;
-            $s->trigger_peer_destruction_callback($s);
+
+            #$s->trigger_peer_destruction($s);
         };
     }
     {    ### Simple plugin system
