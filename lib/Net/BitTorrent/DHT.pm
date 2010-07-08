@@ -9,7 +9,7 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::Types qw[:dht];
     use Net::BitTorrent::Protocol::BEP05::RoutingTable;
     use 5.10.0;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 3; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     # Stub
     sub BUILD {1}
@@ -23,7 +23,8 @@ package Net::BitTorrent::DHT;
     # Standalone?
     after 'BUILD' => sub {
         my ($s, $a) = @_;
-        return has '+client' => (handles => qr[^(?:udp.*|ip_filter)])
+        return has '+client' =>
+            (handles => qr[^(?:(?:_has_)?udp\d.*?|ip_filter|port)])
             if $s->has_client;
         require Moose::Util;
         Moose::Util::apply_all_roles($s,
@@ -79,20 +80,18 @@ package Net::BitTorrent::DHT;
                            {protocol => ($node->ipv6 ? 'udp6' : 'udp4'),
                             severity => 'debug',
                             event    => 'ip_filter',
-                            ip       => $node->host,
-                            rule     => $rule,
+                            address => [$node->host, $node->port],
+                            rule    => $rule,
                             message => 'Outgoing data was blocked by ipfilter'
                            }
             );
             return $s->routing_table->del_node($node);
         }
-        my $sent = send((  $node->ipv6
-                         ? $s->udp6_sock
-                         : $s->udp4_sock
-                        ),
-                        $packet, 0,
-                        $node->sockaddr
-        );
+        my $sock
+            = $node->ipv6 && $s->_has_udp6_sock ? $s->udp6_sock
+            : $s->_has_udp4_sock ? $s->udp4_sock
+            :                      ();
+        my $sent = $sock ? send $sock, $packet, 0, $node->sockaddr : return;
         if ($reply) {
             $s->_inc_send_replies_count;
             $s->_inc_send_replies_length($sent);
@@ -131,29 +130,32 @@ package Net::BitTorrent::DHT;
     sub _build_ipv6_routing_table {
         Net::BitTorrent::Protocol::BEP05::RoutingTable->new(dht => shift);
     }
+
+    sub add_node {
+        my ($s, $n) = @_;
+        require Net::BitTorrent::Protocol::BEP05::Node;
+        my $sockaddr = sockaddr($n->[0], $n->[1]);
+        next if !$sockaddr;
+        $n
+            = blessed $n ? $n
+            : Net::BitTorrent::Protocol::BEP05::Node->new(
+                           host          => $n->[0],
+                           port          => $n->[1],
+                           sockaddr      => $sockaddr,
+                           routing_table => (
+                               length $sockaddr == 28 ? $s->ipv6_routing_table
+                               : $s->ipv4_routing_table
+                           )
+            );
+        (  $n->ipv6
+         ? $s->ipv6_routing_table->add_node($n)
+         : $s->ipv4_routing_table->add_node($n)
+        )->find_node($s->nodeid);
+    }
     after 'BUILD' => sub {
         my ($self, $args) = @_;
         return if !defined $args->{'boot_nodes'};
-        for my $node (@{$args->{'boot_nodes'}}) {
-            require Net::BitTorrent::Protocol::BEP05::Node;
-            my $sockaddr = sockaddr($node->[0], $node->[1]);
-            next if !$sockaddr;
-            $node =
-                Net::BitTorrent::Protocol::BEP05::Node->new(
-                                               host          => $node->[0],
-                                               port          => $node->[1],
-                                               sockaddr      => $sockaddr,
-                                               routing_table => (
-                                                   length $sockaddr == 28
-                                                   ? $self->ipv6_routing_table
-                                                   : $self->ipv4_routing_table
-                                               )
-                );
-            (  $node->ipv6
-             ? $self->ipv6_routing_table->add_node($node)
-             : $self->ipv4_routing_table->add_node($node)
-            )->find_node($self->nodeid);
-        }
+        $self->add_node($_) for @{$args->{'boot_nodes'}};
     };
 
     #
@@ -907,6 +909,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
+=for rcs $Id: DHT.pm 57e44a8 2010-07-08 05:08:09Z sanko@cpan.org $
 
 =cut

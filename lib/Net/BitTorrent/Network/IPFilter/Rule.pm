@@ -43,9 +43,9 @@ package Net::BitTorrent::Network::IPFilter::Rule;
 
     sub _as_string {
         my $s = shift;
-        return join ', ', $s->lower_as_string, $s->upper_as_string,
-            $s->access_level,
-            $s->description;
+        return sprintf '%s - %s, %d, %s', $s->lower_as_string,
+            $s->upper_as_string,
+            $s->access_level, $s->description;
     }
 }
 1;
@@ -86,6 +86,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Rule.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
+=for rcs $Id: Rule.pm 7d50b34 2010-07-05 15:30:47Z sanko@cpan.org $
 
 =cut

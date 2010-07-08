@@ -23,15 +23,15 @@
    "provides" : {
       "Net::BitTorrent" : {
          "file" : "lib/Net/BitTorrent.pm",
-         "version" : "0.074000_005"
+         "version" : "0.074000_006"
       },
       "Net::BitTorrent::DHT" : {
          "file" : "lib/Net/BitTorrent/DHT.pm",
-         "version" : "0.074000_002"
+         "version" : "0.074000_003"
       },
       "Net::BitTorrent::DHT::Standalone" : {
          "file" : "lib/Net/BitTorrent/DHT/Standalone.pm",
-         "version" : "0.074000_002"
+         "version" : "0.074000_003"
       },
       "Net::BitTorrent::Network::IPFilter" : {
          "file" : "lib/Net/BitTorrent/Network/IPFilter.pm",
@@ -155,5 +155,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_006"
+   "version" : "0.074000_007"
 }

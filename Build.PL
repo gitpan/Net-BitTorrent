@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use File::Find;
 use Module::Build;
-our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 6; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 7; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 $|++;
 my $automated_testing = $ENV{'AUTOMATED_TESTING'}
     || $ENV{'PERL_MM_USE_DEFAULT'};
@@ -31,17 +31,26 @@ my $mb = $class->new(
                  Exporter                     => 0,
                  'File::Path'                 => 2.07,
                  'File::Spec'                 => 0,
+                 'File::Temp'                 => 0,
                  'Module::Build'              => 0.30,
                  Moose                        => 0,
                  perl                         => '5.12.0',
                  'Scalar::Util'               => 1.19,
                  'Test::More'                 => 0.80
     },
-    build_requires => {'Module::Build' => 0.30,
+    build_requires => {'File::Temp'    => 0,
+                       'Module::Build' => 0.30,
                        perl            => '5.12.0',
                        'TAP::Harness'  => 3.18,
                        'Test::Class'   => 0.35,
-                       'Test::More'    => 0.80
+                       'Test::More'    => 0.80,
+                       ($is_developer
+                        ? ('CPAN::Meta::Converter' => 0,
+                           'CPAN::Meta::Validator' => 0,
+                           JSON                    => 0
+                            )
+                        : ()
+                       )
     },
     recommends       => {perl => '5.13.0'},
     test_files       => \@tests,
@@ -115,6 +124,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Build.PL 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
+=for rcs $Id: Build.PL d65f697 2010-07-08 05:17:18Z sanko@cpan.org $
 
 =cut

@@ -54,7 +54,7 @@ package Net::BitTorrent::Network::IPFilter;
             my ($range, $access_level, $desc)
                 = ($line =~ m[^(.+-.+)\s*,\s*(\d+)\s*,\s*(.+)\s*$]);
             next if !$range;
-            my ($start, $end) = ($range =~ m[^(.+)\s*-\s*(.+)\s+$]);
+            my ($start, $end) = ($range =~ m[^(.+)\s*-\s*(.+)\s*$]);
             $_ =~ s[\s][]g for $start, $end;
             $s->add_rule($start, $end, $access_level, $desc);
         }
@@ -217,6 +217,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: IPFilter.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
+=for rcs $Id: IPFilter.pm cf06f07 2010-07-05 15:33:02Z sanko@cpan.org $
 
 =cut
