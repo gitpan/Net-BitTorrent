@@ -1,4 +1,4 @@
-Version 0.XXXXX | In the not too distant future | d65f697
+Version 0.XXXXX | In the not too distant future | 4a832ab
 
     API Changes/Compatibility Information:
      * Rewrite!
@@ -434,6 +434,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/
 
-$Ver: 0.074000_007 $ from git $Rev: df33d0f $
+$Ver: 0.074000_008 $ from git $Rev: df33d0f $
 $Date: 2010-07-05 18:35:04Z (Mon, 05 Jul 2010) $
 $Url: http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent/raw/master/Changes $

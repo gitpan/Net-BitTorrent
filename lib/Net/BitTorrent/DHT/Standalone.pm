@@ -257,6 +257,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Standalone.pm c0136fb 2010-07-08 05:07:13Z sanko@cpan.org $
+=for rcs $Id: Standalone.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
 
 =cut

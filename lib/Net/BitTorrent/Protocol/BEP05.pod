@@ -8,7 +8,7 @@ Net::BitTorrent::Protocol::BEP05 - DHT Protocol
 
 BEP: 5
 Title: DHT Protocol
-Version: $Revision: c749a99651402641638eeb4f05f616fee2290289 $
+Version: $Rev: c749a99 $
 Last-Modified: $Date: 2010-07-03 14:19:08Z (Sat, 03 Jul 2010) $
 Author:  Andrew Loewenstern <drue@bittorrent.com>
 Status:  Draft

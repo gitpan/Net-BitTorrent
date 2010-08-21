@@ -8,7 +8,7 @@ Net::BitTorrent::Protocol::BEP07 - IPv6 Tracker Extension
 
 BEP: 7
 Title: IPv6 Tracker Extension
-Version: $Revision: 4446139d80647591d17c5d0e39fd6ded3ac12973 $
+Version: $Rev: 4446139 $
 Last-Modified: $Date: 2010-05-30 03:48:56Z (Sun, 30 May 2010) $
 Author:  Greg Hazel <greg@bittorrent.com>, Arvid Norberg <arvid@bittorrent.com>
 Status:  Draft

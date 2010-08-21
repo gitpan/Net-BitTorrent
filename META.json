@@ -23,7 +23,7 @@
    "provides" : {
       "Net::BitTorrent" : {
          "file" : "lib/Net/BitTorrent.pm",
-         "version" : "0.074000_006"
+         "version" : "0.074000_007"
       },
       "Net::BitTorrent::DHT" : {
          "file" : "lib/Net/BitTorrent/DHT.pm",
@@ -69,6 +69,18 @@
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Packets.pm",
          "version" : "0.074000_001"
       },
+      "Net::BitTorrent::Protocol::BEP03::Peer" : {
+         "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer.pm",
+         "version" : 0
+      },
+      "Net::BitTorrent::Protocol::BEP03::Peer::Incoming" : {
+         "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer/Incoming.pm",
+         "version" : 0
+      },
+      "Net::BitTorrent::Protocol::BEP03::Peer::Outgoing" : {
+         "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer/Outgoing.pm",
+         "version" : 0
+      },
       "Net::BitTorrent::Protocol::BEP03::Tracker::HTTP" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Tracker/HTTP.pm",
          "version" : "0.074000_001"
@@ -113,6 +125,10 @@
          "file" : "lib/Net/BitTorrent/Protocol/BEP27/Private/Metadata.pm",
          "version" : "0.074000_001"
       },
+      "Net::BitTorrent::Protocol::MSE::Peer" : {
+         "file" : "lib/Net/BitTorrent/Protocol/MSE/Peer.pm",
+         "version" : "0.074000_001"
+      },
       "Net::BitTorrent::Storage" : {
          "file" : "lib/Net/BitTorrent/Storage.pm",
          "version" : "0.074000_001"
@@ -132,6 +148,46 @@
       "Net::BitTorrent::Torrent" : {
          "file" : "lib/Net/BitTorrent/Torrent.pm",
          "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::Generator" : {
+         "file" : "lib/Net/BitTorrent/Torrent/Generator.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::Piece" : {
+         "file" : "lib/Net/BitTorrent/Torrent/Piece.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::Piece::Block" : {
+         "file" : "lib/Net/BitTorrent/Torrent/Piece/Block.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::PieceSelector" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Endgame" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Endgame.pm",
+         "version" : 0
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Hybrid" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Hybrid.pm",
+         "version" : 0
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Linear" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Linear.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Popular" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Popular.pm",
+         "version" : 0
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Random" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Random.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Torrent::PieceSelector::Rarest" : {
+         "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Rarest.pm",
+         "version" : 0
       },
       "Net::BitTorrent::Types" : {
          "file" : "lib/Net/BitTorrent/Types.pm",
@@ -155,5 +211,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_007"
+   "version" : "0.074000_008"
 }

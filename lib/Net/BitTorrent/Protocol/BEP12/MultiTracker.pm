@@ -8,12 +8,10 @@ package Net::BitTorrent::Protocol::BEP12::MultiTracker;
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../../';
     use Net::BitTorrent::Types qw[:tracker :bencode];
-    has 'torrent' => (isa       => 'Net::BitTorrent::Torrent',
-                      is        => 'ro',
-                      weak_ref  => 1,
-                      writer    => '_torrent',
-                      predicate => 'has_torrent',
-                      handles   => {client => 'client'}
+    has 'metadata' => (isa      => 'Net::BitTorrent::Torrent',
+                       is       => 'ro',
+                       weak_ref => 1,
+                       required => 1
     );
     has 'tiers' => (
                 traits  => ['Array'],
@@ -30,8 +28,10 @@ package Net::BitTorrent::Protocol::BEP12::MultiTracker;
         $tier_constraint //=
             Moose::Util::TypeConstraints::find_type_constraint(
                                                     'NBTypes::Tracker::Tier');
-        $self->_push_tier($tier_constraint->coerce($urls));
+        my $tier = $tier_constraint->coerce($urls);
+        $self->_push_tier($tier) or return;
         $self->_shuffle_tiers;
+        return $tier;
     }
 
     #
@@ -57,17 +57,19 @@ package Net::BitTorrent::Protocol::BEP12::MultiTracker;
 
     sub announce {
         my ($self, $event, $code) = @_;
-        require Scalar::Util;
-        Scalar::Util::weaken $self;
-        my %args = (info_hash  => $self->torrent->info_hash->to_Hex,
-                    peer_id    => $self->client->peer_id,
-                    port       => $self->client->port,
-                    uploaded   => $self->torrent->uploaded,
-                    downloaded => $self->torrent->downloaded,
-                    left       => $self->torrent->left
+        return if !$self->metadata->can('client');
+        return if !$self->metadata->_has_client;
+        my %args = (info_hash  => $self->metadata->info_hash->to_Hex,
+                    peer_id    => $self->metadata->client->peer_id,
+                    port       => $self->metadata->client->port,
+                    uploaded   => $self->metadata->uploaded,
+                    downloaded => $self->metadata->downloaded,
+                    left       => $self->metadata->left
         );
         $args{'info_hash'} =~ s|(..)|\%$1|g;
         my $quest;
+        require Scalar::Util;
+        Scalar::Util::weaken $self;
         $quest = [
             $event, $code,
             [],
@@ -106,7 +108,7 @@ package Net::BitTorrent::Protocol::BEP12::MultiTracker;
         my ($self, $code) = @_;
         require Scalar::Util;
         Scalar::Util::weaken $self;
-        my %args = (info_hash => $self->torrent->info_hash->to_Hex);
+        my %args = (info_hash => $self->metadata->info_hash->to_Hex);
         $args{'info_hash'} =~ s|(..)|\%$1|g;
         my $quest = [
             0, $code,
@@ -170,6 +172,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: MultiTracker.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
+=for rcs $Id: MultiTracker.pm d76d47a 2010-07-27 20:29:53Z sanko@cpan.org $
 
 =cut

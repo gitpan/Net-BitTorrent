@@ -3,7 +3,7 @@ package Net::BitTorrent;
     use 5.010;
     use Moose;
     use Moose::Util::TypeConstraints;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 6; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 7; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use AnyEvent;
     use lib '../../lib';
     use Net::BitTorrent::Types qw[:client];
@@ -44,7 +44,6 @@ package Net::BitTorrent;
     has 'torrents' => (traits  => ['Array'],
                        isa     => 'ArrayRef[Net::BitTorrent::Torrent]',
                        is      => 'ro',
-                       reader  => '_torrents',
                        default => sub { [] },
                        coerce  => 1,
                        handles => {
@@ -55,11 +54,12 @@ package Net::BitTorrent;
                                 find_torrent    => 'first',
                                 has_torrents    => 'count',
                                 info_hashes => ['map', sub { $_->info_hash }],
-                                map_torrents     => 'map',
-                                no_torrents      => 'is_empty',
-                                shuffle_torrents => 'shuffle',
-                                sort_torrents    => 'sort',
-                                torrent          => 'get',
+                                map_torrents           => 'map',
+                                no_torrents            => 'is_empty',
+                                shuffle_torrents       => 'shuffle',
+                                sort_torrents          => 'sort',
+                                sort_torrents_in_place => 'sort_in_place',
+                                torrent                => 'get',
                        }
     );
     around 'add_torrent' => sub {
@@ -68,25 +68,25 @@ package Net::BitTorrent;
         if (blessed $_[0]) { $torrent = $_[0]; }
         else {
             require Net::BitTorrent::Torrent;
-            $torrent = Net::BitTorrent::Torrent->new(@_);
+            $torrent = Net::BitTorrent::Torrent->new(@_) or return;
         }
         return
                blessed $torrent
             && $code->($self, $torrent)
-            && $torrent->client($self);
+            && $torrent->client($self) ? $torrent : ();
     };
-    my $infohash_constraint;
-    around 'torrent' => sub {
+    my $info_hash_constraint;
+    around 'torrent' => sub ($) {
         my ($code, $self, $index) = @_;
         my $torrent;
         {
-            $infohash_constraint //=
+            $info_hash_constraint //=
                 Moose::Util::TypeConstraints::find_type_constraint(
                                                 'NBTypes::Torrent::Infohash');
-            my $infohash = $infohash_constraint->coerce($index);
+            my $info_hash = $info_hash_constraint->coerce($index);
             $torrent = $self->find_torrent(
                 sub {
-                    $_->info_hash->Lexicompare($infohash) == 0;
+                    $_->info_hash->Lexicompare($info_hash) == 0;
                 }
             );
         }
@@ -162,7 +162,7 @@ package Net::BitTorrent;
             }
         }
     }
-    after 'BUILD' => sub { $_[0]->$_() for qw[udp6 tcp6 udp4 tcp4] };
+    after 'BUILDALL' => sub { $_[0]->$_() for qw[tcp6 tcp4 udp4 udp6] };
 
     sub _build_tcp6 {
         my $s = shift;
@@ -180,6 +180,7 @@ package Net::BitTorrent;
                     $s->_set_tcp6_sock($actual_socket);
                     $s->_set_tcp6_host($actual_host);
                     $s->_set_port($actual_port);
+                    8;
                 },
                 'tcp'
             );
@@ -227,6 +228,7 @@ package Net::BitTorrent;
                     $s->_set_tcp4_sock($actual_socket);
                     $s->_set_tcp4_host($actual_host);
                     $s->_set_port($actual_port);
+                    8;
                 },
                 'tcp'
             );
@@ -368,9 +370,22 @@ package Net::BitTorrent;
             shutdown $peer, 2;
             return close $peer;
         }
-        require Net::BitTorrent::Peer;
-        $self->add_peer(
-                    Net::BitTorrent::Peer->new(fh => $peer, client => $self));
+        require Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
+        require AnyEvent::Handle::Throttle;
+        $peer =
+            Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
+                        client => $self,
+                        handle => AnyEvent::Handle::Throttle->new(fh => $peer)
+            );
+        $self->add_peer($peer);
+        $self->trigger_peer_connect(
+                   {severity => 'info',
+                    event    => 'peer_connect',
+                    peer     => $peer,
+                    message => sprintf 'Incomming peer connection from %s:%s',
+                    $peer->host, $peer->port
+                   }
+        );
     }
 
     sub _on_tcp6_in {
@@ -389,9 +404,22 @@ package Net::BitTorrent;
             shutdown $peer, 2;
             return close $peer;
         }
-        require Net::BitTorrent::Peer;
-        $self->add_peer(
-                    Net::BitTorrent::Peer->new(fh => $peer, client => $self));
+        require Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
+        require AnyEvent::Handle::Throttle;
+        $peer =
+            Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
+                        client => $self,
+                        handle => AnyEvent::Handle::Throttle->new(fh => $peer)
+            );
+        $self->add_peer($peer);
+        $self->trigger_peer_connect(
+                   {severity => 'info',
+                    event    => 'peer_connect',
+                    peer     => $peer,
+                    message => sprintf 'Incomming peer connection from %s:%s',
+                    $peer->host, $peer->port
+                   }
+        );
     }
 
     sub _on_udp4_in {
@@ -413,7 +441,7 @@ package Net::BitTorrent;
         $s->dht->_on_udp4_in(@_);
     }
 
-    sub _on_upd6_in {
+    sub _on_udp6_in {
         my $s = shift;
         my ($udp, $sock, $paddr, $host, $port, $data, $flags) = @_;
         my $rule = $s->ip_filter->is_banned($host);
@@ -433,6 +461,10 @@ package Net::BitTorrent;
     }
 
     #
+    has 'max_peers' => (isa     => 'Int',
+                        is      => 'rw',
+                        default => '50'
+    );
     has '_peers' => (
         is      => 'HashRef[Net::BitTorrent::Peer]',    # by creation id
         is      => 'ro',
@@ -465,11 +497,15 @@ package Net::BitTorrent;
                         handles    => {"trigger_$_" => 'execute_method'},
                         lazy_build => 1,
                         builder    => '_build_callback_no_op',
-                        clearer    => "_no_$_",
-                        weak_ref   => 1
+                        clearer    => "_no_$_"
             )
             for qw[
             listen_failure listen_success
+            peer_id
+            peer_connect peer_disconnect
+            peer_packet_in
+            peer_bitfield
+            peer_have
         ];
     }
     else {    # Callback System II
@@ -603,6 +639,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: BitTorrent.pm c0136fb 2010-07-08 05:07:13Z sanko@cpan.org $
+=for rcs $Id: BitTorrent.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
 
 =cut

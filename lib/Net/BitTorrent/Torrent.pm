@@ -2,22 +2,52 @@ package Net::BitTorrent::Torrent;
 {
     use Moose;
     use Moose::Util::TypeConstraints;
+    extends 'Net::BitTorrent::Protocol::BEP03::Metadata';
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../lib';
     use Net::BitTorrent::Types qw[:torrent];
+    use Fcntl ':flock';
+    use 5.012;
     sub BUILD {1}
+    has 'path' => (is          => 'ro',
+                   isa         => 'Str',
+                   required    => 1,
+                   predicate   => '_has_path',
+                   initializer => '_initializer_path'
+    );
+
+    sub _initializer_path {
+        my ($s, $p, $set, $attr) = @_;
+        $set->($p);
+        open(my ($FH), '<', $p)
+            || return !($_[0] = undef);    # exterminate! exterminate!
+        flock $FH, LOCK_SH;
+        sysread($FH, my ($METADATA), -s $FH) == -s $FH
+            || return !($_[0] = undef);    # destroy!
+        $s->_set_raw_data($METADATA);
+        return close $FH;
+    }
     has 'client' => (
         isa       => 'Maybe[Net::BitTorrent]',
         is        => 'rw',
         weak_ref  => 1,
-        predicate => 'has_client',
-        handles   => [qw[dht]],
-        trigger   => sub {
+        predicate => '_has_client',
+        handles   => {
+            dht   => 'dht',
+            peers => sub {
+                my $s = shift;
+                return if !$s->_has_client;
+                grep {
+                           $_->_has_torrent
+                        && $_->torrent->info_hash eq $s->info_hash
+                } $s->client->peers;
+                }
+        },
+        trigger => sub {
             my ($self, $client) = @_;
 
             # XXX - make sure the new client knows who I am
             #$self->queue;
-            warn 'TODO: Start trackers!';
             $self->start;    # ??? - Should this be automatic?
         }
     );
@@ -27,7 +57,7 @@ package Net::BitTorrent::Torrent;
                      handles => {add_quest    => 'set',
                                  get_quest    => 'get',
                                  has_quest    => 'defined',
-                                 delete_quest => 'delete',
+                                 _del_quest   => 'delete',
                                  clear_quests => 'clear'
                      },
                      default => sub { {} }
@@ -41,15 +71,22 @@ package Net::BitTorrent::Torrent;
                       isa        => 'Net::BitTorrent::Storage',
                       lazy_build => 1,
                       builder    => '_build_storage',
-                      handles    => {
-                                  size => 'size',
-                                  read => 'read'
-                      }
+                      handles    => [qw[size read write wanted]]
     );
 
     sub _build_storage {
         require Net::BitTorrent::Storage;
         Net::BitTorrent::Storage->new(torrent => $_[0]);
+    }
+    has 'piece_selector' => (isa => 'Net::BitTorrent::Torrent::PieceSelector',
+                             is  => 'ro',
+                             builder => '_build_piece_selector',
+                             handles => [qw[select_piece select_block]]
+    );
+
+    sub _build_piece_selector {
+        require Net::BitTorrent::Torrent::PieceSelector;
+        Net::BitTorrent::Torrent::PieceSelector->new(torrent => shift);
     }
     for my $direction (qw[up down]) {
         has $direction
@@ -100,21 +137,64 @@ package Net::BitTorrent::Torrent;
                 0, 3,
                 sub {
                     return if !$self;
-                    return if !$self->has_client;
+                    return if !$self->_has_client;
+                    return if scalar($self->peers) >= $self->max_peers;
                     my ($source)
                         = [[$self->get_quest('dht_get_peers'),    'dht'],
                            [$self->get_quest('tracker_announce'), 'tracker']
                         ]->[int rand 2];
                     return if !@{$source->[0][2]};
                     my $addr = $source->[0][2]->[int rand @{$source->[0][2]}];
-                    require Net::BitTorrent::Peer;
-                    $self->client->add_peer(Net::BitTorrent::Peer->new(
+                    require Net::BitTorrent::Protocol::BEP03::Peer::Outgoing;
+                    $self->client->add_peer(
+                        Net::BitTorrent::Protocol::BEP03::Peer::Outgoing->new(
                                                        torrent => $self,
                                                        connect => $addr,
                                                        source => $source->[1],
                                                        client => $self->client
-                                            )
+                        )
                     );
+                }
+            )
+        );
+        $self->add_quest(
+            'unchoke',
+            AE::timer(
+                0, 10,
+                sub {
+                    return if !$self;
+                    return if !$self->_has_client;
+                    return if !scalar $self->peers;
+                    my @unchoked = grep { !$_->choked } $self->peers;
+                    my @choked = sort {
+                               $a->remote_choked <=> $b->remote_choked
+                            || $a->total_download <=> $b->total_download
+                        } grep { $_->remote_interested && $_->choked }
+                        $self->peers;
+                    for my $i (0 .. $self->max_upload_slots) {
+                        last if !$choked[$i];
+                        $choked[$i]->_unset_choked;
+                    }
+                }
+            )
+        );
+        $self->add_quest(
+            'optimistic_unchoke',
+            AE::timer(
+                0, 120,
+                sub {
+                    return if !$self;
+                    return if !$self->_has_client;
+                    return if !scalar $self->peers;
+                    my @unchoked = grep { !$_->choked } $self->peers;
+                    my @choked = sort {
+                               $a->remote_choked <=> $b->remote_choked
+                            || $a->total_download <=> $b->total_download
+                    } grep { $_->choked } $self->peers;
+                    for my $i (0 .. $self->max_upload_slots) {
+                        last if !$choked[$i];
+                        $choked[$i]->_unset_choked;
+                    }
                 }
             )
         );
@@ -133,7 +213,7 @@ package Net::BitTorrent::Torrent;
     # Quick methods
     my $pieces_per_hashcheck = 10;    # Max block of pieces in single call
 
-    sub hashcheck {    # Range is split up into $pieces_per_hashcheck blocks
+    sub hash_check {    # Range is split up into $pieces_per_hashcheck blocks
         my ($self, $range) = @_;
         $range
             = defined $range
@@ -147,7 +227,7 @@ package Net::BitTorrent::Torrent;
                 my $piece = $self->read($index);
                 next if !$piece || !$$piece;
                 require Digest::SHA;
-                $self->have->Bit_On($index)
+                $self->_set_piece($index)
                     if Digest::SHA::sha1($$piece) eq
                         substr($self->pieces, ($index * 20), 20);
             }
@@ -178,37 +258,42 @@ package Net::BitTorrent::Torrent;
                    builder    => '_build_have',
                    init_arg   => undef,
                    writer     => '_have',
-                   clearer    => '_clear_have'
+                   clearer    => '_clear_have',
+                   handles    => {
+                               _set_piece => 'Bit_On',
+                               _has_piece => 'bit_test',
+                               seed       => 'is_full'
+                   },
     );
     sub _build_have { '0' x $_[0]->piece_count }
-    has 'wanted' => (isa        => 'NBTypes::Torrent::Bitfield',
-                     is         => 'ro',
-                     writer     => '_wanted',
-                     coerce     => 1,
-                     builder    => '_build_wanted',
-                     lazy_build => 1
-    );
-    sub _build_wanted { '1' x $_[0]->piece_count }
-    {    ### Simple plugin system
-        my @_plugins;
 
-        sub _register_plugin {
-            my $s = shift;
-            return $s->meta->apply(@_) if blessed $s;
-            my %seen = ();
-            return @_plugins = grep { !$seen{$_}++ } @_plugins, @_;
-        }
-        after 'BUILD' => sub {
-            return if !@_plugins;
-            my ($s, $a) = @_;
-            require Moose::Util;
-            Moose::Util::apply_all_roles($s, @_plugins,
-                                         {rebless_params => $a});
-        };
-    }
+    #{    ### Simple plugin system
+    #    my @_plugins;
+    #    sub _register_plugin {
+    #        my $s = shift;
+    #        return $s->meta->apply(@_) if blessed $s;
+    #        my %seen = ();
+    #        return @_plugins = grep { !$seen{$_}++ } @_plugins, @_;
+    #    }
+    #    after 'BUILD' => sub {
+    #        return if !@_plugins;
+    #        my ($s, $a) = @_;
+    #        require Moose::Util;
+    #        Moose::Util::apply_all_roles($s, @_plugins,
+    #                                     {rebless_params => $a});
+    #    };
+    #}
+    #
+    has 'max_peers' => (isa     => subtype(as 'Int' => where { $_ >= 1 }),
+                        is      => 'rw',
+                        default => '200'
+    );
+    has 'max_upload_slots' => (isa => subtype(as 'Int' => where { $_ >= 1 }),
+                               is  => 'rw',
+                               default => '8'
+    );
 
     #
-    with 'Net::BitTorrent::Protocol::BEP03::Metadata';
     no Moose;
     __PACKAGE__->meta->make_immutable
 }
@@ -242,6 +327,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Torrent.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
+=for rcs $Id: Torrent.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
 
 =cut

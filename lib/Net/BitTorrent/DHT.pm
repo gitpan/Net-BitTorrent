@@ -6,7 +6,7 @@ package Net::BitTorrent::DHT;
     use Net::BitTorrent::Protocol::BEP03::Bencode qw[bdecode];
     use Net::BitTorrent::Protocol::BEP05::Packets qw[:all];
     use Net::BitTorrent::Network::Utility qw[:paddr :sockaddr];
-    use Net::BitTorrent::Types qw[:dht];
+    use Net::BitTorrent::Types qw[:dht :addr];
     use Net::BitTorrent::Protocol::BEP05::RoutingTable;
     use 5.10.0;
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 3; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
@@ -152,9 +152,14 @@ package Net::BitTorrent::DHT;
          : $s->ipv4_routing_table->add_node($n)
         )->find_node($s->nodeid);
     }
+    my $boot_constraint;
     after 'BUILD' => sub {
         my ($self, $args) = @_;
         return if !defined $args->{'boot_nodes'};
+        $boot_constraint //=
+            Moose::Util::TypeConstraints::create_parameterized_type_constraint(
+                                          'ArrayRef[NBTypes::Network::Addr]');
+        $boot_constraint->validate(@{$args->{'boot_nodes'}});
         $self->add_node($_) for @{$args->{'boot_nodes'}};
     };
 
@@ -909,6 +914,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm 57e44a8 2010-07-08 05:08:09Z sanko@cpan.org $
+=for rcs $Id: DHT.pm 3a21a4c 2010-08-05 14:25:07Z sanko@cpan.org $
 
 =cut

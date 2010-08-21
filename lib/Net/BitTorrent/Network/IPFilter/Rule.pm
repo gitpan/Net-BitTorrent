@@ -5,7 +5,7 @@ package Net::BitTorrent::Network::IPFilter::Rule;
     use 5.012.000;
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../../';
-    use Net::BitTorrent::Types qw[:paddr];
+    use Net::BitTorrent::Types qw[:addr];
     sub BUILD { 1; }
     for my $limit (qw[upper lower]) {
         has $limit => (
@@ -86,6 +86,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Rule.pm 7d50b34 2010-07-05 15:30:47Z sanko@cpan.org $
+=for rcs $Id: Rule.pm 8eb04cb 2010-08-05 02:38:26Z sanko@cpan.org $
 
 =cut

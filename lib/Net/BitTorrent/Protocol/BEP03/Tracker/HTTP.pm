@@ -52,8 +52,10 @@ package Net::BitTorrent::Protocol::BEP03::Tracker::HTTP;
                   : ()
                  )
         );
-        my $url = $self->url . '?' . join '&',
-            map { $_ . '=' . $query_hash{$_} } keys %query_hash;
+        my $url
+            = $self->url
+            . ($self->url =~ qr[\?] ? $self->url =~ qr[&$] ? '' : '&' : '?')
+            . join '&', map { $_ . '=' . $query_hash{$_} } keys %query_hash;
         my ($host, $port, $path)
             = $url =~ m{^https?://([^/:]*)(?::(\d+))?(/.*)$};
         $port //= 80;
@@ -149,6 +151,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: HTTP.pm 4c24394 2010-07-05 02:43:04Z sanko@cpan.org $
+=for rcs $Id: HTTP.pm 28e226d 2010-07-10 22:55:33Z sanko@cpan.org $
 
 =cut

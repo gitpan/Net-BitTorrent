@@ -36,10 +36,11 @@ package Net::BitTorrent::Network::Utility;
         return $return;
     }
 
-    sub paddr2ip ($) {    # snagged from NetAddr::IP::Util
+    sub paddr2ip ($) {
         return inet_ntoa($_[0]) if length $_[0] == 4;    # ipv4
         return inet_ntoa($1)
-            if length $_[0] == 16 && $_[0] =~ m[^\0{12}(.{4})$];    # ipv4
+            if length $_[0] == 16
+                && $_[0] =~ m[^\0{10}\xff{2}(.{4})$];    # ipv4
         return unless length($_[0]) == 16;
         my @hex = (unpack('n8', $_[0]));
         $hex[9] = $hex[7] & 0xff;
@@ -47,10 +48,11 @@ package Net::BitTorrent::Network::Utility;
         $hex[7] = $hex[6] & 0xff;
         $hex[6] >>= 8;
         my $return = sprintf '%X:%X:%X:%X:%X:%X:%D:%D:%D:%D', @hex;
-        $return =~ s|(0+:)+ |:|x;
-        $return =~ s|^0+     ||x;
-        $return =~ s|^:+   |::|x;
-        $return =~ s|::0+  |::|x;
+        $return =~ s|(0+:)+|:|x;
+        $return =~ s|^0+    ||x;
+        $return =~ s|^:+    |::|x;
+        $return =~ s|::0+   |::|x;
+        $return =~ s|^::(\d+):(\d+):(\d+):(\d+)|$1.$2.$3.$4|x;
         return $return;
     }
 
@@ -84,7 +86,7 @@ package Net::BitTorrent::Network::Utility;
         return pack 'n8', @hex;
     }
 
-    sub pack_sockaddr {
+    sub pack_sockaddr ($$) {
         my ($port, $packed_host) = @_;
         my $return
             = length $packed_host == 4
@@ -93,7 +95,7 @@ package Net::BitTorrent::Network::Utility;
         return $return;
     }
 
-    sub unpack_sockaddr {
+    sub unpack_sockaddr ($) {
         my ($packed_host) = @_;
         return
             length $packed_host == 28
@@ -101,36 +103,36 @@ package Net::BitTorrent::Network::Utility;
             : unpack_sockaddr_in($packed_host);
     }
 
-    sub client {
+    sub client ($$&;&) {
         my ($host, $port, $ready, $prepare) = @_;
         &AnyEvent::Socket::tcp_connect;
     }
 
-    sub server {
+    sub server ($$&;&$) {
         my ($host, $port, $callback, $prepare, $proto) = @_;
-        my $sockaddr = sockaddr($host, $port);
+        $proto //= 'tcp';
+        my $sockaddr = sockaddr($host, $port) or return;
         my $type = length $sockaddr == 16 ? PF_INET : PF_INET6;
         socket my ($socket), $type,
             $proto eq 'udp' ? SOCK_DGRAM : SOCK_STREAM, getprotobyname($proto)
-            || return;
+            or return;
 
         # - What is the difference between SO_REUSEADDR and SO_REUSEPORT?
         #    [http://www.unixguide.net/network/socketfaq/4.11.shtml]
-        # - setsockopt - what are the options for ActivePerl under Windows NT?
-        #    [http://perlmonks.org/?node_id=63280]
-        #      setsockopt($_tcp, SOL_SOCKET, SO_REUSEADDR, pack(q[l], 1))
-        #         or return;
-        # SO_REUSEPORT is undefined on Win32... Boo...
-        #return
-        #    if !setsockopt $socket, SOL_SOCKET, SO_REUSEADDR, pack('l', 1);
+        # SO_REUSEPORT is undefined on Win32 and pre-2.4.15 Linux distros.
+        setsockopt $socket, SOL_SOCKET, SO_REUSEADDR, pack('l', 1)
+            or return
+            if $^O !~ m[Win32];
         return if !bind $socket, $sockaddr;
+        my $listen = 8;
         if (defined $prepare) {
             my ($_port, $packed_ip) = unpack_sockaddr getsockname $socket;
-            $prepare->($socket, paddr2ip($packed_ip), $_port);
+            my $return = $prepare->($socket, paddr2ip($packed_ip), $_port);
+            $listen = $return if defined $return;
         }
         require AnyEvent::Util;
         AnyEvent::Util::fh_nonblocking $socket, 1;
-        return if $proto ne 'udp' && !listen($socket, 8);
+        listen $socket, $listen or return if $proto ne 'udp';
         return AE::io(
             $socket, 0,
             $proto eq 'udp'
@@ -193,6 +195,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Utility.pm dd2d8d4 2010-07-03 05:24:58Z sanko@cpan.org $
+=for rcs $Id: Utility.pm 70d1f5e 2010-08-05 14:26:02Z sanko@cpan.org $
 
 =cut

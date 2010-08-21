@@ -2,453 +2,234 @@ package Net::BitTorrent::Peer;
 {
     use Moose;
     use Moose::Util::TypeConstraints;
-    use 5.010;
+    use 5.012;
     use lib '../../../lib';
     use Net::BitTorrent::Types qw[:torrent];
-    use Net::BitTorrent::Protocol::BEP03::Packets qw[parse_packet :types];
+    use Net::BitTorrent::Protocol::BEP03::Packets
+        qw[parse_packet :build :types];
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 2; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     #
-    sub BUILD {1}
-
-    #
-    has 'torrent' => (is        => 'ro',
-                      isa       => 'Net::BitTorrent::Torrent',
-                      predicate => 'has_torrent',
-                      writer    => '_set_torrent',
-                      weak_ref  => 1,
-    );
-    has 'connect' => (is => 'ro', isa => 'ArrayRef');
     has 'client' => (is       => 'ro',
                      isa      => 'Net::BitTorrent',
                      required => 1,
                      weak_ref => 1,
                      handles  => qr[^trigger_.+$]
     );
-    has 'fh' => (is         => 'ro',
-                 isa        => 'GlobRef',
-                 predicate  => 'has_fh',
-                 lazy_build => 1
-    );
-    sub _build_fh { shift->handle->{'fh'}; }
-    has 'handle' => (is         => 'ro',
-                     isa        => 'AnyEvent::Handle::Throttle',
-                     predicate  => 'has_handle',
-                     writer     => '_set_handle',
-                     lazy_build => 1,
-                     handles    => {
-                                 rbuf       => 'rbuf',
-                                 push_read  => 'push_read',
-                                 push_write => 'push_write'
-                     }
+    has 'torrent' => (is          => 'ro',
+                      isa         => 'Net::BitTorrent::Torrent',
+                      predicate   => '_has_torrent',
+                      writer      => '_set_torrent',
+                      weak_ref    => 1,
+                      trigger     => sub { shift->_trigger_torrent },
+                      initializer => '_initializer_torrent'
     );
 
-    sub _build_handle {
-        my ($s) = @_;
-        require AnyEvent::Handle::Throttle;
-        AnyEvent::Handle::Throttle->new(
-                      $s->has_fh ? (fh => $s->fh) : (connect => $s->connect));
+    sub _trigger_torrent {
+        my ($s, $n, $o) = @_;
+        confess 'torrent attribute is already set' if defined $o;
     }
-    has 'source' => (
-             is  => 'ro',
-             isa => enum([qw[tracker dht pex lsd resume_data incoming user]]),
-             default => 'user'
+
+    sub _initializer_torrent {
+        my ($s, $c, $set, $attr) = @_;
+        $set->($c);
+    }
+
+    #
+    has 'pieces' => (
+        is         => 'ro',
+        isa        => 'NBTypes::Torrent::Bitfield',
+        lazy_build => 1,
+        coerce     => 1,
+        init_arg   => undef,
+        predicate  => '_has_pieces',
+        writer     => '_set_pieces',
+        clearer    => '_clear_pieces',
+        trigger    => \&_trigger_pieces,
+        handles    => {
+            _set_piece      => 'Bit_On',
+            _has_piece      => 'bit_test',
+            seed            => 'is_full',
+            _check_interest => sub {
+                my $s = shift;
+                $s->_wanted_pieces->Norm
+                    ? $s->_set_interesting
+                    : $s->_unset_interesting;
+            },
+            _wanted_pieces => sub {
+                my $s            = shift;
+                my $intersection = $s->pieces->Shadow();
+                $intersection->Intersection($s->pieces, $s->torrent->wanted);
+                $intersection;
+                }
+        }
     );
+
+    sub _build_pieces {
+        $_[0]->_has_torrent ? $_[0]->torrent->have->Shadow : ();
+    }
+
+    sub _trigger_pieces {
+        my ($s, $n, $o) = @_;
+        confess 'pieces attribute is already set'
+            if $o && !$s->local_connection;
+        return if !$s->_has_torrent;
+        $s->pieces->Resize($s->torrent->piece_count);
+        $s->_check_interest;
+    }
+    after '_set_piece' => \&_check_interest;
+
+    #
+    has 'peer_id' => (isa       => 'NBTypes::Client::PeerID',
+                      is        => 'ro',
+                      writer    => '_set_peer_id',
+                      predicate => '_has_peer_id'
+    );
+
+    #
+    for my $flag (
+        ([0,
+          [qw[ handshake interesting local_connection on_parole
+               optimistic_unchoke queued remote_interested snubbed
+               support_extensions upload_only]
+          ]
+         ],
+         [1, [qw[choked connecting remote_choked]]]
+        )
+        )
+    {   has $_ => (isa      => 'Bool',
+                   traits   => ['Bool'],
+                   is       => 'ro',
+                   init_arg => undef,
+                   default  => $flag->[0],
+                   handles  => {
+                               '_set_' . $_   => 'set',
+                               '_unset_' . $_ => 'unset'
+                   }
+        ) for @{$flag->[1]};
+    }
+    around '_set_interesting' => sub {
+        my ($c, $s) = @_;
+        return if $s->interesting;
+        $c->($s);
+        $s->_send_interested;
+    };
+    around '_unset_interesting' => sub {
+        my ($c, $s) = @_;
+        return if !$s->interesting;
+        $c->($s);
+        $s->_send_not_interested;
+    };
+    around '_set_choked' => sub {
+        my ($c, $s) = @_;
+        return if $s->choked;
+        $c->($s);
+        $s->_send_choke;
+    };
+    around '_unset_choked' => sub {
+        my ($c, $s) = @_;
+        return if !$s->choked;
+        $c->($s);
+        $s->_send_unchoke;
+    };
+
+    # Internal id
     has '_id' => (isa      => 'Str',                            # creation id
                   is       => 'ro',
                   init_arg => undef,
                   default  => sub { state $id = 'aa'; $id++ }
     );
-    has '_handshake_step' => (
-        isa =>
-            enum(
-            [qw[MSE_ONE MSE_TWO MSE_THREE MSE_FOUR MSE_FIVE REG_ONE REG_TWO REG_THREE REG_OKAY]
-            ]
-            ),
-        is       => 'rw',
-        default  => 'MSE_ONE',
-        init_arg => undef
-    );
-    {    # Handshake utils
 
-        sub _build_reserved {
-            my ($self) = @_;
-            my @reserved = qw[0 0 0 0 0 0 0 0];
-            $reserved[5] |= 0x10;    # Ext Protocol
-            $reserved[7] |= 0x04;    # Fast Ext
-            return join '', map {chr} @reserved;
-        }
-        sub CRYPTO_PLAIN {0x01}
-        sub CRYPTO_RC4   {0x02}
-        sub CRYPTO_XOR   {0x04}      # unimplemented
-        sub CRYPTO_AES   {0x08}      # unimplemented
-        has '_crypto' => (
-            isa => enum([CRYPTO_PLAIN, CRYPTO_RC4, CRYPTO_XOR, CRYPTO_AES]),
-            is  => 'rw',
-            default  => CRYPTO_PLAIN,
-            init_arg => undef
-        );
-
-        #
-        sub DH_P {
-            require Bit::Vector;
-            state $DH_P
-                = Bit::Vector->new_Hex('FFFFFFFFFFFFFFFFC90FDAA22168C234C4C66'
-                . '28B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404D'
-                . 'DEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B5766'
-                . '25E7EC6F44C42E9A63A36210000000000090563');
-            $DH_P;
-        }
-        sub DH_G {2}
-        sub VC   { "\0" x 8 }
-
-        sub crypto_provide {
-            return pack q[N],
-                CRYPTO_PLAIN    # | CRYPTO_RC4    #| CRYPTO_XOR | CRYPTO_AES;
-        }
-        after 'BUILD' => sub {
-            my ($self, $args) = @_;
-            if (defined $args->{'connect'}) {    # outgoing
-                $self->_set_local_connection;
-            }
-            else {
-
-                # incoming
-            }
-        };
-    }
-    for my $flag (qw[
-                  interesting remote_interested
-                  choked      remote_choked
-                  support_extensions              local_connection
-                  handshake   connecting          queued
-                  on_parole   seed                optimistic_unchoke
-                  snubbed     upload_only]
-        )
-    {   has $flag => (isa       => 'Bool',
-                      traits    => ['Bool'],
-                      is        => 'ro',
-                      default   => 0,
-                      predicate => 'is_' . $flag,
-                      handles   => {
-                                  '_set_' . $flag    => 'set',
-                                  '_unset_' . $flag  => 'unset',
-                                  '_toggle_' . $flag => 'toggle',
-                                  'is_not_' . $flag  => 'not'
-                      }
-        );
+    # Utility methods
+    sub _check_unique_connection {    # XXX - Rename this method
+                                      #return;
+        my ($s) = @_;
+        return
+            if scalar(grep { $_->_has_peer_id && $_->peer_id eq $s->peer_id }
+                          $s->torrent->peers
+            ) <= 1;
+        $s->disconnect(sprintf '%s already has connection for this torrent',
+                       $s->peer_id);
     }
 
-    #
-    my $infohash_constraint;
-    after 'BUILD' => sub {
-        my ($s, $a) = @_;
-        my $rule = $s->client->ip_filter->is_banned($s->handle->{'peername'});
-        if (defined $rule) {
-            $s->trigger_ip_filter(
-                               {protocol => ($s->ipv6 ? 'udp6' : 'udp4'),
-                                severity => 'debug',
-                                event    => 'ip_filter',
-                                address => [$s->host, $s->port],
-                                rule    => $rule,
-                                message => 'Connection terminated by ipfilter'
-                               }
-            );
-            return $s->disconnect('Connection terminated by ipfilter');
-        }
-        require Scalar::Util;
-        Scalar::Util::weaken $s;
-        my $hand_shake_writer = sub {
-            my $packet =
-                Net::BitTorrent::Protocol::BEP03::Packets::build_handshake(
-                                  $s->_build_reserved, $s->torrent->info_hash,
-                                  $s->client->peer_id);
-            $s->push_write($packet);
-        };
-        my $hand_shake_reader = sub {
-            my (undef, $data) = @_;
-            if (my ($reserved, $info_hash, $peer_id)
-                = $data =~ m[^\23BitTorrent protocol(.{8})(.{20})(.{20})$])
-            {   $infohash_constraint //=
-                    Moose::Util::TypeConstraints::find_type_constraint(
-                                                'NBTypes::Torrent::Infohash');
-                $info_hash = $infohash_constraint->coerce($info_hash);
-                $s->_set_support_extensions(
-                                         ord(substr($reserved, 5, 1)) & 0x10);
-                $s->_set_peer_id($peer_id);
-                if ($s->local_connection) {
-                    return $s->disconnect(
-                        'Bad info_hash (Does not match the torrent we were seeking)'
-                    ) if $info_hash->Compare($s->torrent->info_hash) != 0;
-                }
-                else {
-                    my $torrent = $a->{'client'}->torrent($info_hash);
-                    return $s->disconnect(
-                            'Bad info_hash (We are not serving this torrent)')
-                        if !$torrent;
-                    $s->_set_torrent($torrent);
-                    $hand_shake_writer->();
-                }
-            }
-            else {
-
-                # XXX - apply encrypted peer role
-            }
-            1;
-        };
-        $s->handle->on_read(
-            sub {
-            PACKET: while (my $packet = parse_packet(\$s->handle->rbuf)) {
-                    $s->_handle_packet($packet);
-                    last PACKET if !$s->rbuf;
-                }
-                warn $s->rbuf if $s->rbuf;
-            }
-        );
-        $s->handle->on_eof(
-            sub {
-                $s->disconnect('Connection closed by remote peer');
-            }
-        );
-        $s->handle->on_error(
-            sub {
-                my ($h, $fatal, $msg) = @_;
-                warn $msg;
-                return if !$fatal;
-                $s->disconnect('Error: ' . $msg);
-            }
-        );
-
-        #$s->handle->on_prepare(sub { $s->set_connecting; 30 });
-        #$s->handle->on_connect(
-        #    sub {    # outgoing. Send handshake
-        #        my ($handle, $host, $port, $retry) = @_;
-        #    }
-        #);
-        $s->handle->on_error(
-            sub {
-                my ($h, $fatal, $msg) = @_;
-                return if !$fatal;
-                $s->disconnect($msg);
-            }
-        );
-        $s->handle->on_eof(
-            sub {
-                $s->disconnect('Connection closed by remote peer');
-            }
-        );
-        $s->handle->on_drain(sub {1});
-        $s->handle->on_timeout(sub { my ($handle) = @_; ... });
-        $s->handle->rtimeout(60 * 5);
-        $s->handle->wtimeout(60 * 10);
-
-        #$s->handle->read_size(1024 * 16);
-        #$s->handle->upload_rate(200);
-        #$s->handle->download_rate(500);
-        #
-        $hand_shake_writer->($s->handle) if $s->local_connection;
-        $s->push_read(chunk => 68, $hand_shake_reader);
-
-        #$hand_shake_reader->($s->handle, substr($s->handle->rbuf, 0, 68) );
-    };
-
+    # Methods
     sub disconnect {
         my ($s, $reason) = @_;
-        warn sprintf '%20s | %s', $s->peer_id || '[unknown peer]', $reason;
-        if (!$s->handle->destroyed) {
-            if (defined $s->handle->{'fh'}) {
-                shutdown($s->handle->{'fh'}, 2);
-                close($s->handle->{'fh'});
-            }
-            $s->handle->destroy;
-        }
+        my ($host, $port, $peer_id) = ($s->host, $s->port, $s->peer_id);
+        $s->trigger_peer_disconnect({peer => $s,
+                                     message =>
+                                         sprintf('%s:%d (%s) disconnect: %s',
+                                                 $host    || 'unknown host',
+                                                 $port    || 0,
+                                                 $peer_id || '[unknown peer]',
+                                                 $reason  || 'Unknown reason'
+                                         ),
+                                     severity => 'info'
+                                    }
+        );
         $s->client->del_peer($s);
         $_[0] = undef;
     }
 
-    sub _build_sockaddr {
-        require Net::BitTorrent::Network::Utility;
-        Net::BitTorrent::Network::Utility::sockaddr($_[0]->host, $_[0]->port);
-    }
-    for my $flag (qw[up_speed down_speed payload_up_speed payload_downspeed])
-    {   has $flag => (isa     => 'Int',
-                      is      => 'rw',
-                      default => 0
-        );
-    }
-    for my $dir (qw[up down]) {
-        for my $content ('', 'payload_') {   # XXX - Update these every second
-            my $attr = sprintf '%s%s_speed', $content, $dir;
-            has $attr => (isa      => 'Int',
-                          is       => 'ro',
-                          init_arg => undef,
-                          default  => 0,
-                          writer   => '_' . $attr
-            );
-        }
-        my $attr = sprintf 'total_%sload', $dir;
-        has $attr => (isa      => 'Int',
-                      is       => 'ro',
-                      init_arg => undef,
-                      traits   => ['Counter'],
-                      handles  => {'_inc_' . $attr => 'inc'},
-                      default  => 0
-        );
-        $attr = sprintf '%sload_limit', $dir;
-        has $attr => (isa      => subtype(as 'Int' => where   { $_ >= -1 }),
-                      is       => 'ro',
-                      init_arg => undef,
-                      writer   => '_set_' . $attr,
-                      default  => -1               # Unlimited
-        );
-    }
-    has 'peer_id' => (isa       => 'NBTypes::Client::PeerID',
-                      is        => 'ro',
-                      writer    => '_set_peer_id',
-                      predicate => 'has_peer_id'
-    );
-    has 'pieces' => (is         => 'ro',
-                     isa        => 'NBTypes::Torrent::Bitfield',
-                     lazy_build => 1,
-                     coerce     => 1,
-                     init_arg   => undef,
-                     writer     => '_set_pieces',
-                     clearer    => '_clear_pieces'
-    );
-    sub _build_pieces { '0' x $_[0]->torrent->piece_count }
-
-    sub _XXX_set_seed {
-        $_[0]->set_seed($_[0]->pieces->to_Bin =~ m[0] ? 0 : 1);
-    }
-    for my $action (qw[request active]) {
-        has 'last_'
-            . $action => (
-                     is      => 'ro',
-                     isa     => 'Int',
-                     traits  => ['Number'],
-                     handles => {'set_last_' . $action => ['set', sub {time}]}
-            );
-    }
-
-=begin comment     after 'BUILD' => sub {
-        use Data::Dump;
-        ddx \@_;
-        ...;
-    };
-=cut
-    my %_packet_dispatch;
-
-    sub _handle_packet {
-        my ($self, $packet) = @_;
-        return if !$self->has_torrent;
-        return if !$self->has_handle;
-
-        #use Data::Dump;
-        #ddx $packet;
-        %_packet_dispatch = (
-            BITFIELD => sub {    # 5
-                my ($s, $bitfield) = @_;
-                return $s->_set_pieces($bitfield);
-            },
-            EXTPROTOCOL => sub {    # 20
-                my ($s, $pid, $p) = @_;
-                if ($pid == 0) {    # Setup/handshake
-                    if (defined $packet->{'p'} && $self->client->has_dht) {
-                        $self->client->dht->ipv4_add_node(
-                                [join('.', unpack 'C*', $packet->{'ipv4'}),
-                                 $packet->{'p'}
-                                ]
-                        ) if defined $packet->{'ipv4'};
-                        $self->client->dht->ipv6_add_node(
-                                      [[join ':',
-                                        (unpack 'H*', $packet->{'ipv6'})
-                                            =~ m[(....)]g
-                                       ],
-                                       $packet->{'p'}
-                                      ]
-                        ) if defined $packet->{'ipv6'};
-                    }
-                }
-                return 1;
-            }
-        ) if !keys %_packet_dispatch;
-        $_packet_dispatch{$packet->{'type'}}->($self, $packet->{'payload'})
-            if defined $_packet_dispatch{$packet->{'type'}};
-    }
-    {    # Callback system
-        after 'BUILD' => sub {
-            my $s = shift;
-
-            #$s->trigger_peer_construction($s);
-        };
-        after 'DEMOLISH' => sub {
-            my $s = shift;
-
-            #$s->trigger_peer_destruction($s);
-        };
-    }
-    {    ### Simple plugin system
-        my @_plugins;
-
-        sub _register_plugin {
-            my $s = shift;
-            return $s->meta->apply(@_) if blessed $s;
-            my %seen = ();
-            return @_plugins = grep { !$seen{$_}++ } @_plugins, @_;
-        }
-        after 'BUILD' => sub {
-            return if !@_plugins;
-            my ($s, $a) = @_;
-            require Moose::Util;
-            Moose::Util::apply_all_roles($s, @_plugins,
-                                         {rebless_params => $a});
-        };
-    }
-###
-    sub DEMOLISH {
-        my $s = shift;
-        return if $s->handle->destroyed;
-        if (defined $s->handle->{'fh'}) {
-            shutdown($s->handle->{'fh'}, 2);
-            close($s->handle->{'fh'});
-        }
-        $s->handle->destroy;
-        1;
-    }
+    #
+    no Moose;
+    __PACKAGE__->meta->make_immutable;
 }
 1;
 
 =pod
 
+=head1 NAME
 
+Net::BitTorrent::Peer - Base class for peer connections
 
-=head1 Activity Methods
+=head1 Description
 
+As the base class for all outgoing and incoming peer connections, this class
+is all but useless on its own. Don't try C<Net::BitTorrent::Peer->new( ... )>;
+instead, create new peer connections with the correct subclass:
 
-=head1 Status Methods
+=over
+
+=item Net::BitTorrent::Protocol::BEP03::Peer::Incoming
+
+Incoming TCP-based peer.
+
+=item Net::BitTorrent::Protocol::BEP03::Peer::Outgoing
+
+Outgoing TCP-based peer.
+
+=item Net::BitTorrent::Protocol::uTP::Peer::Outgoing
+
+Outgoing (UDP) uTP-based peer.
+
+=item Net::BitTorrent::Protocol::uTP::Peer::Incoming
+
+Incoming (UDP) uTP-based peer.
+
+=back
+
+=head1 Public Status Methods
 
 These methods (or accessors) do not initiate a particular action but return
 current state of the peer.
-
-=head2 Net::BitTorrent::Peer->interesting( )
-
-We are interested in pieces from this peer.
 
 =head2 Net::BitTorrent::Peer->choked( )
 
 We have choked this peer.
 
-=head2 Net::BitTorrent::Peer->remote_interested( )
+=head2 Net::BitTorrent::Peer->connecting( )
 
-The peer is interested in us.
+The connection is in a half-open state (i.e. it is being connected).
 
-=head2 Net::BitTorrent::Peer->remote_choked( )
+=head2 Net::BitTorrent::Peer->handshake( )
 
-The peer has choked us.
+The connection is opened, and waiting for the handshake. Until the handshake
+is done, the peer cannot be identified.
 
-=head2 Net::BitTorrent::Peer->support_extensions( )
+=head2 Net::BitTorrent::Peer->interesting( )
 
-Means that this peer supports the extension protocol.
+We are interested in pieces from this peer.
 
 =head2 Net::BitTorrent::Peer->local_connection( )
 
@@ -456,29 +237,11 @@ The connection was initiated by us, the peer has a listen port open, and that
 port is the same as in the address of this peer. If this flag is not set, this
 peer connection was opened by this peer connecting to us.
 
-=head2 Net::BitTorrent::Peer->handshake( )
-
-The connection is opened, and waiting for the handshake. Until the handshake
-is done, the peer cannot be identified.
-
-=head2 Net::BitTorrent::Peer->connecting( )
-
-The connection is in a half-open state (i.e. it is being connected).
-
-=head2 Net::BitTorrent::Peer->queued( )
-
-The connection is currently queued for a connection attempt. This may happen
-if there is a limit set on the number of half-open TCP connections.
-
 =head2 Net::BitTorrent::Peer->on_parole( )
 
 The peer has participated in a piece that failed the hash check, and is now
 "on parole", which means we're only requesting whole pieces from this peer
 until it either fails that piece or proves that it doesn't send bad data.
-
-=head2 Net::BitTorrent::Peer->seed( )
-
-This peer is a seed (it has all the pieces).
 
 =head2 Net::BitTorrent::Peer->optimistic_unchoke( )
 
@@ -487,17 +250,61 @@ while to see if it might unchoke us in return an earn an upload/unchoke slot.
 If it doesn't within some period of time, it will be choked and another peer
 will be optimistically unchoked.
 
+=head2 Net::BitTorrent::Peer->pieces( )
+
+This is a bitfield with one bit per piece in the torrent. Each bit tells you
+if the peer has that piece (if it's set to 1) or if the peer is missing that
+piece (set to 0). Like all bitfields, this returns a
+L<Bit::Vector|Bit::Vector> object.
+
+=head2 Net::BitTorrent::Peer->queued( )
+
+The connection is currently queued for a connection attempt. This may happen
+if there is a limit set on the number of half-open TCP connections.
+
+=head2 Net::BitTorrent::Peer->remote_choked( )
+
+The peer has choked us.
+
+=head2 Net::BitTorrent::Peer->remote_interested( )
+
+The peer is interested in us.
+
+=head2 Net::BitTorrent::Peer->seed( )
+
+This peer is a seed (it has all the pieces).
+
 =head2 Net::BitTorrent::Peer->snubbed( )
 
 This peer has recently failed to send a block within the request timeout from
 when the request was sent. We're currently picking one block at a time from
 this peer.
 
+=head2 Net::BitTorrent::Peer->support_extensions( )
+
+Means that this peer supports the extension protocol.
+
+=head2 Net::BitTorrent::Peer->torrent( )
+
+This is a L<Net::BitTorrent::Torrent|Net::BitTorrent::Torrent> object. Note
+that incoming connections may not have this value set until after the
+<handshake|/"Net::BitTorrent::Peer->handshake( )"> is complete.
+
 =head2 Net::BitTorrent::Peer->upload_only( )
 
 This peer has either explicitly (with an extension) or implicitly (by becoming
 a seed) told us that it will not downloading anything more, regardless of
 which pieces we have.
+
+
+
+
+
+
+
+
+
+=begin :TODO
 
 =head2 Net::BitTorrent::Peer->host( )
 
@@ -539,13 +346,6 @@ The peer's id as used in the BitTorrent protocol. This id can be used to
 extract 'fingerprints' from the peer. Sometimes it can tell you which client
 the peer is using.
 
-=head2 Net::BitTorrent::Peer->pieces( )
-
-This is a bitfield with one bit per piece in the torrent. Each bit tells you
-if the peer has that piece (if it's set to 1) or if the peer is missing that
-piece (set to 0). Like all bitfields, this returns a
-L<Bit::Vector|Bit::Vector> object.
-
 =head2 Net::BitTorrent::Peer->upload_limit( )
 
 The number of bytes we are allowed to send to this peer every second. It may
@@ -565,10 +365,436 @@ The time since we last sent a request to this peer.
 
 The time since any transfer occurred with this peer.
 
+=end :TODO
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+=cut
+
+=pod
+
+=begin old
+
+    #
+
+    #
+
+    after 'BUILD' => sub {
+        my ($s, $a) = @_;
+        require AnyEvent::Handle::Throttle;
+        $s->_set_handle(
+            AnyEvent::Handle::Throttle->new(
+                $a->{'fh'} ? (fh => $a->{'fh'}) : (connect => $a->{'connect'})
+            )
+        );
+    };
+    has 'source' => (
+             is  => 'ro',
+             isa => enum([qw[tracker dht pex lsd resume_data incoming user]]),
+             default => 'user'
+    );
+
+    has 'handshake_step' => (
+        isa        => enum([qw[REG_ONE REG_TWO REG_THREE REG_OKAY]]),
+        is         => 'ro',
+        writer     => '_set_handshake_step',
+        lazy_build => 1,
+        init_arg   => undef,
+        trigger    => sub {
+            my $s = shift;
+            $s->_send_bitfield if $s->handshake_step eq 'REG_OKAY';
+        }
+    );
+
+    sub _build_handshake_step {
+        my $s = shift;
+        $s->local_connection ? 'REG_ONE' : 'REG_TWO';
+    }
+
+    sub _build_reserved {
+        my ($self) = @_;
+        my @reserved = qw[0 0 0 0 0 0 0 0];
+        $reserved[5] |= 0x10;    # Ext Protocol
+        $reserved[7] |= 0x04;    # Fast Ext
+        return join '', map {chr} @reserved;
+    }
+    after 'BUILD' => sub {
+        my ($s, $a) = @_;
+        if (defined $a->{'connect'}) {    # outgoing
+            $s->_set_local_connection;
+        }
+        else {
+
+            # incoming
+        }
+        $s->handshake_step;
+    };
+
+    has 'remote_requests' => (is      => 'ro',
+                              isa     => 'ArrayRef[ArrayRef]',
+                              traits  => ['Array'],
+                              handles => {_add_remote_request    => 'push',
+                                          _shift_remote_requests => 'shift',
+                                          _clear_remote_requests => 'clear',
+                                          _count_remote_requests => 'count'
+                              },
+                              default => sub { [] }
+    );
+    has 'requests' => (
+                    is  => 'ro',
+                    isa => 'ArrayRef[Net::BitTorrent::Torrent::Piece::Block]',
+                    traits  => ['Array'],
+                    handles => {_add_request    => 'push',
+                                _clear_requests => 'clear',
+                                _count_requests => 'count'
+                    },
+                    default => sub { [] }
+    );
+    around '_add_request' => sub {
+        my ($c, $s, $b) = @_;
+        return if $s->choked;
+        $c->($s, $b);    # XXX - also let the parent client know
+
+        # XXX - also let the parent client know
+        $s->_send_request($b);
+        $b->_set_peer($s);
+    };
+    around '_unset_remote_choked' => sub {
+        my ($c, $s) = @_;
+        return if $s->_has_quest('request_block');
+        require Scalar::Util;
+        Scalar::Util::weaken $s;
+        my $max_requests = 4;    # XXX - max_requests attribute
+        $s->_add_quest(
+            'request_block',
+            AE::timer(
+                0, 3,
+                sub {
+                    return if !defined $s;
+                    for (0 .. $max_requests) {
+                        my $piece = $s->torrent->select_piece($s);
+                        next if !$piece;
+                        my $b = $piece->_first_unassigned_block();
+                        next if !$b;
+                        $s->_add_request($b);
+                    }
+                }
+            )
+        );
+    };
+    has 'quests' => (is      => 'ro',
+                     isa     => 'HashRef[ArrayRef]',
+                     traits  => ['Hash'],
+                     handles => {_add_quest    => 'set',
+                                 _get_quest    => 'get',
+                                 _has_quest    => 'defined',
+                                 _delete_quest => 'delete',
+                                 _clear_quests => 'clear'
+                     },
+                     default => sub { {} }
+    );
+
+    #
+    my $infohash_constraint;
+    after 'BUILDALL' => sub {
+        my ($s, $a) = @_;
+        require Scalar::Util;
+        Scalar::Util::weaken $s;
+        my $rule = $s->client->ip_filter->is_banned($s->handle->{'peername'});
+        if (defined $rule) {
+            $s->trigger_ip_filter(
+                               {protocol => ($s->ipv6 ? 'udp6' : 'udp4'),
+                                severity => 'debug',
+                                event    => 'ip_filter',
+                                address => [$s->host, $s->port],
+                                rule    => $rule,
+                                message => 'Connection terminated by ipfilter'
+                               }
+            );
+            return $s->disconnect('Connection terminated by ipfilter');
+        }
+
+        my $hand_shake_reader = sub {
+            return if !defined $s;
+            my (undef, $data) = @_;
+            use Data::Dump;
+            ddx $s->rbuf;
+            ddx $data;
+            ddx \@_;
+            if (my ($reserved, $info_hash, $peer_id)
+                = $data =~ m[^\23BitTorrent protocol(.{8})(.{20})(.{20})$])
+            {   $infohash_constraint //=
+                    Moose::Util::TypeConstraints::find_type_constraint(
+                                                'NBTypes::Torrent::Infohash');
+                $info_hash = $infohash_constraint->coerce($info_hash);
+                $s->_set_support_extensions(
+                                         ord(substr($reserved, 5, 1)) & 0x10);
+                $s->_set_peer_id($peer_id);
+                if ($s->handshake_step eq 'REG_THREE') {
+                    return $s->disconnect(
+                        'Bad info_hash (Does not match the torrent we were seeking)'
+                    ) if $info_hash->Compare($s->torrent->info_hash) != 0;
+                    $s->_set_handshake_step('REG_OKAY');
+                    $s->_check_unique_connection;
+                    return if !defined $s;
+                }
+                elsif ($s->handshake_step eq 'REG_TWO') {
+                    warn 'Incoming connection!';
+                    my $torrent = $a->{'client'}->torrent($info_hash);
+                    return
+                        $s->disconnect(
+                              sprintf 'Bad info_hash (We are not serving %s)',
+                              $info_hash->to_Hex)
+                        if !$torrent;
+                    $s->_set_torrent($torrent);
+                    $s->_check_unique_connection;
+                    return if !defined $s;
+                    $hand_shake_writer->() if defined $torrent;
+                }
+                else {
+                    ...;
+                }
+            }
+            else {
+
+                # XXX - apply encrypted peer role
+            }
+            1;
+        };
+        $s->handle->on_drain(sub {1});
+        $s->handle->on_timeout(sub { my ($handle) = @_; ... });
+        $s->handle->rtimeout(60 * 5);
+        $s->handle->wtimeout(60 * 10);
+
+        #$s->handle->read_size(1024 * 16);
+        #$s->handle->upload_rate(200);
+        #$s->handle->download_rate(500);
+        #
+        $hand_shake_writer->($s->handle) if $s->local_connection;
+        $s->push_read(chunk => 68, $hand_shake_reader);
+
+        #$hand_shake_reader->($s->handle, substr($s->handle->rbuf, 0, 68) );
+    };
+    after 'BUILD' => sub {
+        my $s = shift;
+        require Scalar::Util;
+        Scalar::Util::weaken $s;
+         $s->handle->on_eof(
+            sub {
+                return if !defined $s;
+                $s->disconnect('Connection closed by remote peer');
+            }
+        );
+        $s->handle->on_error(
+            sub {
+                return if !defined $s;
+                my ($h, $fatal, $msg) = @_;
+                warn $msg;
+                return if !$fatal;
+                $s->disconnect('Error: ' . $msg);
+            }
+        );
+
+        #$s->handle->on_prepare(sub { $s->set_connecting; 30 });
+        #$s->handle->on_connect(
+        #    sub {    # outgoing. Send handshake
+        #        my ($handle, $host, $port, $retry) = @_;
+        #    }
+        #);
+        $s->handle->on_error(
+            sub {
+                return if !defined $s;
+                my ($h, $fatal, $msg) = @_;
+                return if !$fatal;
+                $s->disconnect($msg);
+            }
+        );
+        $s->handle->on_eof(
+            sub {
+                return if !defined $s;
+                $s->disconnect('Connection closed by remote peer');
+            }
+        );
+    };
+
+    sub _build_sockaddr {
+        require Net::BitTorrent::Network::Utility;
+        Net::BitTorrent::Network::Utility::sockaddr($_[0]->host, $_[0]->port);
+    }
+    for my $flag (qw[up_speed down_speed payload_up_speed payload_downspeed])
+    {   has $flag => (isa     => 'Int',
+                      is      => 'rw',
+                      default => 0
+        );
+    }
+    for my $dir (qw[up down]) {
+        for my $content ('', 'payload_') {   # XXX - Update these every second
+            my $attr = sprintf '%s%s_speed', $content, $dir;
+            has $attr => (isa      => 'Int',
+                          is       => 'ro',
+                          init_arg => undef,
+                          default  => 0,
+                          writer   => '_' . $attr
+            );
+        }
+        my $attr = sprintf 'total_%sload', $dir;
+        has $attr => (isa      => 'Int',
+                      is       => 'ro',
+                      init_arg => undef,
+                      traits   => ['Counter'],
+                      handles  => {'_inc_' . $attr => 'inc'},
+                      default  => 0
+        );
+        $attr = sprintf '%sload_limit', $dir;
+        has $attr => (isa      => subtype(as 'Int' => where   { $_ >= -1 }),
+                      is       => 'ro',
+                      init_arg => undef,
+                      writer   => '_set_' . $attr,
+                      default  => -1               # Unlimited
+        );
+    }
+
+    after '_set_peer_id' => sub {
+        my $s = shift;
+        $s->trigger_peer_id({peer    => $s,
+                             peer_id => $s->peer_id,
+                             message =>
+                                 sprintf('%s:%d sent peer_id %s',
+                                         $s->host, $s->port, $s->peer_id
+                                 ),
+                             severity => 'debug'
+                            }
+        );
+    };
+
+    #after '_set_pieces' => sub {
+    #    my $s = shift;
+    #    warn unpack 'b*', shift;
+    #    warn $s->pieces->to_Bin;
+    #    #$s->pieces->Reverse($s->pieces);
+    #    #warn $s->pieces->to_Bin;
+    #    die;
+    #};
+    after qr[^_set_pieces?] => sub {
+        my $s = shift;
+        $s->check_interest;
+    };
+    for my $action (qw[request active]) {
+        has 'last_'
+            . $action => (
+                     is      => 'ro',
+                     isa     => 'Int',
+                     traits  => ['Number'],
+                     handles => {'set_last_' . $action => ['set', sub {time}]}
+            );
+    }
+
+    #
+
+
+
+    # Callback system
+    {
+        after 'BUILD' => sub {
+            my $s = shift;
+
+            #$s->trigger_peer_construction($s);
+        };
+        after 'DEMOLISH' => sub {
+            my $s = shift;
+
+            #$s->trigger_peer_destruction($s);
+        };
+    }
+
+    # Utility methods
+    sub _uT_flags {
+        my $s = shift;
+        my @flags;
+
+        # ?: your client unchoked the peer but the peer is not interested
+        push @flags, !$s->choked && !$s->remote_interested ? '?' : ' ';
+
+# D: currently downloading from the peer (interested and not choked)
+# d: your client wants to download, but peer doesn't want to send (interested and choked)
+        push @flags,
+              $s->interesting && !$s->remote_choked ? 'D'
+            : $s->interesting && $s->remote_choked  ? 'd'
+            :                                         ' ';
+
+# E: peer is using Protocol Encryption (all traffic)
+# e: peer is using Protocol Encryption (handshake)
+# F: peer was involved in a hashfailed piece (not necessarily a bad peer, just involved)
+# H: peer was obtained through DHT
+# h: peer connection established via UDP hole-punching
+# I: peer established an incoming connection
+        push @flags, $s->local_connection ? ' ' : 'I';
+
+        # K: peer unchoked your client, but your client is not interested
+        push @flags, !$s->remote_choked && !$s->interesting ? 'K' : ' ';
+
+# L: peer has been or discovered via Local Peer Discovery
+# O: optimistic unchoke
+# P: peer is communicating and transporting data over uTP
+# S: peer is snubbed
+# U: currently uploading to the peer (interested and not choked)
+# u: the peer wants your client to upload, but your client doesn't want to (interested and choked)
+        push @flags,
+              $s->remote_interested && !$s->choked ? 'U'
+            : $s->remote_interested && $s->choked  ? 'u'
+            :                                        ' ';
+
+     # X: peer was included in peer lists obtained through Peer Exchange (PEX)
+        return join '', @flags;
+    }
+
+    # {    ### Simple plugin system
+    # my @_plugins;
+    # sub _register_plugin {
+    # my $s = shift;
+    # return $s->meta->apply(@_) if blessed $s;
+    # my %seen = ();
+    # return @_plugins = grep { !$seen{$_}++ } @_plugins, @_;
+    # }
+    # after 'BUILD' => sub {
+    # return if !@_plugins;
+    # my ($s, $a) = @_;
+    # require Moose::Util;
+    # Moose::Util::apply_all_roles($s, @_plugins,
+    # {rebless_params => $a});
+    # };
+    # }
+###
+    sub DEMOLISH {
+        my $s = shift;
+        return                    if !$s->has_handle;
+        return                    if $s->handle->destroyed;
+        $s->handle->push_shutdown if defined $s->handle->{'fh'};
+        $s->client->del_peer($s);
+        $s->handle->destroy;
+        1;
+    }
+
+=end old
+
+=cut
+
+=pod
+
+=head1 Activity Methods
 
 
 
@@ -669,6 +895,33 @@ progress_ppm indicates the download progress of the peer in the range [0, 100000
 
 
 
+=head1 Author
+
+Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
+
+CPAN ID: SANKO
+
+=head1 License and Legal
+
+Copyright (C) 2008-2010 by Sanko Robinson <sanko@cpan.org>
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of
+L<The Artistic License 2.0|http://www.perlfoundation.org/artistic_license_2_0>.
+See the F<LICENSE> file included with this distribution or
+L<notes on the Artistic License 2.0|http://www.perlfoundation.org/artistic_2_0_notes>
+for clarification.
+
+When separated from the distribution, all original POD documentation is
+covered by the
+L<Creative Commons Attribution-Share Alike 3.0 License|http://creativecommons.org/licenses/by-sa/3.0/us/legalcode>.
+See the
+L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/us/>.
+
+Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
+Inc.
+
+=for rcs $Id: Peer.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
 
 
 =cut

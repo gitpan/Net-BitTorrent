@@ -3,14 +3,13 @@ use strict;
 use warnings;
 use File::Find;
 use Module::Build;
-our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 7; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 8; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 $|++;
 my $automated_testing = $ENV{'AUTOMATED_TESTING'}
     || $ENV{'PERL_MM_USE_DEFAULT'};
 my $is_developer = ((-d '.git') ? 1 : 0) or ($ENV{'RELEASE_TESTING'} ? 1 : 0);
 my @tests;
 find \&find_cb, qw[t/10000_by_class/];
-@tests = reverse sort @tests;
 my $class = $is_developer ? 'inc::MBX::Developer' : 'Module::Build';
 
 if (!eval "require $class") {
@@ -36,14 +35,18 @@ my $mb = $class->new(
                  Moose                        => 0,
                  perl                         => '5.12.0',
                  'Scalar::Util'               => 1.19,
-                 'Test::More'                 => 0.80
+                 'TAP::Harness'               => 3.18,
+                 'Test::Class'                => 0.35,
+                 'Test::Exception'            => 0,
+                 'Test::Most'                 => 0,
     },
-    build_requires => {'File::Temp'    => 0,
-                       'Module::Build' => 0.30,
-                       perl            => '5.12.0',
-                       'TAP::Harness'  => 3.18,
-                       'Test::Class'   => 0.35,
-                       'Test::More'    => 0.80,
+    build_requires => {'File::Temp'      => 0,
+                       'Module::Build'   => 0.30,
+                       perl              => '5.12.0',
+                       'TAP::Harness'    => 3.18,
+                       'Test::Class'     => 0.35,
+                       'Test::Exception' => 0,
+                       'Test::Most'      => 0,
                        ($is_developer
                         ? ('CPAN::Meta::Converter' => 0,
                            'CPAN::Meta::Validator' => 0,
@@ -54,12 +57,17 @@ my $mb = $class->new(
     },
     recommends       => {perl => '5.13.0'},
     test_files       => \@tests,
-    test_file_exts   => [qw(.t .tap .txt)],
+    test_file_exts   => ['.t'],
     use_tap_harness  => 1,
     tap_harness_args => {
-         jobs => 9,
-         rules =>
-             {par => [{seq => '/t/10000_by_class/Net/BitTorrent/DHT/*'}, '*']}
+                    jobs  => 9,
+                    rules => {
+                        par => [
+                            {seq => '/t/10000_by_class/Net/BitTorrent[\._]'},
+                            {seq => '/t/10000_by_class/Net/BitTorrent/DHT/*'},
+                            '*'
+                        ]
+                    }
     },
     meta_merge => {
         keywords  => [qw[BitTorrent torrent client DHT UDP]],
@@ -124,6 +132,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Build.PL d65f697 2010-07-08 05:17:18Z sanko@cpan.org $
+=for rcs $Id: Build.PL 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
 
 =cut

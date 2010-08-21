@@ -8,7 +8,7 @@ Net::BitTorrent::Protocol::BEP03 - The BitTorrent Protocol Specification
 
 BEP: 3
 Title: The BitTorrent Protocol Specification
-Version: $Revision: 838ec755c2c860db050a81fab02fd7da15b36add $
+Version: $Rev: 838ec75 $
 Last-Modified: $Date: 2010-04-25 20:11:56Z (Sun, 25 Apr 2010) $
 Author:  Bram Cohen <bram@bittorrent.com>
 Status:  Final

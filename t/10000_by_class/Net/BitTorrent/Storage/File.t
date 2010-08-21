@@ -51,7 +51,8 @@ is_deeply(
          'http://openoffice.virginmedia.com/stable/3.2.0/OOo_3.2.0_Win32Intel_install_en-US.exe',
          'ftp://ftp.kr.freebsd.org/pub/openoffice/stable/3.2.0/OOo_3.2.0_Win32Intel_install_en-US.exe'
      ]
-    }
+    },
+    'Metadata was parsed correctly'
 );
 
 #use Data::Dumper;
@@ -89,6 +90,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: File.t 0c58774 2010-06-15 16:14:08Z sanko@cpan.org $
+=for rcs $Id: File.t e1e3674 2010-07-15 19:01:21Z sanko@cpan.org $
 
 =cut

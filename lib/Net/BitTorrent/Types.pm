@@ -23,7 +23,7 @@ package Net::BitTorrent::Types;
             qw[NBTypes::Torrent::Status NBTypes::Torrent::Infohash
                 NBTypes::Torrent::Bitfield]
         ],
-        paddr => [qw[NBTypes::Network::Paddr]]
+        addr => [qw[NBTypes::Network::Paddr NBTypes::Network::Addr]]
     );
     @EXPORT_OK = sort map { @$_ = sort @$_; @$_ } values %EXPORT_TAGS;
     $EXPORT_TAGS{'all'} = \@EXPORT_OK;    # When you want to import everything
@@ -53,14 +53,14 @@ package Net::BitTorrent::Types;
         };
     subtype 'NBTypes::Torrent::Bitfield' => as 'Bit::Vector';
     coerce 'NBTypes::Torrent::Bitfield' =>
-        from subtype(as 'Str' => where { $_ =~ m[^(?:[10]*)$] }) => via {
+        from subtype(as 'Str' => where { $_ =~ m[^(?:[10]+)$] }) => via {
         require Bit::Vector;
-        Bit::Vector->new_Bin(length($_), $_);
+        Bit::Vector->new_Bin(length($_), scalar reverse $_);
         },
-        from subtype(as 'Str' => where { unpack('b*', $_) =~ m[^(?:[10]*)$] }
+        from subtype(as 'Str' => where { unpack('b*', $_) =~ m[^(?:[10]+)$] }
         ) => via {
         require Bit::Vector;
-        my $unpack = unpack 'b*', $_;
+        my $unpack = scalar reverse unpack 'b*', $_;
         Bit::Vector->new_Bin(length $unpack, $unpack);
         };
 
@@ -148,6 +148,16 @@ package Net::BitTorrent::Types;
         require Net::BitTorrent::Network::Utility;
         Net::BitTorrent::Network::Utility::ip2paddr($_);
     };
+
+    #
+    subtype 'NBTypes::Network::Addr' => as 'ArrayRef' =>
+        where { $#{$_[0]} == 1 }   => message {'looking for [host, port]'} =>
+        where { defined $_[0][0] } => message {'hostname is missing'} =>
+        where { defined $_[0][1] } => message {'port is missing'} =>
+        where { $_[0][1] =~ m[^\d+$] } => message {'malformed port'};
+
+    #
+    no Moose::Util::TypeConstraints;
 }
 1;
 
@@ -183,6 +193,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Types.pm c1539fe 2010-07-03 04:58:20Z sanko@cpan.org $
+=for rcs $Id: Types.pm 0aeb1fc 2010-08-02 15:34:35Z sanko@cpan.org $
 
 =cut
