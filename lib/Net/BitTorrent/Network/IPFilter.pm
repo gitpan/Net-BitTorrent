@@ -11,7 +11,6 @@ package Net::BitTorrent::Network::IPFilter;
           isa => 'ArrayRef[Net::BitTorrent::Network::IPFilter::Rule]' => is =>
               'ro',
           traits   => ['Array'],
-          coerce   => 1,
           init_arg => undef,
           default  => sub { [] },
           handles  => {
@@ -217,6 +216,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: IPFilter.pm cf06f07 2010-07-05 15:33:02Z sanko@cpan.org $
+=for rcs $Id: IPFilter.pm ba85fec 2010-08-22 16:35:45Z sanko@cpan.org $
 
 =cut

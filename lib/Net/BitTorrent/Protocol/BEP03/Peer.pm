@@ -151,7 +151,7 @@
         my $code
             = $s->can('_handle_packet_' . $_packet_dispatch{$p->{'type'}});
         return $code->($s, $p->{'payload'}) if $code;
-        return if !eval 'use Data::Dump;';
+        return if !eval 'require Data::Dump;';
         ddx $p;
     }
     override 'disconnect' => sub {
@@ -234,6 +234,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Peer.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
+=for rcs $Id: Peer.pm c7a1e01 2010-08-22 16:36:42Z sanko@cpan.org $
 
 =cut

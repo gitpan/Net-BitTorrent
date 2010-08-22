@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use File::Find;
 use Module::Build;
-our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 8; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 9; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 $|++;
 my $automated_testing = $ENV{'AUTOMATED_TESTING'}
     || $ENV{'PERL_MM_USE_DEFAULT'};
@@ -50,12 +50,12 @@ my $mb = $class->new(
                        ($is_developer
                         ? ('CPAN::Meta::Converter' => 0,
                            'CPAN::Meta::Validator' => 0,
-                           JSON                    => 0
+                           JSON                    => 0,
+                           'Perl::Tidy'            => 0
                             )
                         : ()
                        )
     },
-    recommends       => {perl => '5.13.0'},
     test_files       => \@tests,
     test_file_exts   => ['.t'],
     use_tap_harness  => 1,
@@ -132,6 +132,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Build.PL 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
+=for rcs $Id: Build.PL c7a1e01 2010-08-22 16:36:42Z sanko@cpan.org $
 
 =cut
