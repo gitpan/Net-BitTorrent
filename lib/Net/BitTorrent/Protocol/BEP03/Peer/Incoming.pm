@@ -6,6 +6,7 @@
     use lib '../../../../../../lib';
     use Net::BitTorrent::Types qw[:addr];
     extends 'Net::BitTorrent::Protocol::BEP03::Peer';
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 10; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     has '_handle' => (
         is          => 'ro',
         isa         => 'AnyEvent::Handle::Throttle',
@@ -14,11 +15,12 @@
         init_arg    => 'handle',
         required    => 1,
         handles     => {
-            rbuf       => 'rbuf',
-            push_read  => 'push_read',
-            push_write => 'push_write',
-            fh         => sub { shift->_handle->{'fh'} },
-            host       => sub {
+            rbuf           => 'rbuf',
+            push_read      => 'push_read',
+            push_write     => 'push_write',
+            total_download => 'download_total',
+            fh             => sub { shift->_handle->{'fh'} },
+            host           => sub {
                 my $s = shift;
                 return $_[0] = undef  #$s->disconnect('Failed to open socket')
                     if !defined $s->fh;    # XXX - error creating socket?
@@ -100,7 +102,9 @@
         return if !defined $s;
 
         # send handshake
-        $s->_send_handshake if defined $t;
+        return if !defined $t;
+        $s->_send_handshake;
+        $s->_send_bitfield;
     }
 
     #
@@ -146,6 +150,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Incoming.pm 4a832ab 2010-08-21 17:00:23Z sanko@cpan.org $
+=for rcs $Id: Incoming.pm 15cc184 2010-09-05 19:12:43Z sanko@cpan.org $
 
 =cut

@@ -25,7 +25,7 @@ package Net::BitTorrent;
         return pack(
             'a20',
             (sprintf(
-                 'NB%03d%1s-%8s%5s',
+                 'NB%03d%1s-%8s%-5s',
                  $MAJOR * 1000,
                  ($DEV > 0 ? 'U' : 'S'),
                  (join '',
@@ -34,7 +34,7 @@ package Net::BitTorrent;
                       ->[rand(66)]
                       } 1 .. 8
                  ),
-                 'KaiLi'
+                 [qw[KaiLi April]]->[rand 2]
              )
             )
         );
@@ -371,11 +371,17 @@ package Net::BitTorrent;
         }
         require Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
         require AnyEvent::Handle::Throttle;
-        $peer =
-            Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
-                        client => $self,
-                        handle => AnyEvent::Handle::Throttle->new(fh => $peer)
-            );
+        $peer = Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
+            client => $self,
+            handle => AnyEvent::Handle::Throttle->new(
+                fh     => $peer,
+                on_eof => sub {
+                    return if !defined $peer;
+                    $peer->_handle->push_shutdown;
+                    $peer->_handle->destroy;
+                }
+            )
+        );
         $self->add_peer($peer);
         $self->trigger_peer_connect(
                    {severity => 'info',
@@ -405,11 +411,17 @@ package Net::BitTorrent;
         }
         require Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
         require AnyEvent::Handle::Throttle;
-        $peer =
-            Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
-                        client => $self,
-                        handle => AnyEvent::Handle::Throttle->new(fh => $peer)
-            );
+        $peer = Net::BitTorrent::Protocol::BEP03::Peer::Incoming->new(
+            client => $self,
+            handle => AnyEvent::Handle::Throttle->new(
+                fh     => $peer,
+                on_eof => sub {
+                    return if !defined $peer;
+                    $peer->_handle->push_shutdown;
+                    $peer->_handle->destroy;
+                }
+            )
+        );
         $self->add_peer($peer);
         $self->trigger_peer_connect(
                    {severity => 'info',
@@ -505,6 +517,8 @@ package Net::BitTorrent;
             peer_packet_in
             peer_bitfield
             peer_have
+            piece_hash_pass
+            piece_hash_fail
         ];
     }
     else {    # Callback System II
@@ -638,6 +652,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: BitTorrent.pm ba85fec 2010-08-22 16:35:45Z sanko@cpan.org $
+=for rcs $Id: BitTorrent.pm 011d4a5 2010-08-27 04:09:25Z sanko@cpan.org $
 
 =cut

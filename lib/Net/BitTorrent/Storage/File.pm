@@ -17,19 +17,22 @@ package Net::BitTorrent::Storage::File;
                      default => 0
     );
     has 'priority' => (is      => 'rw',
-                       isa     => subtype(as 'Int' => as enum([0 .. 3])),
-                       default => 2
+                       isa     => subtype(as 'Int' => as enum([0 .. 15])),
+                       default => 8
     );
-    around 'read' => sub ($;$$) {
+    around 'read' => sub ($$;$$) {
         my ($code, $self, $offset, $length) = @_;
         $offset //= 0;
         $length //= $self->length - $offset;
         return if $length + $offset > $self->length;
         return $code->($self, $offset, $length);
     };
-    around 'write' => sub ($$$) {
+    around 'write' => sub ($$$$) {
         my ($code, $self, $offset, $data) = @_;
-        $offset //= 0;
+        return
+            $self->storage->cache->add_block($self->index,
+                                             $self->offset + $offset, $data)
+            if $self->priority == 0;
         return if length($data) + $offset > $self->length;
         return $code->($self, $offset, $data);
     };
@@ -64,6 +67,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: File.pm a7f61f8 2010-06-27 02:13:37Z sanko@cpan.org $
+=for rcs $Id: File.pm 62b27d0 2010-09-05 04:22:11Z sanko@cpan.org $
 
 =cut

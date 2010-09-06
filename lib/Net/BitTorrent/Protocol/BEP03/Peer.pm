@@ -5,6 +5,7 @@
     use lib '../../../../../lib';
     extends 'Net::BitTorrent::Peer';
     use Net::BitTorrent::Protocol::BEP03::Packets qw[:all];
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 10; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 
     sub _build_reserved {
         my ($self) = @_;
@@ -32,18 +33,36 @@
     sub _handle_packet_choke      { shift->_set_remote_choked }
     sub _handle_packet_unchoke    { shift->_unset_remote_choked }
     sub _handle_packet_interested { shift->_set_remote_interested }
+    after '_unset_remote_choked' => sub {
+        my $s = shift;
+        return if $s->_has_quest('request_block');
+        require Scalar::Util;
+        Scalar::Util::weaken $s;
+        my $max_requests = 4;    # XXX - max_requests attribute
+        $s->_add_quest(
+            'request_block',
+            AE::timer(
+                3, 10,
+                sub {
+                    return if !defined $s;
+                    return if !$s->_wanted_pieces->Norm;
+                    for ($s->_count_requests .. $max_requests) {
+                        my $piece = $s->torrent->select_piece($s);
+                        next if !$piece;
+                        my $b = $piece->_first_unassigned_block();
+                        next if !$b;
+                        $s->_add_request($b);
+                    }
+                }
+            )
+        );
+    };
 
     sub _handle_packet_have {
         my ($s, $i) = @_;
-        warn $i;
-        warn $s->pieces->bit_test($i) ? 'already have! :(' : 'yay';
-        my $x = $s->pieces->to_Bin;
         $s->_set_piece($i);
-        warn $s->pieces->bit_test($i)
-            ? 'now have! :D'
-            : 'aw, man... :( Broken!';
         my $seed = $s->torrent->piece_count;
-        my $have = scalar grep {$_} split '', unpack 'b*', $s->pieces;
+        my $have = $s->pieces->Norm;
         my $perc = (($have / $seed) * 100);
         $s->trigger_peer_have(
             {peer     => $s,
@@ -58,14 +77,13 @@
              $s->torrent->info_hash->to_Hex
             }
         );
-        die if $x eq $s->pieces->to_Bin;
     }
 
     sub _handle_packet_bitfield {
         my ($s, $b) = @_;
         $s->_set_pieces($b);
         my $seed = $s->torrent->piece_count;
-        my $have = scalar grep {$_} split '', unpack 'b*', $b;
+        my $have = $s->pieces->Norm();
         my $perc = (($have / $seed) * 100);
         $s->trigger_peer_bitfield(
             {peer     => $s,
@@ -79,10 +97,29 @@
             }
         );
     }
+    after qw[_handle_packet_bitfield _handle_packet_have] => sub {
+        shift->_check_interest;
+    };
 
     sub _handle_packet_request {
         my ($s, $r) = @_;
         my ($i, $o, $l) = @$r;
+        return
+            $s->disconnect(sprintf 'Bad piece index in request: %d > %d',
+                           $i, $s->torrent->piece_count)
+            if $i > $s->torrent->piece_count;
+        my $_l
+            = ($i == $s->torrent->piece_count - 1)
+            ? $s->torrent->size % $s->torrent->piece_length
+            : $s->torrent->piece_length;
+        return
+            $s->disconnect(sprintf 'Bad piece length for index %d: %d > %d',
+                           $i, $l, $_l)
+            if $l > $_l;
+        return
+            $s->disconnect(sprintf 'Bad offset for index %d: %d > %d',
+                           $i, $o + $l, $_l)
+            if $o + $l > $_l;
 
         # XXX - Choke peer if they have too many requests in queue
         $s->_add_remote_request($r);
@@ -91,10 +128,13 @@
         $s->_add_quest(
             'fill_remote_requests',
             AE::timer(
-                0, 15,
+                5, 15,
                 sub {
+
+                    #warn 'HERE!!!!!!!!!!!!';
                     return if !defined $s;
 
+               #warn 'Here...';
                # XXX - return if outgoing data queue is larger than block x 8?
                     my $request = $s->_shift_remote_requests;
                     $s->_delete_quest('fill_remote_requests')
@@ -106,7 +146,20 @@
             )
         ) if !$s->_has_quest('fill_remote_requests');
     }
-    sub _handle_packet_piece {...}
+
+    sub _handle_packet_piece {
+        my ($s, $p) = @_;
+        my ($i, $o, $d) = @$p;
+        my $req = $s->_find_request($i, $o, length $d);
+        return $s->disconnect('Peer sent us a block we were not asking for.')
+            if !$req;
+        $req->_write($d);
+        $s->_delete_request($req);
+        if (!$req->piece->_first_incompete_block) {
+            $s->torrent->piece_selector->_del_working_piece($req->index)
+                if $s->torrent->hash_check($req->index);
+        }
+    }
 
     sub _handle_packet_ext_protocol {
         my ($s, $pid, $p) = @_;
@@ -155,17 +208,18 @@
         ddx $p;
     }
     override 'disconnect' => sub {
-        super;
-        my $s = shift;
+        my ($s) = @_;
         if (!$s->_handle->destroyed) {
-            $s->_handle->push_shutdown if defined $s->_handle->{'fh'};
+            $s->_handle->push_shutdown;
             $s->_handle->destroy;
         }
+        super;
     };
 
     # Outgoing packets
     sub _send_interested     { shift->push_write(build_interested()) }
     sub _send_not_interested { shift->push_write(build_not_interested()) }
+    sub _send_have           { shift->push_write(build_have(shift)) }
     sub _send_choke          { shift->push_write(build_choke()) }
     sub _send_unchoke        { shift->push_write(build_unchoke()) }
 
@@ -176,9 +230,10 @@
 
     sub _send_request {
         my ($s, $b) = @_;
-        return if $s->choked;
-        warn sprintf 'Sending request for %d:%d:%d to %s', $b->index,
-            $b->offset, $b->length, $s->peer_id;
+        return if $s->remote_choked;
+
+        #warn sprintf 'Sending request for %d:%d:%d to %s', $b->index,
+        #    $b->offset, $b->length, $s->peer_id;
         return $s->push_write(
                             build_request($b->index, $b->offset, $b->length));
     }
@@ -186,7 +241,8 @@
     sub _send_piece {
         my ($s, $i, $o, $l) = @_;
         return if $s->choked;
-        warn sprintf 'Sending block %d:%d:%d to %s', $i, $o, $l, $s->peer_id;
+
+        #warn sprintf 'Sending block %d:%d:%d to %s', $i, $o, $l, $s->peer_id;
         return $s->push_write(
                       build_piece($i, $o, $l, $s->torrent->read($i, $o, $l)));
     }
@@ -234,6 +290,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Peer.pm c7a1e01 2010-08-22 16:36:42Z sanko@cpan.org $
+=for rcs $Id: Peer.pm 88b492c 2010-09-05 23:57:34Z sanko@cpan.org $
 
 =cut

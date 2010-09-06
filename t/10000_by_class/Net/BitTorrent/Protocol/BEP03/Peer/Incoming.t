@@ -16,6 +16,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
 
     # Basic utility functions/methods
     sub class {'Net::BitTorrent::Protocol::BEP03::Peer::Incoming'}
+    sub _done { shift->{'cv'}->send }
 
     sub new_args {
         my $s = shift;
@@ -29,6 +30,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
                     is $args->{'peer'}->host, '127.0.0.1', 'local peer...';
                     isa_ok $s->{'peer'}, 'Net::BitTorrent::Peer';
                     isa_ok $s->{'peer'}, $s->class;
+                    explain 'New peer looks like... ', $s->{'peer'};
                 };
             }
         );
@@ -64,7 +66,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
     sub __expect {
         my ($s, $k) = @_;
         state $expect;
-        $expect //= [qw[handshake interested]];
+        $expect //= [qw[handshake bitfield interested]];
         return wantarray ? @$expect : shift @$expect;
     }
     sub _send_handshake {return}
@@ -201,7 +203,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
             bitfield => sub {
                 plan tests => 2;
                 my $s = shift;
-                is length $s->{'handle'}->rbuf, 5, 'read 5 bytes from peer';
+                is length $s->{'handle'}->rbuf, 6, 'read 6 bytes from peer';
                 is_deeply parse_packet(\$s->{'handle'}->rbuf),
                     {packet_length  => 6,
                      payload        => "\0",
@@ -241,12 +243,14 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
                 $s->{'handle'}->push_write(build_unchoke());
                 $s->{'handle'}->push_read(
                     sub {
-                        AnyEvent->one_event for 1 .. 10;
+                        my ($h, $d) = @_;
+                        return if !$d;
+                        AnyEvent->one_event for 1 .. 20;
                         subtest 'post unchoke', sub {
                             plan tests => 1;
                             is $s->{'peer'}->remote_choked, 0,
                                 'peer is now unchoked by us';
-                            $s->{'cv'}->send;
+                            $s->_done;
                         };
                         1;
                     }
@@ -260,4 +264,36 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
     #$ENV{'TEST_VERBOSE'}++;
     __PACKAGE__->runtests() if !caller;
 }
-1
+1;
+
+=pod
+
+=head1 Author
+
+Sanko Robinson <sanko@cpan.org> - http://sankorobinson.com/
+
+CPAN ID: SANKO
+
+=head1 License and Legal
+
+Copyright (C) 2008-2010 by Sanko Robinson <sanko@cpan.org>
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of
+L<The Artistic License 2.0|http://www.perlfoundation.org/artistic_license_2_0>.
+See the F<LICENSE> file included with this distribution or
+L<notes on the Artistic License 2.0|http://www.perlfoundation.org/artistic_2_0_notes>
+for clarification.
+
+When separated from the distribution, all original POD documentation is
+covered by the
+L<Creative Commons Attribution-Share Alike 3.0 License|http://creativecommons.org/licenses/by-sa/3.0/us/legalcode>.
+See the
+L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/us/>.
+
+Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
+Inc.
+
+=for rcs $Id: Incoming.t a78cd6f 2010-09-05 22:03:31Z sanko@cpan.org $
+
+=cut

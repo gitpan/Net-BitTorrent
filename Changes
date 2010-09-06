@@ -1,4 +1,4 @@
-Version 0.XXXXX | In the not too distant future | c7a1e01
+Version 0.XXXXX | In the not too distant future | 4e60dbb
 
     API Changes/Compatibility Information:
      * Rewrite!
@@ -15,7 +15,7 @@ Version 0.XXXXX | In the not too distant future | c7a1e01
     Notes:
      * Meanwhile...
          - This distribution is going through a rewrite. You know, ...fyi.
-         - This particular dist is being uploaded to test the IPFilter code so far.
+         - This particular dist is being uploaded to test the Peer code so far.
          - See http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent
 
 ---
@@ -434,6 +434,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/
 
-$Ver: 0.074000_009 $ from git $Rev: df33d0f $
-$Date: 2010-07-05 18:35:04Z (Mon, 05 Jul 2010) $
+$Ver: 0.074000_010 $ from git $Rev: 4e60dbb $
+$Date: 2010-09-06 00:09:07Z (Mon, 06 Sep 2010) $
 $Url: http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent/raw/master/Changes $

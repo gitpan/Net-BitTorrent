@@ -14,8 +14,7 @@ package Net::BitTorrent::Types;
                 NBTypes::Tracker::UDP NBTypes::Tracker::HTTP
                 NBTypes::Tracker::HTTP::Event]
         ],
-        file    => [qw[NBTypes::Files NBTypes::File::Open::Permission]],
-        cache   => [qw[NBTypes::Cache::Packet]],
+        file    => [qw[NBTypes::File::Open::Permission]],
         client  => [qw[NBTypes::Client::PeerID]],
         dht     => [qw[NBTypes::DHT::NodeID]],
         bencode => [qw[NBTypes::Bencode NBTypes::Bdecode]],
@@ -92,34 +91,6 @@ package Net::BitTorrent::Types;
 
     #
     enum 'NBTypes::File::Open::Permission' => qw[ro wo rw];
-    subtype 'NBTypes::Files' => as 'ArrayRef[Net::BitTorrent::Storage::File]';
-    coerce 'NBTypes::Files' => from 'ArrayRef[HashRef]' => via {
-        require Net::BitTorrent::Storage::File;
-        my ($offset, $index) = (0, 0);
-        [map {
-             my $obj =
-                 Net::BitTorrent::Storage::File->new(
-                                           index  => $index++,
-                                           length => $_->{'length'},
-                                           offset => $offset,
-                                           path => [grep {$_} @{$_->{'path'}}]
-                 );
-             $offset += $_->{'length'};
-             $obj
-             } @{$_}
-        ];
-    };
-    coerce 'NBTypes::Files' => from 'HashRef' => via {
-        require Net::BitTorrent::Storage::File;
-        [Net::BitTorrent::Storage::File->new(length => $_->{'length'},
-                                             path   => $_->{'path'}
-         )
-        ];
-    };
-
-    #
-    subtype 'NBTypes::Cache::Packet' => as 'ArrayRef[Int]' =>
-        where { scalar @$_ == 2 };
 
     #
     subtype 'NBTypes::Client::PeerID' => as 'Str' =>
@@ -193,6 +164,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Types.pm 0aeb1fc 2010-08-02 15:34:35Z sanko@cpan.org $
+=for rcs $Id: Types.pm 62b27d0 2010-09-05 04:22:11Z sanko@cpan.org $
 
 =cut

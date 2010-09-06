@@ -3,13 +3,13 @@ use strict;
 use warnings;
 use File::Find;
 use Module::Build;
-our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 9; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 10; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 $|++;
 my $automated_testing = $ENV{'AUTOMATED_TESTING'}
     || $ENV{'PERL_MM_USE_DEFAULT'};
 my $is_developer = ((-d '.git') ? 1 : 0) or ($ENV{'RELEASE_TESTING'} ? 1 : 0);
 my @tests;
-find \&find_cb, qw[t/10000_by_class/];
+find \&find_cb, qw[t/10000_by_class/ t/60000_swarm/];
 my $class = $is_developer ? 'inc::MBX::Developer' : 'Module::Build';
 
 if (!eval "require $class") {
@@ -24,7 +24,7 @@ my $mb = $class->new(
     dist_version  => $VERSION,
     requires      => {
                  AnyEvent                     => 0,
-                 'AnyEvent::Handle::Throttle' => '0.000002002',
+                 'AnyEvent::Handle::Throttle' => '0.000002004',
                  'Bit::Vector'                => 0,
                  'Digest::SHA'                => 5.45,
                  Exporter                     => 0,
@@ -34,11 +34,7 @@ my $mb = $class->new(
                  'Module::Build'              => 0.30,
                  Moose                        => 0,
                  perl                         => '5.12.0',
-                 'Scalar::Util'               => 1.19,
-                 'TAP::Harness'               => 3.18,
-                 'Test::Class'                => 0.35,
-                 'Test::Exception'            => 0,
-                 'Test::Most'                 => 0,
+                 'Scalar::Util'               => 1.19
     },
     build_requires => {'File::Temp'      => 0,
                        'Module::Build'   => 0.30,
@@ -132,6 +128,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Build.PL c7a1e01 2010-08-22 16:36:42Z sanko@cpan.org $
+=for rcs $Id: Build.PL 4e60dbb 2010-09-06 00:09:07Z sanko@cpan.org $
 
 =cut

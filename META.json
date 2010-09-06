@@ -65,21 +65,29 @@
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Metadata.pm",
          "version" : "0.074000_001"
       },
+      "Net::BitTorrent::Protocol::BEP03::Metadata::Piece" : {
+         "file" : "lib/Net/BitTorrent/Protocol/BEP03/Metadata/Piece.pm",
+         "version" : "0.074000_001"
+      },
+      "Net::BitTorrent::Protocol::BEP03::Metadata::Piece::Block" : {
+         "file" : "lib/Net/BitTorrent/Protocol/BEP03/Metadata/Piece/Block.pm",
+         "version" : "0.074000_001"
+      },
       "Net::BitTorrent::Protocol::BEP03::Packets" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Packets.pm",
          "version" : "0.074000_001"
       },
       "Net::BitTorrent::Protocol::BEP03::Peer" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Protocol::BEP03::Peer::Incoming" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer/Incoming.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Protocol::BEP03::Peer::Outgoing" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Peer/Outgoing.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Protocol::BEP03::Tracker::HTTP" : {
          "file" : "lib/Net/BitTorrent/Protocol/BEP03/Tracker/HTTP.pm",
@@ -153,25 +161,17 @@
          "file" : "lib/Net/BitTorrent/Torrent/Generator.pm",
          "version" : "0.074000_001"
       },
-      "Net::BitTorrent::Torrent::Piece" : {
-         "file" : "lib/Net/BitTorrent/Torrent/Piece.pm",
-         "version" : "0.074000_001"
-      },
-      "Net::BitTorrent::Torrent::Piece::Block" : {
-         "file" : "lib/Net/BitTorrent/Torrent/Piece/Block.pm",
-         "version" : "0.074000_001"
-      },
       "Net::BitTorrent::Torrent::PieceSelector" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector.pm",
          "version" : "0.074000_001"
       },
       "Net::BitTorrent::Torrent::PieceSelector::Endgame" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Endgame.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Torrent::PieceSelector::Hybrid" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Hybrid.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Torrent::PieceSelector::Linear" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Linear.pm",
@@ -179,7 +179,7 @@
       },
       "Net::BitTorrent::Torrent::PieceSelector::Popular" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Popular.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Torrent::PieceSelector::Random" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Random.pm",
@@ -187,7 +187,7 @@
       },
       "Net::BitTorrent::Torrent::PieceSelector::Rarest" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector/Rarest.pm",
-         "version" : 0
+         "version" : "0.074000_010"
       },
       "Net::BitTorrent::Types" : {
          "file" : "lib/Net/BitTorrent/Types.pm",
@@ -211,5 +211,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_009"
+   "version" : "0.074000_010"
 }

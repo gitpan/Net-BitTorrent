@@ -17,6 +17,8 @@ lib/Net/BitTorrent/Peer.pm
 lib/Net/BitTorrent/Protocol/BEP03.pod
 lib/Net/BitTorrent/Protocol/BEP03/Bencode.pm
 lib/Net/BitTorrent/Protocol/BEP03/Metadata.pm
+lib/Net/BitTorrent/Protocol/BEP03/Metadata/Piece.pm
+lib/Net/BitTorrent/Protocol/BEP03/Metadata/Piece/Block.pm
 lib/Net/BitTorrent/Protocol/BEP03/Packets.pm
 lib/Net/BitTorrent/Protocol/BEP03/Peer.pm
 lib/Net/BitTorrent/Protocol/BEP03/Peer/Incoming.pm
@@ -42,8 +44,6 @@ lib/Net/BitTorrent/Storage/File.pm
 lib/Net/BitTorrent/Storage/Node.pm
 lib/Net/BitTorrent/Torrent.pm
 lib/Net/BitTorrent/Torrent/Generator.pm
-lib/Net/BitTorrent/Torrent/Piece.pm
-lib/Net/BitTorrent/Torrent/Piece/Block.pm
 lib/Net/BitTorrent/Torrent/PieceSelector.pm
 lib/Net/BitTorrent/Torrent/PieceSelector/Endgame.pm
 lib/Net/BitTorrent/Torrent/PieceSelector/Hybrid.pm
@@ -66,6 +66,9 @@ t/10000_by_class/Net/BitTorrent/Protocol/BEP03/Peer/Outgoing.t
 t/10000_by_class/Net/BitTorrent/Storage/File.t
 t/10000_by_class/Net/BitTorrent_random_port.t
 t/10000_by_class/Net/BitTorrent_single_port.t
+t/60000_swarm/60010_http.t
+t/80000_utility/Net/BitTorrent/Tracker.pm
+t/80000_utility/Net/BitTorrent/Tracker/HTTP.pm
 t/90000_data/95000_torrents/95003_miniswarm.torrent
 t/90000_data/95000_torrents/credits.txt
 t/90000_data/95000_torrents/OOo_3.2.0_Win32Intel_install_en-US.exe.torrent

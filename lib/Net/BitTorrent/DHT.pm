@@ -512,17 +512,15 @@ package Net::BitTorrent::DHT;
             }
         }
         elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
-
-            #use Data::Dump;
             warn sprintf 'Error from %s:%d', $node->host, $node->port;
 
+            #use Data::Dump;
             #ddx $packet;
         }
         else {
 
             #use Data::Dump;
-            warn sprintf '%s:%d', $node->host, $node->port;
-
+            #warn sprintf '%s:%d', $node->host, $node->port;
             #ddx $packet;
             #ddx $data;
             #...;
@@ -914,6 +912,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm 3a21a4c 2010-08-05 14:25:07Z sanko@cpan.org $
+=for rcs $Id: DHT.pm 6b95bd3 2010-08-22 19:45:22Z sanko@cpan.org $
 
 =cut
