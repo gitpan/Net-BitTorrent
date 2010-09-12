@@ -385,7 +385,7 @@ package Net::BitTorrent::DHT;
                             )
                             )
                         {    # Malformed packet
-                            ...;
+                            die '...';
                         }
                         if (defined $packet->{'r'}{'nodes'}) {
                             require Net::BitTorrent::Protocol::BEP23::Compact;
@@ -508,7 +508,7 @@ package Net::BitTorrent::DHT;
                     );
             }
             else {
-                ...;
+                die '...';
             }
         }
         elsif ($packet->{'y'} eq 'q' && defined $packet->{'a'}) {
@@ -912,6 +912,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: DHT.pm 6b95bd3 2010-08-22 19:45:22Z sanko@cpan.org $
+=for rcs $Id: DHT.pm d9b2c6b 2010-09-12 03:05:02Z sanko@cpan.org $
 
 =cut

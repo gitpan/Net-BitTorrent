@@ -85,6 +85,8 @@ package Net::BitTorrent;
             my $info_hash = $info_hash_constraint->coerce($index);
             $torrent = $self->find_torrent(
                 sub {
+
+                    #$_->_has_info_hash &&
                     $_->info_hash->Lexicompare($info_hash) == 0;
                 }
             );
@@ -652,6 +654,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: BitTorrent.pm 011d4a5 2010-08-27 04:09:25Z sanko@cpan.org $
+=for rcs $Id: BitTorrent.pm e9628b1 2010-09-12 03:10:17Z sanko@cpan.org $
 
 =cut

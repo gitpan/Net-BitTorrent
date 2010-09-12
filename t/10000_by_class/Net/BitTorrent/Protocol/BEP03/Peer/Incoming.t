@@ -2,7 +2,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
 {
     use strict;
     use warnings;
-    use 5.012;
+    use 5.010.000;
     use AnyEvent;
     use AnyEvent::Socket qw[tcp_connect];
     use AnyEvent::Handle;
@@ -58,7 +58,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
         #        : explain 'No idea what to do with this packet: ',
         #        $s->{'handle'}->rbuf;
         #},
-        #on_write => sub {...}
+        #on_write => sub {die '...';}
         #    );
         #ok $s->{'handle'}, 'handle created opened';
     }
@@ -69,7 +69,10 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
         $expect //= [qw[handshake bitfield interested]];
         return wantarray ? @$expect : shift @$expect;
     }
-    sub _send_handshake {return}
+
+    sub _send_handshake {
+        return;
+    }
 
     sub _9000_open_socket : Test( startup => 0 ) {
         my $s = shift;
@@ -83,6 +86,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
                     AnyEvent->one_event for 1 .. 5;    # at least 3
                     subtest 'pre handshake', sub {
                         plan tests => 4;
+                        explain $s->{'peer'};
                         ok $s->{'peer'}->_has_torrent,
                             '...->torrent is defined';
                         is $s->{'peer'}->torrent->info_hash->to_Hex,
@@ -257,7 +261,7 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
                 );
                 }
         };
-        $dispatch->{$k} // sub {...}
+        $dispatch->{$k} // sub { die '...'; }
     }
 
     #
@@ -294,6 +298,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Incoming.t a78cd6f 2010-09-05 22:03:31Z sanko@cpan.org $
+=for rcs $Id: Incoming.t 46a30ff 2010-09-12 03:11:15Z sanko@cpan.org $
 
 =cut

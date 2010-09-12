@@ -2,7 +2,7 @@ package Net::BitTorrent::Network::IPFilter;
 {
     use Moose;
     use Moose::Util::TypeConstraints;
-    use 5.012.000;
+    use 5.010.000;
     our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 6; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../';
     use Net::BitTorrent::Network::Utility qw[:paddr];
@@ -216,6 +216,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: IPFilter.pm ba85fec 2010-08-22 16:35:45Z sanko@cpan.org $
+=for rcs $Id: IPFilter.pm d9b2c6b 2010-09-12 03:05:02Z sanko@cpan.org $
 
 =cut

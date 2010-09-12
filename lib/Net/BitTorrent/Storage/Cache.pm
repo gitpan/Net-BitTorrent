@@ -52,7 +52,7 @@ package Net::BitTorrent::Storage::Cache;
 
     sub del_block ($$) {
         my ($s, $i) = @_;
-        ...;    # XXX - I need to double check all offsets after removal
+        die '...';    # XXX - I need to double check all offsets after removal
         my $where = $s->_get_block_info($i);
         return if !defined $where;
         $s->close() if defined $s->open && $s->open ne 'ro';
@@ -74,7 +74,7 @@ package Net::BitTorrent::Storage::Cache;
         # XXX - Load index from file
         my ($i, $o, $l) = unpack 'N3', $s->read(12);
         warn join '|', $i, $o, $l;
-        ...;
+        die '...';
     }
 }
 1;
@@ -107,6 +107,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Cache.pm 62b27d0 2010-09-05 04:22:11Z sanko@cpan.org $
+=for rcs $Id: Cache.pm d9b2c6b 2010-09-12 03:05:02Z sanko@cpan.org $
 
 =cut

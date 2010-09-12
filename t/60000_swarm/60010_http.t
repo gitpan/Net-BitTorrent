@@ -22,7 +22,13 @@ sub _done { $cv->send }
 
 #
 my $tracker = Net::BitTorrent::Tracker::HTTP->new(host => '127.0.0.1');
-chdir '../..' if !-f 't/90000_data/95000_torrents/95003_miniswarm.torrent';
+
+sub _dot_torrent {
+    require File::Spec;
+    File::Spec->rel2abs(
+                     './t/90000_data/95000_torrents/95003_miniswarm.torrent');
+}
+chdir '../..' if !-f _dot_torrent();
 for my $seed (qw[1 0]) {
     push @cli, Net::BitTorrent->new(
         on_peer_id => sub {
@@ -58,17 +64,17 @@ for my $seed (qw[1 0]) {
             note 'Bitfield packet: ' . $a->{'message'};
         }
     );
-    $cli[-1]->add_torrent(
-                path => 't\90000_data\95000_torrents\95003_miniswarm.torrent')
-        ->tracker->add_tier(
+    $cli[-1]->add_torrent(path => _dot_torrent())->tracker->add_tier(
                    [sprintf 'http://%s:%d/announce.pl?%d^', $tracker->host,
                     $tracker->port,                         int rand time
                    ]
-        );
+    );
     if ($seed) {
-        $cli[-1]->torrent(0)
-            ->storage->_set_root(
-                              't\90000_data\96000_data\96020_miniswarm_seed');
+        require File::Spec;
+        $cli[-1]->torrent(0)->storage->_set_root(
+                           File::Spec->rel2abs(
+                               't/90000_data/96000_data/96020_miniswarm_seed')
+        );
     }
     else {
         push @dir,
@@ -119,6 +125,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: 60010_http.t 88b492c 2010-09-05 23:57:34Z sanko@cpan.org $
+=for rcs $Id: 60010_http.t e9628b1 2010-09-12 03:10:17Z sanko@cpan.org $
 
 =cut
