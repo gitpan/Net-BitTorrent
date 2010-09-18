@@ -2,10 +2,12 @@ use strict;
 use warnings;
 use lib '../lib';
 use Net::BitTorrent::Torrent::Generator;
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+$|++;
 
 #
 my $torrent = Net::BitTorrent::Torrent::Generator->new(
-                  path => '../t/90000_data/96000_data/96020_miniswarm_seed/');
+                 files => '../t/90000_data/96000_data/96020_miniswarm_seed/');
 $torrent->_set_comment('See credit.txt for attributions.');
 print 'Saving ' . $torrent->info_hash->to_Hex . '...';
 unlink 'test.torrent';
@@ -13,4 +15,4 @@ open my ($fh), '>', 'test.torrent' || die 'FAIL!';
 syswrite $fh, $torrent->raw_data;
 close $fh;
 
-# $Id: generate_torrent.pl 4da645d 2010-08-08 03:22:49Z sanko@cpan.org $
+# $Id: generate_torrent.pl d016c63 2010-09-16 03:15:29Z sanko@cpan.org $

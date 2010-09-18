@@ -1,6 +1,8 @@
 package Net::BitTorrent::Tracker;
 {
     use Moose;
+        our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+
     use AnyEvent::Handle;
     use Net::BitTorrent::Network::Utility qw[server];
     use Net::BitTorrent::Protocol::BEP03::Bencode qw[:all];
@@ -97,6 +99,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Tracker.pm a78cd6f 2010-09-05 22:03:31Z sanko@cpan.org $
+=for rcs $Id: Tracker.pm fb35269 2010-09-17 04:27:05Z sanko@cpan.org $
 
 =cut

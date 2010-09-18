@@ -2,64 +2,62 @@ package Net::BitTorrent::Torrent::Generator;
 {
     use Moose;
     use Moose::Util::TypeConstraints;
-    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 1; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use lib '../../../';
     use Net::BitTorrent::Protocol::BEP03::Bencode qw[bencode];
     use Net::BitTorrent::Types qw[:all];
     use Digest::SHA;
     use Fcntl qw[SEEK_CUR];
-    use File::Spec::Functions;
-    has 'path' => (
-        is       => 'ro',
-        isa      => 'Str',
+    use File::Spec::Functions
+        qw[abs2rel catdir curdir no_upwards rel2abs splitdir splitpath];
+    has '_files' => (
+        is => 'ro',
+        isa =>
+            'ArrayRef[NBTypes::File::Path::PreExisting]|NBTypes::File::Path::PreExisting|NBTypes::File::Directory::PreExisting',
         required => 1,
-        writer   => '_set_path',
+        init_arg => 'files',
+        writer   => '_set_files',
+        coerce   => 1,
         handles  => {
             files => sub {
                 my $s = shift;
-                return [$s->path] if -f $s->path;
+                return [$s->_files] if -f $s->_files;
+                return $s->_files if grep { !-d } $s->_files;
                 my @files;
                 require File::Find;
-                File::Find::find(
-                    {wanted => sub {
-                         push @files, $_
-                             if -f && (  $s->_has_path_skip
-                                       ? $_ !~ $s->path_skip
-                                       : 1
-                             );
-                     },
-                     no_chdir => 1
-                    },
-                    $s->path
+                File::Find::find({wanted => sub { push @files, $_ if -f },
+                                  no_chdir => 1
+                                 },
+                                 $s->_files
                 );
                 \@files;
             },
             _count_files => sub { scalar @{shift->files} },
             total_size   => sub {
                 my $t = 0;
-                $t += -s $_->[0] for shift->files;
+                $t += -s for @{shift->files};
                 $t;
                 }
         }
     );
-    has 'path_skip' => (is        => 'ro',
-                        isa       => 'RegexpRef',
-                        predicate => '_has_path_skip',
-                        writer    => '_set_path_skip',
-                        clearer   => '_clear_path_skip'
+    has 'name' => (is        => 'ro',
+                   isa       => 'Str',
+                   writer    => '_set_name',
+                   predicate => '_has_name'
     );
     has 'announce' => (is        => 'ro',
                        isa       => 'Str',
                        writer    => '_set_announce',
                        predicate => '_has_announce'
     );
-    has 'announce-list' => (is      => 'ro',
+    has 'announce_list' => (is      => 'ro',
                             isa     => 'ArrayRef[ArrayRef[Str]]',
                             default => sub { [] },
                             traits  => ['Array'],
                             handles => {_add_tier          => 'push',
-                                        _get_pier          => 'get',
-                                        _has_announce_list => 'count'
+                                        _get_tier          => 'get',
+                                        _has_announce_list => 'count',
+                                        _del_tier          => 'delete'
                             }
     );
     has 'private' => (is      => 'ro',
@@ -88,6 +86,10 @@ package Net::BitTorrent::Torrent::Generator;
         writer  => '_set_piece_length',
         handles => {
             _piece_count => sub {
+                my ($s, $v) = @_;
+                int($s->total_size / $s->piece_length) + 1;
+            },
+            _set_piece_count => sub {
                 my ($s, $v) = @_;
                 $s->_set_piece_length(int($s->total_size / $v) + 1);
                 }
@@ -140,32 +142,46 @@ package Net::BitTorrent::Torrent::Generator;
                 pieces         => '',                 # Filled later
                 ($s->private ? (private => 1) : ()),
                 ($s->_count_files > 1 ? (             # Multiple files
-                     files => [
-                         map {
-                             {path => [
-                                  grep { defined && length }
-                                      File::Spec::Functions::no_upwards(
-                                      sub {
-                                          my $p = $s->path;
-                                          m[^$p[\\/](.+)$]i;
-                                          File::Spec::Functions::splitdir($1
-                                                                       // $_);
-                                          }
-                                          ->()
-                                      )
-                              ],
-                              length => -s $_
+                     sub {
+                         my $tree = {};
+                         for my $f (@{$s->files}) {
+                             my $pos = \$tree;
+                             for my $key (splitdir $f) {
+                                 $$pos->{$key} ||= ();
+                                 $pos = \$$pos->{$key};
                              }
-                             } @{$s->files}
-                     ],
-                     name =>
-                         sub { $s->path =~ m[(\w+)$]; $1 ? $1 : 'torrent' }
+                         }
+                         my $base;
+                         my $abs = '';
+                         while (scalar keys %$tree == 1) {
+                             ($base) = keys(%$tree);
+                             $abs .= $base . '/';
+                             $tree = $tree->{$base};
+                         }
+                         my $cwd = rel2abs curdir;
+                         return (
+                             files => [
+                                 map {
+                                     my $f_abs = rel2abs $_;
+                                     my ($c, $d, undef) = splitpath($f_abs);
+                                     chdir catdir rel2abs $abs;
+                                     my $x = abs2rel $f_abs;
+                                     chdir $cwd;
+                                     {path => [grep { defined && length }
+                                                   splitdir($x)
+                                      ],
+                                      length => -s $f_abs
+                                     };
+                                     } @{$s->files}
+                             ],
+                             name => $s->_has_name ? $s->name : $base
+                         );
+                         }
                          ->()
                      )
                  : (    # Single file
                      length => $s->total_size,
-                     name =>
-                         [File::Spec::Functions::splitpath($s->path)]->[-1]
+                     name   => [splitpath($s->files->[0])]->[-1]
                  )
                 )
             },
@@ -181,7 +197,9 @@ package Net::BitTorrent::Torrent::Generator;
         );
         my $data = '';
     FILE: for my $f (@{$s->files}) {
-            open(my ($fh), '<', $f) || confess 'Cannot generate .torrent';
+            open(my ($fh), '<', $f)
+                || confess sprintf
+                'Cannot open "%s" to generate metadata: %s', $f, $!;
         PIECE:
             while (length $data < $s->piece_length) {
                 sysread($fh, $data, ($s->piece_length - length($data)),
@@ -199,6 +217,11 @@ package Net::BitTorrent::Torrent::Generator;
     # If anything is changed, update the good stuff
     after qr[^(_(set|unset|add|del|sort)|add)] =>
         sub { my $s = shift; $s->_clear_info_hash; $s->_clear_metadata };
+
+    #
+    no Moose;
+    no Moose::Util::TypeConstraints;
+    __PACKAGE__->meta->make_immutable
 }
 1;
 
@@ -211,12 +234,11 @@ Net::BitTorrent::Torrent::Generator - .torrent metadata generator
 =head1 Synopsis
 
     # Generate a single file .torrent to seed file.avi
-    my $t1 = Net::BitTorrent::Torrent::Generator->new( path => 'file.avi' );
+    my $t1 = Net::BitTorrent::Torrent::Generator->new( files => 'file.avi' );
 
     # Add everything in the current directory accept .torrent files
     my $t2 = Net::BitTorrent::Torrent::Generator->new(
-        path      => '../',
-        path_skip => qr[.*torrent$]
+        files      => '../'
     );
 
     # Now, let's write the metadata to disk
@@ -233,7 +255,7 @@ TODO
 
 Creating a new .torrent is simple. As is this API.
 
-=head2 my $torrent = Net::BitTorrent::Torrent::Generator->B<new>( path => ..., [ ... ] )
+=head2 my $torrent = Net::BitTorrent::Torrent::Generator->B<new>( files => ..., [ ... ] )
 
 Creates a new generator object.
 
@@ -241,9 +263,9 @@ This constructor requires the following arguments:
 
 =over
 
-=item C<path>
+=item C<files>
 
-See L<< path|/"$torrent->B<path>( )" >>.
+See L<< files|/"$torrent->B<files>( )" >>.
 
 =back
 
@@ -258,10 +280,6 @@ See L<< announce|/"$torrent->B<announce>( )" >>.
 =item C<announce_list>
 
 See L<< announce_list|/"$torrent->B<announce_list>( )" >>.
-
-=item C<path_skip>
-
-See L<< path_skip|/"$torretn->B<path_skip>( )" >>.
 
 =item C<comment>
 
@@ -322,23 +340,13 @@ This method generates and returns the metadata.
 For raw data ready to write to disk, see
 L<< raw_data|/"$torrent->B<raw_data>( ))" >>.
 
-=head2 $torrent->B<path>( )
+=head2 $torrent->B<files>( )
 
 This is a string contining either a directory or a single file.
 
 If this is a directory, a multi-file torrent is generated.
 
-Use C<< $torrent->B<_set_path>( $path ) >> to set this value later.
-
-=head2 $torrent->B<path_skip>( )
-
-This is a regular expression. If L<path|/"$torrent->B<path>( )"> is a
-directory, L<found files|File::Find/"find"> are checked against this regex. If
-they match, they're ignored when generating
-<metadata|/"$torrent->B<metadata>( )">.
-
-Use C<< $torrent->B<_set_path_skip>( qr[...] ) >> to set this value later and
-C<< $torrent->B<_clear_path_skip>( ) >> to clear it.
+Use C<< $torrent->B<_set_files>( $path ) >> to set this value later.
 
 =head2 $torrent->B<piece_length>( )
 
@@ -382,7 +390,7 @@ L<Net::BitTorrent::File|Net::BitTorrent::File>
 
 =over
 
-=item Optional, user-defined/smart file sorting
+=item Document optional .torrent C<name>.
 
 =back
 
@@ -412,6 +420,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Generator.pm e472218 2010-08-08 03:22:04Z sanko@cpan.org $
+=for rcs $Id: Generator.pm 73cb81c 2010-09-17 04:10:38Z sanko@cpan.org $
 
 =cut

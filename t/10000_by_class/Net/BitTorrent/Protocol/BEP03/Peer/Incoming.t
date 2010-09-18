@@ -2,7 +2,9 @@ package t::10000_by_class::Net::BitTorrent::Protocol::BEP03::Peer::Incoming;
 {
     use strict;
     use warnings;
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use 5.010.000;
+    use AnyEvent::Impl::Perl;   # Timing is different than with EV. Go figure.
     use AnyEvent;
     use AnyEvent::Socket qw[tcp_connect];
     use AnyEvent::Handle;
@@ -298,6 +300,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Incoming.t 46a30ff 2010-09-12 03:11:15Z sanko@cpan.org $
+=for rcs $Id: Incoming.t fb35269 2010-09-17 04:27:05Z sanko@cpan.org $
 
 =cut

@@ -2,12 +2,14 @@ package t::10000_by_class::Net::BitTorrent::DHT;
 {
     use strict;
     use warnings;
+    our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
     use Test::More;
     use parent 'Test::Class';
     use lib '../../../../lib', 'lib';
     use 5.010.000;
     use Test::Moose;
     use Test::More;
+    use AnyEvent::Impl::Perl;   # Timing is different than with EV. Go figure.
     use AnyEvent;
 
     #
@@ -16,7 +18,7 @@ package t::10000_by_class::Net::BitTorrent::DHT;
     sub new_args {
         my $t = shift;
         require Net::BitTorrent;
-        [    #port              => [1337 .. 1339, 0],
+        [                       #port              => [1337 .. 1339, 0],
            on_listen_failure => sub {
                my ($s, $a) = @_;
                note $a->{'message'};

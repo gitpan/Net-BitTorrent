@@ -1,4 +1,4 @@
-Version 0.XXXXX | In the not too distant future | 114ae5a
+Version 0.XXXXX | In the not too distant future | 3ff0077
 
     API Changes/Compatibility Information:
      * Rewrite!
@@ -15,8 +15,9 @@ Version 0.XXXXX | In the not too distant future | 114ae5a
     Notes:
      * Meanwhile...
          - This distribution is going through a rewrite. You know, ...fyi.
-         - This particular dist is being uploaded to test the Peer code so far.
-         - See http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent
+         - This particular dist is being uploaded to test the Peer code and
+             metadata generator.
+         - See http://github.com/sanko/net-bittorrent/
 
 ---
 Version 0.052 | 2010-04-02 18:31:29Z (Fri, 02 Apr 2010) | 07f0c35
@@ -434,6 +435,6 @@ _ -.-. .... .- -. --. . ... _________________________________________
 For more information, see the commit log:
     http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/
 
-$Ver: 0.074000_011 $ from git $Rev: 4e60dbb $
-$Date: 2010-09-06 00:09:07Z (Mon, 06 Sep 2010) $
+$Ver: 0.074000_012 $ from git $Rev: 3ff0077 $
+$Date: 2010-09-18 01:43:53Z (Sat, 18 Sep 2010) $
 $Url: http://github.com/sanko/net-bittorrent/tree/summer-2010-moose-anyevent/raw/master/Changes $

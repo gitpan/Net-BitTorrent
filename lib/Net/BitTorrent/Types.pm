@@ -19,6 +19,7 @@ package Net::BitTorrent::Types;
                 NBTypes::File::Path
                 NBTypes::File::Path::Absolute
                 NBTypes::File::Path::PreExisting
+                NBTypes::File::Directory::PreExisting
                 ]
         ],
         client  => [qw[NBTypes::Client::PeerID]],
@@ -107,7 +108,13 @@ package Net::BitTorrent::Types;
         where { require File::Spec; File::Spec->file_name_is_absolute($_) } =>
         message {'Filename must be absolute.'} => where { -f $_ } =>
         message {'File must be preexisting'};
+    subtype 'NBTypes::File::Directory::PreExisting' => as 'Str' =>
+        where { require File::Spec; File::Spec->file_name_is_absolute($_) } =>
+        message {'Directory must be absolute.'} => where { -d $_ } =>
+        message {'Directory must be preexisting'};
     coerce 'NBTypes::File::Path::PreExisting' => from 'Str' =>
+        via { require File::Spec; File::Spec->rel2abs($_); };
+    coerce 'NBTypes::File::Directory::PreExisting' => from 'Str' =>
         via { require File::Spec; File::Spec->rel2abs($_); };
 
     #
@@ -182,6 +189,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: Types.pm e9628b1 2010-09-12 03:10:17Z sanko@cpan.org $
+=for rcs $Id: Types.pm 173ac45 2010-09-16 03:12:04Z sanko@cpan.org $
 
 =cut

@@ -159,7 +159,7 @@
       },
       "Net::BitTorrent::Torrent::Generator" : {
          "file" : "lib/Net/BitTorrent/Torrent/Generator.pm",
-         "version" : "0.074000_001"
+         "version" : "0.074000_012"
       },
       "Net::BitTorrent::Torrent::PieceSelector" : {
          "file" : "lib/Net/BitTorrent/Torrent/PieceSelector.pm",
@@ -211,5 +211,5 @@
       },
       "x_ChangeLog" : "http://github.com/sanko/net-bittorrent/commits/summer-2010-moose-anyevent/"
    },
-   "version" : "0.074000_011"
+   "version" : "0.074000_012"
 }

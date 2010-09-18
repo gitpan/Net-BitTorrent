@@ -1,8 +1,10 @@
 use strict;
 use warnings;
+our $MAJOR = 0.074; our $MINOR = 0; our $DEV = 12; our $VERSION = sprintf('%1.3f%03d' . ($DEV ? (($DEV < 0 ? '' : '_') . '%03d') : ('')), $MAJOR, $MINOR, abs $DEV);
 use lib '../../lib';
 use Test::More;
 use File::Temp;
+use AnyEvent::Impl::Perl;    # Timing is different than with EV. Go figure.
 use AnyEvent;
 use lib reverse 'lib', '../lib', '../../lib';
 use Net::BitTorrent;
@@ -125,6 +127,6 @@ L<clarification of the CCA-SA3.0|http://creativecommons.org/licenses/by-sa/3.0/u
 Neither this module nor the L<Author|/Author> is affiliated with BitTorrent,
 Inc.
 
-=for rcs $Id: 60010_http.t e9628b1 2010-09-12 03:10:17Z sanko@cpan.org $
+=for rcs $Id: 60010_http.t fb35269 2010-09-17 04:27:05Z sanko@cpan.org $
 
 =cut
